@@ -97,14 +97,23 @@ async fn run(config: config::Config) {
 
 // Fallback, що спершу намагається віддати статичний файл із site-root (JS/WASM/CSS з cargo-leptos),
 // і лише якщо такого файлу немає — рендерить Leptos-застосунок (SPA-подібна навігація на невідомих шляхах).
+// Контекст (db) провайдиться так само, як у leptos_routes_with_context — інакше будь-який
+// невідомий шлях (типо/відсутній асет, бот-скан) падав з panic "no DatabaseConnection in context"
+// замість того, щоб SSR коректно показав "не знайдено" через <Routes fallback>.
 async fn file_and_error_handler(uri: Uri, State(state): State<AppState>, req: Request<Body>) -> Response {
     let root = state.leptos_options.site_root.clone();
 
     match get_static_file(uri, root.as_ref()).await {
         Ok(res) if res.status() == StatusCode::OK => res,
-        _ => leptos_axum::render_app_to_stream(move || shell(state.leptos_options.clone()))(req)
+        _ => {
+            let db = state.db.clone();
+            leptos_axum::render_app_to_stream_with_context(
+                move || provide_context(db.clone()),
+                move || shell(state.leptos_options.clone()),
+            )(req)
             .await
-            .into_response(),
+            .into_response()
+        }
     }
 }
 

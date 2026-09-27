@@ -32,5 +32,7 @@ site-pkg-dir = "pkg"
 site-addr = "127.0.0.1:3000"
 reload-port = 3001
 env = "PROD"
-# Темно-оливкова палітра + помаранчевий акцент (05-documents.md), узгоджена з .claude/decisions/ui-visual-style-source.md.
+# Палітра/шрифти UI — з .claude/decisions/ui-visual-style-source.md (реальні виміри striy.pp.ua).
 style-file = "app/style/main.css"
+# Шрифти (self-hosted woff2, без CDN — CLAUDE.md: "жодних мережевих викликів... шрифти — локально").
+assets-dir = "app/assets"

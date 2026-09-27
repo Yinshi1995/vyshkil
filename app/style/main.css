@@ -1,25 +1,59 @@
-/* Палітра — реальні кольори з референсу UI застосунку "Напрацювання ВВД.pptx"
-   (НЕ з docs/spec/05-documents.md — та палітра для генерованих документів, інша).
+/* Палітра й шрифти — виміряно з живого сайту striy.pp.ua (НЕ з документів, НЕ з пікселів pptx).
    Джерело й обґрунтування: .claude/decisions/ui-visual-style-source.md */
+
+@font-face {
+  font-family: "Oswald";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/oswald-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "Oswald";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/oswald-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+2122;
+}
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/roboto-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/roboto-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+2000-206F, U+2122;
+}
+
 :root {
-  --bg-darkest: #302d24;
-  --panel: #453f2e;
-  --panel-alt: #393529;
-  --text-main: #f5f2ec;
-  --text-secondary: #c7c1b0;
-  --text-muted: #9c947f;
-  --accent: #f39200;
-  --accent-dark: #855000;
-  --border: rgba(245, 242, 236, 0.1);
-  --shadow: rgba(0, 0, 0, 0.35);
+  --bg-darkest: #0d0f0a;
+  --panel: #171912;
+  --panel-alt: #1f2217;
+  --border: rgba(201, 168, 76, 0.16);
+  --border-strong: #c9a84c;
 
-  /* Категорійні кольори (іконки/бейджі за типом сутності — не для тексту чи фону панелей) */
-  --cat-blue: #8faec9;
-  --cat-gold: #d9c08a;
-  --cat-sage: #9db08c;
-  --cat-terracotta: #c98f6e;
+  --text-main: #e8e4d8;
+  --text-secondary: #b9b4a6;
+  --text-muted: #8a8577;
 
-  --error: #e07a5f;
+  --accent: #c9a84c;
+  --accent-dim: rgba(201, 168, 76, 0.12);
+  --accent-contrast: #14140c;
+
+  --error: #c97a6e;
+  --shadow: rgba(0, 0, 0, 0.5);
+
+  --font-heading: "Oswald", "Arial Narrow", sans-serif;
+  --font-body: "Roboto", "Segoe UI", sans-serif;
 }
 
 * {
@@ -32,28 +66,31 @@ body {
   min-height: 100%;
   background: var(--bg-darkest);
   color: var(--text-main);
-  font-family: "Segoe UI", "Arial", sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 20px 48px;
+  padding: 32px 20px 56px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-main);
+  margin: 0 0 12px;
 }
 
 h1 {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 0 0 8px;
-  color: var(--text-main);
-}
-
-h2,
-h3 {
-  color: var(--text-main);
-  font-weight: 600;
+  font-size: 34px;
+  letter-spacing: 0.04em;
 }
 
 p {
@@ -63,94 +100,166 @@ p {
 
 a {
   color: var(--accent);
+  text-decoration: none;
 }
 
-/* Шапка з перемикачем актора (02 §8, 01 §6 — dev-режим без автентифікації) */
+a:hover {
+  text-decoration: underline;
+}
+
+/* Секційний лейбл: "РОЗДІЛ 01" з лініями обабіч (для майбутніх секцій — форми/звіти) */
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.eyebrow::before,
+.eyebrow::after {
+  content: "";
+  height: 1px;
+  width: 32px;
+  background: var(--border-strong);
+  opacity: 0.5;
+}
+
+/* Шапка з логотипом і перемикачем актора (02 §8, 01 §6 — dev-режим без автентифікації) */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 14px 24px;
-  background: var(--panel-alt);
+  background: var(--panel);
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 2px 8px var(--shadow);
+  box-shadow: 0 2px 12px var(--shadow);
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header__mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
 .app-header__title {
+  font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 19px;
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--text-main);
-  letter-spacing: 0.01em;
 }
 
 .actor-switcher {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
 }
 
 .actor-switcher select {
-  background: var(--panel);
+  background: var(--panel-alt);
   color: var(--text-main);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: 3px;
+  padding: 7px 10px;
+  font-family: var(--font-body);
   font-size: 14px;
   text-transform: none;
   letter-spacing: normal;
 }
 
 .actor-switcher select:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
 }
 
 .actor-switcher .status-error {
   text-transform: none;
   letter-spacing: normal;
+  font-family: var(--font-body);
 }
 
-/* Картки — icon+text патерн з референсу: акцентний колір за категорією, тінь для глибини */
+/* Іконка в золотій рамці — той самий мотив, що на striy.pp.ua */
+.icon-box {
+  width: 52px;
+  height: 52px;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.icon-box svg {
+  width: 26px;
+  height: 26px;
+  stroke: currentColor;
+  fill: none;
+}
+
+/* Картка: icon-box + заголовок + опис — icon+text патерн з референсу */
 .card-row {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  margin: 20px 0;
+  margin: 24px 0;
 }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 4px 16px var(--shadow);
+  border-radius: 6px;
+  padding: 22px;
+  box-shadow: 0 4px 20px var(--shadow);
   flex: 1 1 240px;
   min-width: 220px;
 }
 
-.card__icon-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 8px;
-}
-
 .card__label {
+  font-family: var(--font-heading);
   text-transform: uppercase;
   font-size: 11px;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   color: var(--text-muted);
   margin-bottom: 6px;
 }
 
 .card__value {
-  font-size: 30px;
+  font-family: var(--font-heading);
+  font-size: 32px;
   font-weight: 700;
   color: var(--accent);
   line-height: 1.1;
@@ -162,14 +271,53 @@ a {
   margin-top: 8px;
 }
 
-/* Таблиці — висока контрастність, великий шрифт у клітинках (02 §8) */
+/* Кнопка зі скошеним краєм (clip-path) — той самий мотив, що на striy.pp.ua */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 11px 22px 11px 18px;
+  border: none;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
+  text-decoration: none;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.btn--primary:hover {
+  background: #ddb95a;
+  text-decoration: none;
+}
+
+.btn--outline {
+  background: transparent;
+  color: var(--text-main);
+  border: 1px solid var(--border-strong);
+  padding: 10px 22px 10px 18px;
+}
+
+.btn--outline:hover {
+  background: var(--accent-dim);
+  text-decoration: none;
+}
+
+/* Таблиці — навмисно БЕЗ декору (без фото, без скосів): "без шкоди читабельності" (02 §8) */
 table {
   width: 100%;
   border-collapse: collapse;
   background: var(--panel);
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0 4px 16px var(--shadow);
 }
 
 th,
@@ -181,11 +329,12 @@ td {
 }
 
 th {
+  font-family: var(--font-heading);
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
   font-size: 12px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 tr:last-child td {
@@ -193,7 +342,7 @@ tr:last-child td {
 }
 
 tr:hover td {
-  background: rgba(243, 146, 0, 0.06);
+  background: var(--accent-dim);
 }
 
 .status-error {

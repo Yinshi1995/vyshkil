@@ -35,7 +35,6 @@
       "Read(*.pdf)",
       "Read(*.zip)",
       "Read(docs/templates/**)",
-      "Read(target/**)",
       "Read(source_files/**)"
     ]
   }
