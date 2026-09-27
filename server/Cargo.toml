@@ -1,0 +1,34 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+app = { path = "../app", features = ["ssr"] }
+migration = { path = "../migration" }
+# "macros" вмикає #[derive(FromRef)] для AppState (axum::extract::FromRef інакше є лише трейтом, без derive).
+axum = { version = "0.7", features = ["macros"] }
+leptos = { workspace = true, features = ["ssr"] }
+leptos_axum = { workspace = true }
+leptos_meta = { workspace = true, features = ["ssr"] }
+leptos_router = { workspace = true, features = ["ssr"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+# oneshot (для ServeDir у fallback-хендлері) живе саме в tower, не в tower-http.
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["fs", "compression-gzip", "trace"] }
+sea-orm = { version = "1", default-features = false, features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "macros",
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+serde = { workspace = true }
+# default-features = false: вимикаємо статистику використання секцій mimalloc, яка на віддалених
+# ОС не завжди коректно білдиться і нам тут не потрібна — лишаємо тільки сам аллокатор.
+mimalloc = { version = "0.1", default-features = false }

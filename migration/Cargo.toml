@@ -1,0 +1,19 @@
+[package]
+name = "migration"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "migration"
+path = "src/lib.rs"
+
+[dependencies]
+# tokio потрібен прямо тут (не лише через sea-orm-migration) для макроса #[tokio::main] у бінарнику `migration`.
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dependencies.sea-orm-migration]
+version = "1"
+features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+]

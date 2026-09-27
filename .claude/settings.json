@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat $CLAUDE_PROJECT_DIR/.claude/memory/MEMORY.md 2>/dev/null"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(cargo build *)",
+      "Bash(cargo test *)",
+      "Bash(cargo check *)",
+      "Bash(cargo clippy *)",
+      "Bash(cargo fmt *)",
+      "Bash(cargo leptos build *)",
+      "Bash(docker ps *)",
+      "Bash(docker start *)",
+      "Bash(docker logs *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Bash(git push *)",
+      "Read(*.pptx)",
+      "Read(*.pdf)",
+      "Read(*.zip)",
+      "Read(docs/templates/**)",
+      "Read(target/**)",
+      "Read(source_files/**)"
+    ]
+  }
+}

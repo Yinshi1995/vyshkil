@@ -1,0 +1,15 @@
+[package]
+name = "frontend"
+version = "0.1.0"
+edition = "2021"
+
+# cdylib — єдиний тип, з якого wasm-bindgen може зібрати .wasm-модуль для браузера.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+app = { path = "../app", features = ["hydrate"] }
+leptos = { workspace = true, features = ["hydrate"] }
+wasm-bindgen = "0.2"
+# Панік у wasm без цього хука мовчки падає в консоль браузера без стектрейсу — з ним хоч видно, де впало.
+console_error_panic_hook = "0.1"

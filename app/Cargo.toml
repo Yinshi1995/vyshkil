@@ -1,0 +1,27 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+# cdylib потрібен лише кінцевому wasm-бінарнику (крейт frontend), але лишаємо його і тут,
+# бо workspace-конвенція Leptos будує app як спільну lib для обох таргетів (ssr/hydrate).
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+leptos = { workspace = true }
+leptos_meta = { workspace = true }
+leptos_router = { workspace = true }
+serde = { workspace = true }
+# sea-orm потрібен лише на боці сервера (щоб #[server]-функція могла дістати DatabaseConnection
+# з контексту) — опційний і вмикається тільки під feature "ssr", у wasm його бути не може.
+sea-orm = { version = "1", default-features = false, features = ["macros"], optional = true }
+
+[features]
+hydrate = ["leptos/hydrate"]
+ssr = [
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+    "dep:sea-orm",
+]

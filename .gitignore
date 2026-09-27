@@ -1,0 +1,15 @@
+/target
+/migration/target
+.env
+node_modules
+# Локально завантажений бінарник wasm-opt для Dockerfile (обхід нестабільного download у контейнері) — не в git.
+/.docker-tools
+
+# Дані замовника з грифом ДСК — ніколи в git (docs/spec/00-agent-brief.md, §0.8).
+/source_files
+*.log
+# Збережені файли застосунку на сервері (stored_file, генеровані документи) — не в git.
+/data
+
+# Особисті дозволи користувача — не спільні (docs/spec/00-agent-brief.md, §0.5).
+/.claude/settings.local.json

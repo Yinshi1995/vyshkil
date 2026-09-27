@@ -1,0 +1,36 @@
+# Компоуз лише для локальної розробки: піднімає Postgres поруч із застосунком,
+# щоб не ставити СУБД на хост окремо — прод-деплой цей файл не використовує.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: taktoblik
+      POSTGRES_PASSWORD: taktoblik
+      POSTGRES_DB: taktoblik
+    ports:
+      - "5432:5432"
+    volumes:
+      - taktoblik_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taktoblik"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Ім'я хоста "db" — це DNS-ім'я сервісу compose, а не localhost, бо сервер живе в іншому контейнері.
+      DATABASE_URL: postgres://taktoblik:taktoblik@db:5432/taktoblik
+      DATABASE_MAX_CONNECTIONS: "5"
+      SERVER_WORKER_THREADS: "2"
+      LEPTOS_SITE_ADDR: 0.0.0.0:3000
+      RUST_LOG: info,sqlx=warn
+    ports:
+      - "3000:3000"
+
+volumes:
+  taktoblik_pgdata:
