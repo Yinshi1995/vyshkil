@@ -15,3 +15,13 @@ date: 2026-09-27
 - [rustls замість native-tls/openssl](../decisions/rustls-over-openssl.md) — прибирає OpenSSL з рантайм-образу, сумісно з distroless.
 - [cargo-modules замість Graphify](../decisions/cargo-modules-over-graphify.md) — Graphify виявився свіжим нерозкрученим інструментом з auto-exec hook (supply-chain ризик); cargo-modules — перевірена Rust-специфічна заміна.
 - [Smart App Control блокує локальну збірку → перевірка через Docker](../decisions/smart-app-control-blocks-local-build.md) — Windows блокує непідписані build-script бінарники; вимикати не стали (одностороння дія), збірку перевіряємо в Docker.
+
+Рішення специфікації домену (`docs/spec/`, затверджено замовником 27.09.2026):
+
+- [Людей поіменно не зберігаємо](../decisions/no-personal-data.md) — облік групами й кількостями; ПІБ з імпорту агрегуються і вичищаються.
+- [Кількості тільки подіями, бітемпорально](../decisions/event-sourced-counts-bitemporal.md) — `occurred_on` + `recorded_at`, ніяких полів-лічильників.
+- [Дві осі підпорядкування з історією + замикання](../decisions/temporal-subordination-closure.md) — матеріалізоване `subordination_closure`, не рекурсивні CTE.
+- ["Як подали" vs "як вважаємо"](../decisions/reported-vs-canonical.md) — два шари даних і функція визначення канону з пріоритетом.
+- [Нормалізація синонімів в `app`](../decisions/alias-normalization-in-app.md) — одна функція для SSR і WASM, порівняння по `alias.norm`.
+- [text+CHECK замість Postgres ENUM](../decisions/text-enums-not-pg-enums.md) — додавання значення не має вимагати міграції типу.
+- [Знеособлена черга сповіщень](../decisions/depersonalized-notification-outbox.md) — `notification_outbox` + трейт `NotificationChannel`, шаблон без доменних даних.

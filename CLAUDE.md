@@ -1,16 +1,39 @@
-# Taktoblik
+# Taktoblik (Vyshkil)
 
-Rust full-stack: Axum + Leptos 0.7 (SSR) + SeaORM + PostgreSQL.
-Workspace: `app/` (спільні компоненти), `frontend/` (wasm-гідратація), `server/` (Axum SSR), `migration/` (SeaORM).
+Облік заходів підготовки військових частин УВ(с) "Південь": збір даних (форма/таблиця/звернення) →
+нормалізація → звірка між рівнями підпорядкування → виявлення розбіжностей → звітні документи.
+Домен — `docs/spec/README.md` (джерело істини; код узгоджується з ним, не навпаки).
+
+Стек: Axum + Leptos 0.7 (SSR) + SeaORM + PostgreSQL. Workspace: `app/`, `frontend/`, `server/`, `migration/`.
+
+## Жорсткі правила
+
+- Людей поіменно не зберігати й не логувати — тільки кількості груп.
+- Жодних мережевих викликів з даними назовні (OCR, шрифти, CDN — локально); виняток — знеособлене WhatsApp-повідомлення.
+- Нічого не перезаписувати без історії: періоди дії, події, `audit_log`.
+- Спершу специфікація, потім код: відступ від `docs/spec` = спершу оновити spec + рішення в `.claude/decisions/`.
+- `source_files/` — дані замовника з грифом ДСК: не комітити, не цитувати в логах, тести з ними — skip за відсутності.
+- Права — тільки через модуль `policy`.
+- Спільна логіка (нормалізація, парсинг дат, валідація) — в `app`, компілюється і для SSR, і для WASM.
 
 ## Куди йти за контекстом
 
 | Питання | Джерело |
 |---|---|
-| Що зроблено зараз / що в процесі | `.claude/memory/MEMORY.md` |
+| Що зроблено зараз / що в процесі / на якому етапі roadmap | `.claude/memory/MEMORY.md` |
 | Чому так, а не інакше (архітектурні рішення) | `.claude/memory/DECISIONS.md` → `.claude/decisions/*.md` |
 | Контракт між app/frontend/server | `.claude/memory/INTERFACES.md` |
-| "хто що викликає" / залежності символів | `cargo modules dependencies` — спробуй перед grep по всьому проєкту |
+| Домен і вимоги (сутності, форми, імпорт, звірка, документи, roadmap) | `docs/spec/` — див. таблицю в `docs/spec/README.md` |
+| Наступний крок | `docs/spec/06-roadmap.md` (поточний етап — у MEMORY.md) |
+| Дані джерел і граблі імпорту | `docs/source-analysis.md` |
+| "хто що викликає" / залежності символів | `cargo modules dependencies` — перед grep по всьому проєкту |
 | Конкретна логіка в конкретному файлі | читай файл напряму |
 
-Не дублюй деталі рішень і стану тут — вони в файлах вище (progressive disclosure).
+## Запуск і перевірка (коротко — деталі в MEMORY.md)
+
+```
+docker start taktoblik-db          # Postgres (fresh: docker run — див. MEMORY.md)
+cargo leptos build                 # НЕ watch — зависає на .gitignore-скані (див. MEMORY.md)
+$env:LEPTOS_SITE_ROOT="target/site"; .\target\debug\server.exe
+```
+Відкрити `http://localhost:3000`.
