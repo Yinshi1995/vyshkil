@@ -184,7 +184,7 @@ fn HomePage() -> impl IntoView {
                             })
                     }}
                 </Suspense>
-                <div class="card__desc">"Етап 1: сід із source_files ще не завантажено."</div>
+                <div class="card__desc">"Dev-сід Етапу 1 (зі specи, не з source_files): органи + приклад переходу 17 АК → 7 КШР."</div>
             </div>
         </div>
     }

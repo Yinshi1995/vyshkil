@@ -13,3 +13,6 @@ node_modules
 
 # Особисті дозволи користувача — не спільні (docs/spec/00-agent-brief.md, §0.5).
 /.claude/settings.local.json
+
+# Скріншоти/снапшоти Playwright MCP — сесійні артефакти, не для git.
+/.playwright-mcp

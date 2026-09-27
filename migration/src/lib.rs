@@ -10,6 +10,7 @@ mod m20260927_000007_create_subordination_closure_table;
 mod m20260927_000008_create_alias_table;
 mod m20260927_000009_create_audit_log_and_triggers;
 mod m20260927_000010_create_closure_rebuild_trigger;
+mod m20260927_000011_seed_dev_data;
 
 pub struct Migrator;
 
@@ -30,6 +31,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260927_000008_create_alias_table::Migration),
             Box::new(m20260927_000009_create_audit_log_and_triggers::Migration),
             Box::new(m20260927_000010_create_closure_rebuild_trigger::Migration),
+            Box::new(m20260927_000011_seed_dev_data::Migration),
         ]
     }
 }
