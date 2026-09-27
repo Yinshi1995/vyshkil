@@ -131,6 +131,7 @@ fn ActorSwitcher() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     let db_status = Resource::new(|| (), |_| health_check());
+    let orgs = Resource::new(|| (), |_| list_orgs());
 
     view! {
         <h1>"Taktoblik"</h1>
@@ -138,19 +139,54 @@ fn HomePage() -> impl IntoView {
             "Облік заходів підготовки військових частин: збір даних, нормалізація, звірка між "
             "рівнями підпорядкування, звітні документи."
         </p>
-        <p>
-            "Стан підключення до БД: "
-            <Suspense fallback=|| view! { "перевіряю..." }>
-                {move || {
-                    db_status
-                        .get()
-                        .map(|res| match res {
-                            Ok(status) => status,
-                            Err(e) => format!("помилка: {e}"),
-                        })
-                }}
-            </Suspense>
-        </p>
+        <div class="card-row">
+            <div class="card">
+                <div class="card__label">
+                    <span class="card__icon-dot" style="background: var(--cat-sage)"></span>
+                    "З'єднання з БД"
+                </div>
+                <Suspense fallback=|| view! { <div class="card__value">"…"</div> }>
+                    {move || {
+                        db_status
+                            .get()
+                            .map(|res| match res {
+                                Ok(status) => {
+                                    view! { <div class="card__value status-ok">{status}</div> }.into_any()
+                                }
+                                Err(e) => {
+                                    view! {
+                                        <div class="card__value status-error">"помилка"</div>
+                                        <div class="card__desc">{e.to_string()}</div>
+                                    }
+                                        .into_any()
+                                }
+                            })
+                    }}
+                </Suspense>
+            </div>
+            <div class="card">
+                <div class="card__label">
+                    <span class="card__icon-dot" style="background: var(--cat-blue)"></span>
+                    "Організацій у довіднику"
+                </div>
+                <Suspense fallback=|| view! { <div class="card__value">"…"</div> }>
+                    {move || {
+                        orgs.get()
+                            .map(|res| match res {
+                                Ok(list) => view! { <div class="card__value">{list.len()}</div> }.into_any(),
+                                Err(e) => {
+                                    view! {
+                                        <div class="card__value status-error">"помилка"</div>
+                                        <div class="card__desc">{e.to_string()}</div>
+                                    }
+                                        .into_any()
+                                }
+                            })
+                    }}
+                </Suspense>
+                <div class="card__desc">"Етап 1: сід із source_files ще не завантажено."</div>
+            </div>
+        </div>
     }
 }
 

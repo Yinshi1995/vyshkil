@@ -1,16 +1,25 @@
-/* Палітра — точні hex зі спеки (docs/spec/05-documents.md), не з пікселів референсу
-   (див. .claude/decisions/ui-visual-style-source.md). Це UI для щоденної роботи з таблицями,
-   тому без фото-текстур і декору презентації — лише колір і контраст. */
+/* Палітра — реальні кольори з референсу UI застосунку "Напрацювання ВВД.pptx"
+   (НЕ з docs/spec/05-documents.md — та палітра для генерованих документів, інша).
+   Джерело й обґрунтування: .claude/decisions/ui-visual-style-source.md */
 :root {
-  --panel: #38331f;
-  --panel-dark: #0e0c08;
+  --bg-darkest: #302d24;
+  --panel: #453f2e;
+  --panel-alt: #393529;
+  --text-main: #f5f2ec;
+  --text-secondary: #c7c1b0;
+  --text-muted: #9c947f;
   --accent: #f39200;
-  --text-main: #f7f5f0;
-  --text-secondary: #d2ccbc;
-  --text-muted: #a8a08a;
-  --border: #4a4530;
-  --error: #e05656;
-  --warning: #f3c200;
+  --accent-dark: #855000;
+  --border: rgba(245, 242, 236, 0.1);
+  --shadow: rgba(0, 0, 0, 0.35);
+
+  /* Категорійні кольори (іконки/бейджі за типом сутності — не для тексту чи фону панелей) */
+  --cat-blue: #8faec9;
+  --cat-gold: #d9c08a;
+  --cat-sage: #9db08c;
+  --cat-terracotta: #c98f6e;
+
+  --error: #e07a5f;
 }
 
 * {
@@ -21,22 +30,35 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: var(--panel-dark);
+  background: var(--bg-darkest);
   color: var(--text-main);
   font-family: "Segoe UI", "Arial", sans-serif;
   font-size: 15px;
+  line-height: 1.5;
 }
 
 main {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 16px 32px;
+  padding: 24px 20px 48px;
 }
 
-h1,
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text-main);
+}
+
 h2,
 h3 {
   color: var(--text-main);
+  font-weight: 600;
+}
+
+p {
+  color: var(--text-secondary);
+  max-width: 720px;
 }
 
 a {
@@ -49,33 +71,38 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 16px;
-  background: var(--panel);
+  padding: 14px 24px;
+  background: var(--panel-alt);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 8px var(--shadow);
 }
 
 .app-header__title {
-  font-weight: 600;
-  font-size: 18px;
+  font-weight: 700;
+  font-size: 19px;
   color: var(--text-main);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 .actor-switcher {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .actor-switcher select {
-  background: var(--panel-dark);
+  background: var(--panel);
   color: var(--text-main);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 8px;
+  border-radius: 6px;
+  padding: 6px 10px;
   font-size: 14px;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .actor-switcher select:focus {
@@ -83,26 +110,56 @@ a {
   outline-offset: 1px;
 }
 
-/* Панелі-картки — та сама мова, що й KPI-плитки в презентаціях, без фото/декору */
+.actor-switcher .status-error {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Картки — icon+text патерн з референсу: акцентний колір за категорією, тінь для глибини */
+.card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 20px 0;
+}
+
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 16px;
-  margin-bottom: 12px;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 4px 16px var(--shadow);
+  flex: 1 1 240px;
+  min-width: 220px;
+}
+
+.card__icon-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
 }
 
 .card__label {
   text-transform: uppercase;
   font-size: 11px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
+  margin-bottom: 6px;
 }
 
 .card__value {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 700;
   color: var(--accent);
+  line-height: 1.1;
+}
+
+.card__desc {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 8px;
 }
 
 /* Таблиці — висока контрастність, великий шрифт у клітинках (02 §8) */
@@ -110,24 +167,29 @@ table {
   width: 100%;
   border-collapse: collapse;
   background: var(--panel);
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
+  box-shadow: 0 4px 16px var(--shadow);
 }
 
 th,
 td {
-  padding: 8px 12px;
+  padding: 10px 14px;
   text-align: left;
   border-bottom: 1px solid var(--border);
   font-size: 15px;
 }
 
 th {
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
   font-size: 12px;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+}
+
+tr:last-child td {
+  border-bottom: none;
 }
 
 tr:hover td {
