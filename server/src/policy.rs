@@ -1,42 +1,22 @@
 //! Єдиний модуль перевірки прав (docs/spec/01-domain-model.md §6). Кожна server function,
 //! яка читає/пише доменні дані, викликає щось звідси першою — жодних перевірок прав в іншому місці.
+//! Тип Actor/Role — в `app::actor` (спільний з UI-перемикачем), тут — лише логіка перевірки.
 
+pub use app::actor::{Actor, Role};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, Statement};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Role {
-    Admin,
-    OrgEditor,
-    Viewer,
+/// Рядок для `SET LOCAL app.actor` — читає generic-тригер аудиту (audit_log.actor).
+/// Не містить ПІБ: лише org_id (число) і роль.
+pub fn session_tag(actor: Actor) -> String {
+    format!("{}:{}", actor.org_id, actor.role.as_str())
 }
 
-/// Актор = організація + роль. На етапі розробки (без автентифікації) — перемикач у шапці;
-/// пізніше цю саму пару віддаватиме мікросервіс автентифікації (01 §6).
-#[derive(Debug, Clone, Copy)]
-pub struct Actor {
-    pub org_id: i32,
-    pub role: Role,
-}
-
-impl Actor {
-    /// Рядок для `SET LOCAL app.actor` — читає generic-тригер аудиту (audit_log.actor).
-    /// Не містить ПІБ: лише org_id (число) і роль.
-    pub fn session_tag(&self) -> String {
-        let role = match self.role {
-            Role::Admin => "admin",
-            Role::OrgEditor => "org_editor",
-            Role::Viewer => "viewer",
-        };
-        format!("{}:{role}", self.org_id)
-    }
-
-    /// admin редагує все; решта — тільки власні подання своєї організації (org §6).
-    pub fn can_edit_org(&self, target_org_id: i32) -> bool {
-        match self.role {
-            Role::Admin => true,
-            Role::OrgEditor => self.org_id == target_org_id,
-            Role::Viewer => false,
-        }
+/// admin редагує все; решта — тільки власні подання своєї організації (01 §6).
+pub fn can_edit_org(actor: Actor, target_org_id: i32) -> bool {
+    match actor.role {
+        Role::Admin => true,
+        Role::OrgEditor => actor.org_id == target_org_id,
+        Role::Viewer => false,
     }
 }
 
@@ -74,10 +54,7 @@ pub async fn can_view_org(
 /// Виконує `SET LOCAL app.actor = '<org_id>:<role>'` на поточному з'єднанні/транзакції —
 /// щоб generic-тригер аудиту (`audit_log_trigger`) знав актора без передачі його в кожен запит.
 pub async fn set_session_actor(db: &impl ConnectionTrait, actor: Actor) -> Result<(), DbErr> {
-    let sql = format!(
-        "SET LOCAL app.actor = '{}'",
-        actor.session_tag().replace('\'', "")
-    );
+    let sql = format!("SET LOCAL app.actor = '{}'", session_tag(actor));
     db.execute_unprepared(&sql).await?;
     Ok(())
 }

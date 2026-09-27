@@ -1,0 +1,143 @@
+/* Палітра — точні hex зі спеки (docs/spec/05-documents.md), не з пікселів референсу
+   (див. .claude/decisions/ui-visual-style-source.md). Це UI для щоденної роботи з таблицями,
+   тому без фото-текстур і декору презентації — лише колір і контраст. */
+:root {
+  --panel: #38331f;
+  --panel-dark: #0e0c08;
+  --accent: #f39200;
+  --text-main: #f7f5f0;
+  --text-secondary: #d2ccbc;
+  --text-muted: #a8a08a;
+  --border: #4a4530;
+  --error: #e05656;
+  --warning: #f3c200;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--panel-dark);
+  color: var(--text-main);
+  font-family: "Segoe UI", "Arial", sans-serif;
+  font-size: 15px;
+}
+
+main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 16px 32px;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--text-main);
+}
+
+a {
+  color: var(--accent);
+}
+
+/* Шапка з перемикачем актора (02 §8, 01 §6 — dev-режим без автентифікації) */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header__title {
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--text-main);
+  letter-spacing: 0.02em;
+}
+
+.actor-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.actor-switcher select {
+  background: var(--panel-dark);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 14px;
+}
+
+.actor-switcher select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Панелі-картки — та сама мова, що й KPI-плитки в презентаціях, без фото/декору */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.card__label {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.card__value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Таблиці — висока контрастність, великий шрифт у клітинках (02 §8) */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+th,
+td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+}
+
+th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+
+tr:hover td {
+  background: rgba(243, 146, 0, 0.06);
+}
+
+.status-error {
+  color: var(--error);
+}
+
+.status-ok {
+  color: var(--text-secondary);
+}

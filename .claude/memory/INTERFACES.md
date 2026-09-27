@@ -34,20 +34,30 @@ date: 2026-09-27
 (наприклад REST-ендпоінти поза Leptos) мають діставати БД через `State<AppState>`, а не заводити
 власне з'єднання.
 
+## Реалізовані модулі (доповнювати в міру появи коду)
+
+- `app::normalize::normalize(&str) -> String` — єдина функція нормалізації синонімів
+  (`docs/spec/01-domain-model.md` §2, рішення [[alias-normalization-in-app]],
+  [[normalize-direction-one-way]]): нижній регістр, латинські→кириличні двійники (один напрямок),
+  прибрати лапки/дужки, уніфікувати дефіс/тире, "в/с". Без залежностей поза WASM. Табличні тести
+  на реальних граблях у самому файлі (`app/src/normalize.rs`).
+- `app::actor::{Actor, Role}` — чистий тип (org_id + роль), без sea-orm/tokio. Використовується і
+  клієнтом (`ActorSwitcher` у шапці, `RwSignal<Option<Actor>>` через `provide_context`), і сервером
+  (`server::policy` реекспортує ці ж типи — `pub use app::actor::{Actor, Role};` — щоб не дублювати
+  визначення). Якщо міняєш поля `Actor`/варіанти `Role` — онови обидва боки одразу.
+- `app::app::list_orgs()` — `#[server]`-функція, читає `org` напряму SQL (без sea-orm entity —
+  Stage 1 їх ще не заводить). Повертає `(id, "назва (номер)")` для перемикача актора.
+- `server::policy` — `can_view_org` (через `subordination_closure`), `can_edit_org`, `session_tag`/
+  `set_session_actor` (для `audit_log.actor`). **Написано, але ще НЕ викликається** з жодної
+  server function — з'явиться разом із першою реальною CRUD-операцією (дерево/картка частини).
+
 ## Плановані модулі (Етап 1+, docs/spec) — доповнювати сюди в міру появи коду
 
-- `app::normalize` — єдина функція нормалізації синонімів (`docs/spec/01-domain-model.md` §2,
-  рішення [[alias-normalization-in-app]]): нижній регістр, латинські↔кириличні двійники, прибрати
-  лапки/дужки, уніфікувати дефіс/тире. Без залежностей поза WASM — компілюється і для SSR, і для
-  frontend. Порівняння між сирим і канонічним значенням — по результату цієї функції (`alias.norm`).
 - `app::validation` — правила валідації з `docs/spec/03-import-validation.md` §5, спільні для форми
   введення (`02`) і превʼю імпорту (`03`) — та сама функція викликається і в WASM (реальний час), і
   на сервері (фіксація/імпорт).
 - `app::dates` — парсинг дат у довільних форматах (`dd.mm`, діапазони, рік з контексту `as_of_date`) —
   `docs/spec/03-import-validation.md` §4.
-- `server::policy` — єдиний модуль перевірки прав (`admin`/`org_editor`/`viewer`,
-  `docs/spec/04-reconciliation-notifications.md` §6). **Кожна** server function викликає його першою
-  (`server/CLAUDE.md`) — ніяких перевірок прав в іншому місці.
 - Формат `reported_*` ↔ канон (`training_group` тощо) — зіставлення за ключем "відправник + вид +
   (ВОС|курс|програма) + місце + початок ±3 дні" (`04-reconciliation-notifications.md` §2); правило
   визначення канонічного значення — одна функція, `training_group.canonical_from` фіксує крок.

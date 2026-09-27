@@ -25,3 +25,5 @@ date: 2026-09-27
 - [Нормалізація синонімів в `app`](../decisions/alias-normalization-in-app.md) — одна функція для SSR і WASM, порівняння по `alias.norm`.
 - [text+CHECK замість Postgres ENUM](../decisions/text-enums-not-pg-enums.md) — додавання значення не має вимагати міграції типу.
 - [Знеособлена черга сповіщень](../decisions/depersonalized-notification-outbox.md) — `notification_outbox` + трейт `NotificationChannel`, шаблон без доменних даних.
+- [Транслітерація normalize() — лише Latin→Cyrillic](../decisions/normalize-direction-one-way.md) — зворотний напрямок ("Vampire"↔"Вампір") через seed-рядки alias, не героїзм в одній функції.
+- [Джерело візуального стилю UI](../decisions/ui-visual-style-source.md) — палітра з 05-documents.md (панелі/акцент/текст), референс-pptx лише підтвердив напрямок.

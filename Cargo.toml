@@ -32,3 +32,5 @@ site-pkg-dir = "pkg"
 site-addr = "127.0.0.1:3000"
 reload-port = 3001
 env = "PROD"
+# Темно-оливкова палітра + помаранчевий акцент (05-documents.md), узгоджена з .claude/decisions/ui-visual-style-source.md.
+style-file = "app/style/main.css"

@@ -5,6 +5,8 @@ use leptos_router::{
     StaticSegment,
 };
 
+use crate::actor::{Actor, Role};
+
 // shell() генерує повний HTML-документ навколо <App/> — його викликає і SSR (перший рендер),
 // і fallback-обробник помилок на сервері, тому він винесений окремо від самого <App/>.
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -29,10 +31,16 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 pub fn App() -> impl IntoView {
     provide_meta_context();
 
+    // Актор (організація+роль) — dev-перемикач у шапці замість автентифікації (01 §6).
+    // None, поки нема жодної організації в довіднику (сід ще не завантажено — Етап 1, далі).
+    let actor: RwSignal<Option<Actor>> = RwSignal::new(None);
+    provide_context(actor);
+
     view! {
         <Stylesheet id="leptos" href="/pkg/taktoblik.css"/>
-        <Title text="Taktoblik — облік бойової підготовки"/>
+        <Title text="Taktoblik — облік підготовки"/>
         <Router>
+            <Header/>
             <main>
                 <Routes fallback=|| view! { <p>"Сторінку не знайдено."</p> }>
                     <Route path=StaticSegment("") view=HomePage/>
@@ -43,12 +51,93 @@ pub fn App() -> impl IntoView {
 }
 
 #[component]
+fn Header() -> impl IntoView {
+    view! {
+        <header class="app-header">
+            <span class="app-header__title">"Taktoblik"</span>
+            <ActorSwitcher/>
+        </header>
+    }
+}
+
+/// Перемикач актора: список організацій із `org` + вибір ролі. Тільки для розробки —
+/// пізніше цю пару (org, роль) віддаватиме мікросервіс автентифікації (01 §6).
+#[component]
+fn ActorSwitcher() -> impl IntoView {
+    let actor = expect_context::<RwSignal<Option<Actor>>>();
+    let orgs = Resource::new(|| (), |_| list_orgs());
+
+    view! {
+        <div class="actor-switcher">
+            <label>"Актор:"</label>
+            <Suspense fallback=|| view! { <span>"..."</span> }>
+                {move || {
+                    orgs.get()
+                        .map(|res| match res {
+                            Ok(list) if list.is_empty() => {
+                                view! { <span class="status-error">"немає організацій (сід ще не завантажено)"</span> }
+                                    .into_any()
+                            }
+                            Ok(list) => {
+                                let on_org_change = move |ev| {
+                                    let org_id: i32 = event_target_value(&ev).parse().unwrap_or_default();
+                                    let role = actor.get().map(|a| a.role).unwrap_or(Role::Admin);
+                                    actor.set(Some(Actor { org_id, role }));
+                                };
+                                let on_role_change = move |ev| {
+                                    let role = Role::parse(&event_target_value(&ev)).unwrap_or(Role::Admin);
+                                    if let Some(a) = actor.get() {
+                                        actor.set(Some(Actor { org_id: a.org_id, role }));
+                                    }
+                                };
+                                let current_org = actor.get().map(|a| a.org_id);
+                                view! {
+                                    <select on:change=on_org_change>
+                                        {list.iter()
+                                            .map(|(id, name)| {
+                                                let selected = current_org == Some(*id);
+                                                view! {
+                                                    <option value=id.to_string() selected=selected>
+                                                        {name.clone()}
+                                                    </option>
+                                                }
+                                            })
+                                            .collect_view()}
+                                    </select>
+                                    <select on:change=on_role_change>
+                                        {Role::ALL
+                                            .iter()
+                                            .map(|r| {
+                                                view! {
+                                                    <option value=r.as_str()>{r.label()}</option>
+                                                }
+                                            })
+                                            .collect_view()}
+                                    </select>
+                                }
+                                    .into_any()
+                            }
+                            Err(e) => {
+                                view! { <span class="status-error">{format!("помилка: {e}")}</span> }
+                                    .into_any()
+                            }
+                        })
+                }}
+            </Suspense>
+        </div>
+    }
+}
+
+#[component]
 fn HomePage() -> impl IntoView {
     let db_status = Resource::new(|| (), |_| health_check());
 
     view! {
         <h1>"Taktoblik"</h1>
-        <p>"Система збору та обробки даних з бойової підготовки батальйон-бригада."</p>
+        <p>
+            "Облік заходів підготовки військових частин: збір даних, нормалізація, звірка між "
+            "рівнями підпорядкування, звітні документи."
+        </p>
         <p>
             "Стан підключення до БД: "
             <Suspense fallback=|| view! { "перевіряю..." }>
@@ -72,4 +161,39 @@ pub async fn health_check() -> Result<String, ServerFnError> {
     let db = expect_context::<sea_orm::DatabaseConnection>();
     db.ping().await.map_err(|e| ServerFnError::new(e.to_string()))?;
     Ok("з'єднано".to_string())
+}
+
+/// Список організацій для перемикача актора: (id, короткий вигляд "назва (номер)").
+/// Прямий SQL, без entity — Stage 1 ще не заводить повноцінні sea-orm entity для org.
+#[server(ListOrgs, "/api")]
+pub async fn list_orgs() -> Result<Vec<(i32, String)>, ServerFnError> {
+    use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
+
+    #[derive(FromQueryResult)]
+    struct OrgRow {
+        id: i32,
+        short_name: String,
+        number: Option<String>,
+    }
+
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    let stmt = Statement::from_string(
+        db.get_database_backend(),
+        "SELECT id, short_name, number FROM org WHERE deleted_at IS NULL ORDER BY short_name",
+    );
+    let rows = OrgRow::find_by_statement(stmt)
+        .all(&db)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let label = match r.number {
+                Some(n) => format!("{} ({n})", r.short_name),
+                None => r.short_name,
+            };
+            (r.id, label)
+        })
+        .collect())
 }
