@@ -13,6 +13,10 @@ leptos = { workspace = true }
 leptos_meta = { workspace = true }
 leptos_router = { workspace = true }
 serde = { workspace = true }
+# Парсинг/арифметика дат у domain/dates.rs (02 §4, 03 §4) -- чиста дата-математика, без "clock"
+# (не читаємо системний час) і без "wasmbind" (не чіпаємо JS Date) -- компілюється в WASM так само,
+# як і на сервері (рішення: [[chrono-in-domain]]).
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 # sea-orm потрібен лише на боці сервера (щоб #[server]-функція могла дістати DatabaseConnection
 # з контексту, а `queries` — самостійно з'єднатись у тестах) — опційний, вмикається тільки під
 # feature "ssr", у wasm його бути не може. Драйвер+рантайм (не лише "macros") потрібні, щоб
