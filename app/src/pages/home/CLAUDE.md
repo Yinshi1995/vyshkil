@@ -1,6 +1,6 @@
 # app/src/pages/home — головна сторінка (`/`)
 
-- Можна: `services`, `types`, `domain`, `backend` (лише з `server.rs`, під `ssr`).
+- Можна: `services`, `widgets`, `hooks`, `types`, `domain`, `backend` (лише з `server.rs`, під `ssr`).
   Не можна: інші сторінки.
 - `server.rs`/`components/` оголошені без `pub` (`mod server; mod components;`) — приватні для
   цієї сторінки. Компонент/server fn стає потрібним ще одній сторінці → переносити в

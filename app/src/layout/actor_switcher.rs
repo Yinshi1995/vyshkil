@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 
+use crate::hooks::use_actor::use_actor;
 use crate::services::orgs::list_orgs;
 use crate::types::actor::{Actor, Role};
 
@@ -7,7 +8,7 @@ use crate::types::actor::{Actor, Role};
 /// пізніше цю пару (org, роль) віддаватиме мікросервіс автентифікації (01 §6).
 #[component]
 pub fn ActorSwitcher() -> impl IntoView {
-    let actor = expect_context::<RwSignal<Option<Actor>>>();
+    let actor = use_actor();
     let orgs = Resource::new(|| (), |_| list_orgs());
 
     view! {

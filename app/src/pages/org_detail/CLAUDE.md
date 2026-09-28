@@ -1,6 +1,6 @@
 # app/src/pages/org_detail — картка частини (`/org/:id`)
 
-- Можна: `services`, `types`, `domain`, `backend` (лише з `server.rs`, під `ssr`).
+- Можна: `services`, `widgets`, `hooks`, `types`, `domain`, `backend` (лише з `server.rs`, під `ssr`).
   Не можна: інші сторінки.
 - `server.rs` оголошений без `pub` (`mod server;`) — приватний для цієї сторінки.
 

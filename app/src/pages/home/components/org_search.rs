@@ -1,14 +1,16 @@
 use leptos::prelude::*;
 
+use crate::hooks::use_actor::use_actor;
 use crate::pages::home::server::search_orgs;
-use crate::types::actor::Actor;
+use crate::widgets::ActorNotice;
 
 /// Нечіткий пошук організацій (02 §3): стійкий до опечаток/розкладки/скорочень
 /// ("152НЦ", "а4896", "польша" — усі знаходять канонічну організацію). Результат звужений до
-/// видимого поточному актору піддерева (backend::policy) — без обраного актора пошук порожній.
+/// видимого поточному актору піддерева (backend::policy) — без обраного актора показуємо
+/// `<ActorNotice/>`, а не мовчазне "нічого не знайдено".
 #[component]
 pub fn OrgSearch() -> impl IntoView {
-    let actor = expect_context::<RwSignal<Option<Actor>>>();
+    let actor = use_actor();
     let query = RwSignal::new(String::new());
     let results = Resource::new(
         move || (actor.get(), query.get()),
@@ -33,6 +35,9 @@ pub fn OrgSearch() -> impl IntoView {
             />
             <Suspense fallback=|| view! { <p>"…"</p> }>
                 {move || {
+                    if actor.get().is_none() {
+                        return Some(view! { <ActorNotice/> }.into_any());
+                    }
                     results
                         .get()
                         .map(|res| match res {

@@ -3,15 +3,16 @@ mod server;
 use leptos::prelude::*;
 use leptos_router::hooks::use_params_map;
 
-use crate::types::actor::Actor;
+use crate::hooks::use_actor::use_actor;
+use crate::widgets::ActorNotice;
 use server::get_org_detail;
 
 /// Сторінка `/org/:id`: поточні дані + історія назв/статусів (порожня історія — легітимний стан,
 /// поки в частини не було жодного перейменування чи зміни статусу). Доступ перевіряється
-/// `backend::policy::can_view_org` (01 §6) — без обраного актора картка не завантажується.
+/// `backend::policy::can_view_org` (01 §6) — без обраного актора показуємо `<ActorNotice/>`.
 #[component]
 pub fn OrgDetailPage() -> impl IntoView {
-    let actor = expect_context::<RwSignal<Option<Actor>>>();
+    let actor = use_actor();
     let params = use_params_map();
     let org_id = move || {
         params
@@ -28,6 +29,9 @@ pub fn OrgDetailPage() -> impl IntoView {
     view! {
         <Suspense fallback=|| view! { <p>"…"</p> }>
             {move || {
+                if actor.get().is_none() {
+                    return Some(view! { <ActorNotice/> }.into_any());
+                }
                 detail
                     .get()
                     .map(|res| match res {
