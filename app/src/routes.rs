@@ -7,7 +7,7 @@ use leptos_router::{
     ParamSegment, StaticSegment,
 };
 
-use crate::pages::{home::HomePage, org_detail::OrgDetailPage};
+use crate::pages::{home::HomePage, org_detail::OrgDetailPage, vos_lookup::VosLookupPage};
 
 #[component]
 pub fn AppRoutes() -> impl IntoView {
@@ -15,6 +15,7 @@ pub fn AppRoutes() -> impl IntoView {
         <Routes fallback=|| view! { <p>"Сторінку не знайдено."</p> }>
             <Route path=StaticSegment("") view=HomePage/>
             <Route path=(StaticSegment("org"), ParamSegment("id")) view=OrgDetailPage/>
+            <Route path=StaticSegment("vos-lookup") view=VosLookupPage/>
         </Routes>
     }
 }

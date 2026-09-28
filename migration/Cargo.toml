@@ -10,6 +10,9 @@ path = "src/lib.rs"
 [dependencies]
 # tokio потрібен прямо тут (не лише через sea-orm-migration) для макроса #[tokio::main] у бінарнику `migration`.
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+# app::domain::normalize — та сама функція нормалізації, що й у runtime-пошуку (backend::repo).
+# Без фічі "ssr": normalize сам по собі не залежить від sea-orm/leptos, тож не тягне їх сюди.
+app = { path = "../app" }
 
 [dependencies.sea-orm-migration]
 version = "1"

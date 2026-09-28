@@ -173,6 +173,28 @@ a:hover {
   color: var(--text-main);
 }
 
+.app-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-right: auto;
+  margin-left: 24px;
+}
+
+.app-header__nav a {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.app-header__nav a:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
 .actor-switcher {
   display: flex;
   align-items: center;
@@ -360,6 +382,55 @@ a:hover {
 
 .org-search__link {
   font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Підказка ВОС за ОВТ (pages/vos_lookup) — той самий патерн, що й org-search, окремі класи
+   бо різні сторінки (07: CSS-колокацію відкладено, main.css лишається одним файлом). */
+.hint-search__input {
+  width: 100%;
+  background: var(--panel-alt);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 14px;
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.hint-search__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.hint-search__results {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.hint-search__result {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.hint-search__result:last-child {
+  border-bottom: none;
+}
+
+.hint-search__label {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.hint-search__reason {
+  font-size: 13px;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 

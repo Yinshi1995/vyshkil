@@ -11,6 +11,18 @@ mod m20260927_000008_create_alias_table;
 mod m20260927_000009_create_audit_log_and_triggers;
 mod m20260927_000010_create_closure_rebuild_trigger;
 mod m20260927_000011_seed_dev_data;
+mod m20260928_000012_create_training_kind_table;
+mod m20260928_000013_create_training_direction_table;
+mod m20260928_000014_create_bzvp_program_table;
+mod m20260928_000015_create_vos_table;
+mod m20260928_000016_create_position_table;
+mod m20260928_000017_create_vos_position_table;
+mod m20260928_000018_create_equipment_table;
+mod m20260928_000019_create_equipment_vos_table;
+mod m20260928_000020_create_course_table;
+mod m20260928_000021_create_attrition_reason_table;
+mod m20260928_000022_attach_audit_triggers_stage2;
+mod m20260928_000023_seed_stage2_dictionaries;
 
 pub struct Migrator;
 
@@ -32,6 +44,19 @@ impl MigratorTrait for Migrator {
             Box::new(m20260927_000009_create_audit_log_and_triggers::Migration),
             Box::new(m20260927_000010_create_closure_rebuild_trigger::Migration),
             Box::new(m20260927_000011_seed_dev_data::Migration),
+            // Етап 2 (docs/spec/06-roadmap.md): довідники підготовки + словник спеціальностей.
+            Box::new(m20260928_000012_create_training_kind_table::Migration),
+            Box::new(m20260928_000013_create_training_direction_table::Migration),
+            Box::new(m20260928_000014_create_bzvp_program_table::Migration),
+            Box::new(m20260928_000015_create_vos_table::Migration),
+            Box::new(m20260928_000016_create_position_table::Migration),
+            Box::new(m20260928_000017_create_vos_position_table::Migration),
+            Box::new(m20260928_000018_create_equipment_table::Migration),
+            Box::new(m20260928_000019_create_equipment_vos_table::Migration),
+            Box::new(m20260928_000020_create_course_table::Migration),
+            Box::new(m20260928_000021_create_attrition_reason_table::Migration),
+            Box::new(m20260928_000022_attach_audit_triggers_stage2::Migration),
+            Box::new(m20260928_000023_seed_stage2_dictionaries::Migration),
         ]
     }
 }
