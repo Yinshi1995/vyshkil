@@ -129,4 +129,10 @@ pub enum TrainingGroup {
     PlannedStart,
     PlannedEnd,
     Note,
+    // Додано m20260928_000031 (Етап 4) -- лише мапить назви колонок, historical up() тут
+    // цих колонок не створює.
+    EquipmentText,
+    BasisDocNumber,
+    BasisDocDate,
+    InflowSource,
 }

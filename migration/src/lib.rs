@@ -30,6 +30,9 @@ mod m20260928_000027_attach_audit_triggers_stage3;
 mod m20260928_000028_create_submission_table;
 mod m20260928_000029_add_submission_id_to_group_event;
 mod m20260928_000030_attach_audit_trigger_submission;
+mod m20260928_000031_extend_training_group_for_stage4;
+mod m20260928_000032_create_group_composition_table;
+mod m20260928_000033_attach_audit_trigger_group_composition;
 
 pub struct Migrator;
 
@@ -72,6 +75,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20260928_000028_create_submission_table::Migration),
             Box::new(m20260928_000029_add_submission_id_to_group_event::Migration),
             Box::new(m20260928_000030_attach_audit_trigger_submission::Migration),
+            // Колонки/таблиці training_group відкладені Етапом 3, потрібні сітці Етапу 4.
+            Box::new(m20260928_000031_extend_training_group_for_stage4::Migration),
+            Box::new(m20260928_000032_create_group_composition_table::Migration),
+            Box::new(m20260928_000033_attach_audit_trigger_group_composition::Migration),
         ]
     }
 }

@@ -20,3 +20,6 @@
 | `m…_000028_create_submission_table` | `submission` (мінімум під Етап 4: form/draft_payload, без reported_*/file_id — ті з Етапу 5) | `backend/repo/submissions.rs` |
 | `m…_000029_add_submission_id_to_group_event` | `group_event.submission_id` (nullable FK) | — |
 | `m…_000030_attach_audit_trigger_submission` | audit-тригер на `submission` | — |
+| `m…_000031_extend_training_group_for_stage4` | `training_group` += equipment_text/basis_doc_number/basis_doc_date/inflow_source (відкладено Етапом 3, потрібно сітці) | — |
+| `m…_000032_create_group_composition_table` | `group_composition` (розподіл за підрозділами, опційно) | `backend/repo/groups.rs` |
+| `m…_000033_attach_audit_trigger_group_composition` | audit-тригер на `group_composition` | — |
