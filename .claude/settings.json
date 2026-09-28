@@ -34,8 +34,7 @@
       "Read(*.pptx)",
       "Read(*.pdf)",
       "Read(*.zip)",
-      "Read(docs/templates/**)",
-      "Read(source_files/**)"
+      "Read(docs/templates/**)"
     ]
   }
 }
