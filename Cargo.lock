@@ -113,8 +113,10 @@ dependencies = [
  "leptos",
  "leptos_meta",
  "leptos_router",
+ "migration",
  "sea-orm",
  "serde",
+ "tokio",
 ]
 
 [[package]]

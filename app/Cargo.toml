@@ -14,8 +14,20 @@ leptos_meta = { workspace = true }
 leptos_router = { workspace = true }
 serde = { workspace = true }
 # sea-orm потрібен лише на боці сервера (щоб #[server]-функція могла дістати DatabaseConnection
-# з контексту) — опційний і вмикається тільки під feature "ssr", у wasm його бути не може.
-sea-orm = { version = "1", default-features = false, features = ["macros"], optional = true }
+# з контексту, а `queries` — самостійно з'єднатись у тестах) — опційний, вмикається тільки під
+# feature "ssr", у wasm його бути не може. Драйвер+рантайм (не лише "macros") потрібні, щоб
+# `app::queries` міг підключатись до Postgres напряму в інтеграційних тестах, без сервера/Leptos-контексту.
+sea-orm = { version = "1", default-features = false, features = [
+    "macros",
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+], optional = true }
+
+[dev-dependencies]
+# Тільки для інтеграційних тестів `queries` (окрема тестова БД, "Як вести розробку далі" §3) —
+# не тягнеться у wasm, бо dev-dependencies не впливають на звичайну (не тестову) збірку.
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+migration = { path = "../migration" }
 
 [features]
 hydrate = ["leptos/hydrate"]
