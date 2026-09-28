@@ -8,4 +8,4 @@
 |---|---|---|
 | `actor.rs` | `Actor`/`Role` — org_id + роль, `Serialize`/`Deserialize` | `layout`, `pages/*`, `backend::policy` |
 | `org.rs` | `OrgSearchResult`, `OrgTreeRow`, `OrgDetail` | `backend/repo/orgs.rs`, `pages/home`, `pages/org_detail` |
-| `dictionaries.rs` | `EquipmentVosHint` | `backend/repo/dictionaries.rs`, `pages/vos_lookup` |
+| `dictionaries.rs` | `EquipmentVosHint`, `DictionaryEntry`, `DictionariesOverview`, `LearnedAlias` | `backend/repo/dictionaries.rs`, `pages/vos_lookup`, `pages/dictionaries` |

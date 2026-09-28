@@ -6,6 +6,6 @@
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
-| `db.rs` | `connection()` (DatabaseConnection з контексту), `actor_transaction()` (транзакція + `SET LOCAL app.actor`) | server fn, що пишуть в аудійовані таблиці |
-| `policy.rs` | `Actor`/`Role` (реекспорт), `can_view_org`/`visible_org_ids`, `can_edit_org`, `restrict_tree`, `set_session_actor` | `pages/*/server.rs`, `services/` |
+| `db.rs` | `connection()` (DatabaseConnection з контексту), `actor_transaction()` (транзакція + `SET LOCAL app.actor`) | server fn, що пишуть в аудійовані таблиці (перший приклад — `pages/dictionaries`) |
+| `policy.rs` | `Actor`/`Role` (реекспорт), `can_view_org`/`visible_org_ids`, `can_edit_org`, `is_admin`, `restrict_tree`, `set_session_actor` | `pages/*/server.rs`, `services/` |
 | `repo/` | SQL/SeaORM по агрегатах (своя карта) | `pages/*/server.rs`, `services/` |

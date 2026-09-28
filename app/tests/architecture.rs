@@ -282,7 +282,12 @@ fn every_server_fn_lives_in_services_or_a_page_server_file() {
 /// список тек під контролем; тримаємо як smoke-test, що обхід дерева взагалі щось знайшов).
 #[test]
 fn sanity_the_tree_walk_actually_found_pages() {
-    let pages = BTreeSet::from(["home".to_string(), "org_detail".to_string(), "vos_lookup".to_string()]);
+    let pages = BTreeSet::from([
+        "dictionaries".to_string(),
+        "home".to_string(),
+        "org_detail".to_string(),
+        "vos_lookup".to_string(),
+    ]);
     let found: BTreeSet<String> = fs::read_dir(src_dir().join("pages"))
         .unwrap()
         .filter_map(|e| {

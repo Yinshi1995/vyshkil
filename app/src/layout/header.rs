@@ -13,6 +13,7 @@ pub fn Header() -> impl IntoView {
             <nav class="app-header__nav">
                 <a href="/">"Головна"</a>
                 <a href="/vos-lookup">"ВОС за ОВТ"</a>
+                <a href="/dictionaries">"Довідники"</a>
             </nav>
             <ActorSwitcher/>
         </header>

@@ -9,4 +9,4 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `orgs.rs` | `list_orgs`, `search_orgs`, `subordination_tree`, `org_detail` — SQL по `org`/`alias`/`subordination_closure`/`org_name_history`/`org_status` | `services/orgs.rs`, `pages/home/server.rs`, `pages/org_detail/server.rs`, `app/tests/orgs.rs`, `app/tests/policy.rs` |
-| `dictionaries.rs` | `equipment_vos_hint` — SQL по `alias`/`equipment`/`equipment_vos`/`vos` (той самий `alias`+`pg_trgm`-патерн, що й `orgs.rs`) | `pages/vos_lookup/server.rs` |
+| `dictionaries.rs` | `equipment_vos_hint`, `dictionaries_overview`, `learned_aliases`, `confirm_learned_alias`, `reject_learned_alias` | `pages/vos_lookup/server.rs`, `pages/dictionaries/server.rs` |

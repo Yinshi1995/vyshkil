@@ -12,6 +12,12 @@ pub fn session_tag(actor: Actor) -> String {
     format!("{}:{}", actor.org_id, actor.role.as_str())
 }
 
+/// Дії, не прив'язані до конкретної організації (підтвердження learned-синонімів, керування
+/// довідниками — 01 §"Навчання") — лише `admin`.
+pub fn is_admin(actor: Actor) -> bool {
+    actor.role == Role::Admin
+}
+
 /// admin редагує все; решта — тільки власні подання своєї організації (01 §6).
 pub fn can_edit_org(actor: Actor, target_org_id: i32) -> bool {
     match actor.role {
@@ -125,6 +131,13 @@ mod tests {
     fn org_editor_edits_only_own_org() {
         assert!(can_edit_org(actor(1, Role::OrgEditor), 1), "org_editor редагує свою організацію");
         assert!(!can_edit_org(actor(1, Role::OrgEditor), 2), "org_editor НЕ редагує чужу організацію");
+    }
+
+    #[test]
+    fn only_admin_passes_is_admin() {
+        assert!(is_admin(actor(1, Role::Admin)));
+        assert!(!is_admin(actor(1, Role::OrgEditor)));
+        assert!(!is_admin(actor(1, Role::Viewer)));
     }
 
     #[test]

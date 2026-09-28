@@ -1,9 +1,13 @@
 //! SQL/SeaORM для словників Етапу 2: `vos`, `equipment`, `equipment_vos`, `position`,
 //! `vos_position` — довідникові дані, доступні будь-якому актору (не org-scoped, на відміну
 //! від `repo::orgs`, тому тут немає `policy`-фільтрації, як і в `services::orgs::list_orgs`).
+//! Виняток — `learned_aliases`/`confirm_learned_alias`/`reject_learned_alias`: підтвердження
+//! learned-синонімів — дія адміна (перевіряється в `pages/dictionaries/server.rs`).
 
 use crate::domain::normalize::normalize;
-use crate::types::dictionaries::EquipmentVosHint;
+use crate::types::dictionaries::{
+    DictionariesOverview, DictionaryEntry, EquipmentVosHint, LearnedAlias,
+};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
 
 /// Підказка "ОВТ/сленг → ВОС" (02 §3): той самий `alias`+`pg_trgm` патерн, що й `repo::orgs::
@@ -75,4 +79,129 @@ pub async fn equipment_vos_hint(
             is_exact: r.is_exact,
         })
         .collect())
+}
+
+#[derive(FromQueryResult)]
+struct SimpleRow {
+    id: i32,
+    label: String,
+    extra: Option<String>,
+}
+
+async fn simple_list(db: &DatabaseConnection, sql: &str) -> Result<Vec<DictionaryEntry>, DbErr> {
+    let stmt = Statement::from_string(db.get_database_backend(), sql);
+    let rows = SimpleRow::find_by_statement(stmt).all(db).await?;
+    Ok(rows.into_iter().map(|r| DictionaryEntry { id: r.id, label: r.label, extra: r.extra }).collect())
+}
+
+/// Усі "прості" довідники Етапу 2 одним викликом (01 §2) — для сторінки адмінки.
+pub async fn dictionaries_overview(db: &DatabaseConnection) -> Result<DictionariesOverview, DbErr> {
+    Ok(DictionariesOverview {
+        training_kinds: simple_list(
+            db,
+            "SELECT id, name AS label, code AS extra FROM training_kind \
+             WHERE deleted_at IS NULL ORDER BY name",
+        )
+        .await?,
+        training_directions: simple_list(
+            db,
+            "SELECT id, name AS label, code AS extra FROM training_direction \
+             WHERE deleted_at IS NULL ORDER BY name",
+        )
+        .await?,
+        bzvp_programs: simple_list(
+            db,
+            "SELECT id, name AS label, NULL::text AS extra FROM bzvp_program \
+             WHERE deleted_at IS NULL ORDER BY name",
+        )
+        .await?,
+        vos: simple_list(
+            db,
+            "SELECT id, (code || ' — ' || title) AS label, status AS extra FROM vos \
+             WHERE deleted_at IS NULL ORDER BY code",
+        )
+        .await?,
+        positions: simple_list(
+            db,
+            "SELECT id, name AS label, NULL::text AS extra FROM \"position\" \
+             WHERE deleted_at IS NULL ORDER BY name",
+        )
+        .await?,
+        equipment: simple_list(
+            db,
+            "SELECT id, name AS label, category AS extra FROM equipment \
+             WHERE deleted_at IS NULL ORDER BY name",
+        )
+        .await?,
+        courses: simple_list(
+            db,
+            "SELECT id, name AS label, NULL::text AS extra FROM course \
+             WHERE deleted_at IS NULL ORDER BY name",
+        )
+        .await?,
+        attrition_reasons: simple_list(
+            db,
+            "SELECT id, name AS label, \
+                    (CASE WHEN requires_note THEN 'потребує примітки' ELSE NULL END) AS extra \
+             FROM attrition_reason WHERE deleted_at IS NULL ORDER BY name",
+        )
+        .await?,
+    })
+}
+
+/// Learned-синоніми, що чекають підтвердження адміном (01 §"Навчання") — найстаріші перші.
+pub async fn learned_aliases(db: &DatabaseConnection) -> Result<Vec<LearnedAlias>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+        target_type: String,
+        raw: String,
+        norm: String,
+        uses_count: i32,
+        created_at: String,
+    }
+
+    let stmt = Statement::from_string(
+        db.get_database_backend(),
+        "SELECT id, target_type, raw, norm, uses_count, \
+                to_char(created_at, 'YYYY-MM-DD HH24:MI') AS created_at \
+         FROM alias WHERE source = 'learned' ORDER BY created_at",
+    );
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| LearnedAlias {
+            id: r.id,
+            target_type: r.target_type,
+            raw: r.raw,
+            norm: r.norm,
+            uses_count: r.uses_count,
+            created_at: r.created_at,
+        })
+        .collect())
+}
+
+/// Підтвердити learned-синонім: залишається в `alias`, стає `source = 'manual'` (адмін підтвердив
+/// відповідність — те саме довірче джерело, що й ручне введення). Транзакція з `SET LOCAL
+/// app.actor` — щоб audit_log знав, хто підтвердив.
+pub async fn confirm_learned_alias(db: &impl ConnectionTrait, alias_id: i32) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "UPDATE alias SET source = 'manual' WHERE id = $1 AND source = 'learned'",
+        [alias_id.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+/// Відхилити learned-синонім: видаляється з `alias` (хибна відповідність — не тримаємо її).
+pub async fn reject_learned_alias(db: &impl ConnectionTrait, alias_id: i32) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "DELETE FROM alias WHERE id = $1 AND source = 'learned'",
+        [alias_id.into()],
+    ))
+    .await?;
+    Ok(())
 }
