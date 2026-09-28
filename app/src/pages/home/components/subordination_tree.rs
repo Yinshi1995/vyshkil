@@ -1,18 +1,21 @@
 use leptos::prelude::*;
 
 use crate::pages::home::server::get_subordination_tree;
+use crate::types::actor::Actor;
 use crate::types::org::OrgTreeRow;
 
 /// Дерево підпорядкування з перемикачем осі й дати. За замовчуванням — сьогодні; щоб побачити
 /// сценарій переходу (142/154/61/5/92/225 омбр/ошбр з 17 АК → 7 КШР, серпень 2026), можна
-/// підставити 2026-07-20 і 2026-09-20.
+/// підставити 2026-07-20 і 2026-09-20. Дерево обрізане до видимого поточному актору піддерева
+/// (backend::policy) — без обраного актора дерево порожнє.
 #[component]
 pub fn SubordinationTree() -> impl IntoView {
+    let actor = expect_context::<RwSignal<Option<Actor>>>();
     let axis = RwSignal::new("staff".to_string());
     let as_of = RwSignal::new("2026-09-28".to_string());
     let tree = Resource::new(
-        move || (axis.get(), as_of.get()),
-        |(axis, as_of)| async move { get_subordination_tree(as_of, axis).await },
+        move || (actor.get(), axis.get(), as_of.get()),
+        |(actor, axis, as_of)| async move { get_subordination_tree(actor, as_of, axis).await },
     );
 
     view! {

@@ -1,8 +1,12 @@
 //! Актор = організація + роль (docs/spec/01-domain-model.md §6). Чистий тип без sea-orm/tokio —
-//! той самий у WASM (перемикач у шапці) і на сервері (server::policy). Дозволу тут нема,
-//! лише представлення "хто зараз обраний" — саму перевірку прав робить server::policy.
+//! той самий у WASM (перемикач у шапці) і на сервері (`backend::policy`). Дозволу тут нема,
+//! лише представлення "хто зараз обраний" — саму перевірку прав робить `backend::policy`.
+//! `Serialize`/`Deserialize` — щоб їздити як параметр `#[server]`-функції (клієнт передає
+//! поточного актора з перемикача в шапці разом із кожним запитом, що читає доменні дані).
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     Admin,
     OrgEditor,
@@ -38,7 +42,7 @@ impl Role {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Actor {
     pub org_id: i32,
     pub role: Role,
