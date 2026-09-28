@@ -25,6 +25,7 @@
 | Контракт між app/frontend/server | `.claude/memory/INTERFACES.md` |
 | Домен і вимоги (сутності, форми, імпорт, звірка, документи, roadmap) | `docs/spec/` — див. таблицю в `docs/spec/README.md` |
 | Наступний крок | `docs/spec/06-roadmap.md` (поточний етап — у MEMORY.md) |
+| Де лежить код / куди класти новий | `app/src/CLAUDE.md` (дерево рішень), `docs/spec/07-code-structure.md` |
 | Дані джерел і граблі імпорту | `docs/source-analysis.md` |
 | "хто що викликає" / залежності символів | `cargo modules dependencies` — перед grep по всьому проєкту |
 | Конкретна логіка в конкретному файлі | читай файл напряму |

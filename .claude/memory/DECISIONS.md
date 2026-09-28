@@ -28,3 +28,4 @@ date: 2026-09-27
 - [Транслітерація normalize() — лише Latin→Cyrillic](../decisions/normalize-direction-one-way.md) — зворотний напрямок ("Vampire"↔"Вампір") через seed-рядки alias, не героїзм в одній функції.
 - [Джерело візуального стилю UI](../decisions/ui-visual-style-source.md) — палітра з 05-documents.md (панелі/акцент/текст), референс-pptx лише підтвердив напрямок.
 - [CSS-колокація (07) відкладена](../decisions/css-colocation-deferred.md) — cargo-leptos не розгортає `@import` і обробляє стилі до збірки Rust-крейта, тож і `build.rs`-фолбек не встигає; `main.css` лишається одним файлом.
+- [Структура app/src: спільне в корені, специфічне поруч](../decisions/code-layout-colocation.md) — правило двох + карти CLAUDE.md + `app/tests/architecture.rs`; заодно `policy` переїхав у `app/src/backend` (був недосяжний для `#[server]`-функцій) і server fn почали реально перевіряти права.

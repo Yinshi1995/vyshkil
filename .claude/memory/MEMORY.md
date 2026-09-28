@@ -19,14 +19,11 @@ date: 2026-09-28
   таблиць: org/org_name_history/training_site/subordination/org_status/alias — не на
   subordination_closure, вона TRUNCATE+INSERT перебудовується), тригер автоперебудови
   `subordination_closure` при будь-якій зміні `subordination`.
-- `app::normalize` — нормалізація синонімів, табличні тести на реальних граблях, рішення
+- `app::domain::normalize` — нормалізація синонімів, табличні тести на реальних граблях, рішення
   [[normalize-direction-one-way]] (транслітерація лише Latin→Cyrillic, не навпаки).
-- `app::actor::{Actor, Role}` + `server::policy` (реекспортує ті самі типи) — `can_view_org`
-  (через `subordination_closure`), `can_edit_org`, `set_session_actor`. **Логіка перевірки прав
-  ще не викликається** з жодної server function (нема ще жодної CRUD-операції, яку захищати).
-- **UI, перший шматок**: `Header` + `ActorSwitcher` у шапці (`app::app::list_orgs()` читає `org`
-  напряму SQL, без entity), `RwSignal<Option<Actor>>` через контекст. Коректно показує порожній
-  стан, поки `org` пустий ("немає організацій — сід ще не завантажено").
+- **UI, перший шматок**: `Header` + `ActorSwitcher` у шапці (`app::services::orgs::list_orgs()`
+  читає `org` напряму SQL, без entity), `RwSignal<Option<Actor>>` через контекст. Коректно показує
+  порожній стан, поки `org` пустий ("немає організацій — сід ще не завантажено").
 - **Глобальний стиль — 3-тя і фінальна ітерація**: перша спроба взяла палітру документів
   (05-documents.md), друга — приблизні кольори з пікселів pptx. Третя — **виміряно з живого сайту
   striy.pp.ua** (Playwright `getComputedStyle`, та сама організація УВ(с) "Південь"): фон `#0D0F0A`,
@@ -50,44 +47,47 @@ date: 2026-09-28
   Перевірено на реальних (не rollback) даних: 29→23 підлеглих 17 АК на 20.07→20.09.2026, точно
   ті самі 6 частин пішли — критерій готовності Етапу 1 виконано.
 
-**Нечіткий пошук організацій (02 §3)** — `#[server] search_orgs` (`app/src/app.rs`) + `<OrgSearch/>`
-на головній: `alias.norm` = `normalize(query)` (та сама функція, що й при сіді/введенні) → точний
-збіг → потім `pg_trgm` (`%`/`similarity`) з ранжуванням "точний синонім → uses_count → similarity"
-(рядок SQL з `ROW_NUMBER() OVER (PARTITION BY org_id ...)`, щоб одна org не дублювалась кількома
-своїми alias-рядками). Перевірено live-запитами (не тільки очима): "152НЦ" → 152 нц, "а4896" →
-152 нц, "польша" → Республіка Польща, "423 опБпС" → 423 обБпС (exact) + 433/422 як similarity-
-фолбек — критерій готовності Етапу 1 з роадмапу виконано.
+**Нечіткий пошук організацій (02 §3)** — `search_orgs` (`backend::repo::orgs`, викликається з
+`pages/home/server.rs`) + `<OrgSearch/>` на головній: `alias.norm` = `normalize(query)` → точний
+збіг → потім `pg_trgm` з ранжуванням "точний синонім → uses_count → similarity". Перевірено
+live-запитами: "152НЦ" → 152 нц, "а4896" → 152 нц, "польша" → Республіка Польща — критерій
+готовності Етапу 1 виконано.
 
-**Дерево підпорядкування + картка частини** — `get_subordination_tree` (депф=1 з
-`subordination_closure`, **не** рекурсивний CTE — server/CLAUDE.md), `<SubordinationTree/>` з
-перемикачем осі (штатне/оперативне) і полем дати; `get_org_detail` + `<OrgDetailPage/>` на
-`/org/:id` (поточні дані + історія назв/статусів; порожня історія — легітимний стан, поки в
-сіді немає жодного перейменування/зміни статусу). Перевірено live-запитами (curl на
-хешовані `/api/...` шляхи, витягнуті з `taktoblik.wasm` — див. Граблі): 17 АК 07-20→09-20
-29→23 (7 пішли в 7 КШР: 142/154/61/5/92 омбр/ошбр/225 ошп/44 оабр, +1 прийшла: 67 омбр з 20 АК —
-чиста різниця 6, як і задокументовано); 110 омбр на operational-осі показує 20 АК (на staff — 17 АК).
-Обидва критерії готовності Етапу 1 з роадмапу виконано.
+**Дерево підпорядкування + картка частини** — `subordination_tree`/`org_detail`
+(`backend::repo::orgs`), `<SubordinationTree/>` (перемикач осі) і `<OrgDetailPage/>` на `/org/:id`.
+Перевірено: 17 АК 07-20→09-20 29→23 (7 пішли в 7 КШР, +1 прийшла — 67 омбр з 20 АК, чиста різниця
+6); 110 омбр на operational-осі показує 20 АК (на staff — 17 АК). Обидва критерії готовності
+Етапу 1 виконано.
 
-**Інтеграційні тести проти реальної БД** ("Як вести розробку далі" §3) — `app/src/queries.rs`:
-запити (`search_orgs`/`subordination_tree`/`org_detail`) винесено з `#[server]`-тіл у `app.rs` в
-окремі функції, що беруть `&DatabaseConnection` явним аргументом (без `expect_context`/Leptos-
-контексту) — завдяки цьому їх можна тестувати напряму, без сервера й без браузера. Один
-`#[tokio::test]` (`queries::ssr::tests::stage1_readiness_scenarios`) перестворює окрему тестову БД
-(`DROP`+`CREATE DATABASE`, через maintenance-з'єднання до `postgres`) і ганяє всі міграції
-(включно з dev-сідом) з нуля, потім перевіряє всі три Stage-1-критерії одразу: пошук
-152НЦ/а4896/польша, 17 АК 29→23 (з точним списком, хто пішов у 7 КШР), 110 омбр — різний
-батько на staff/operational. Потребує `TEST_DATABASE_URL`; без нього — skip (той самий підхід,
-що й для `source_files/`-тестів). Запуск:
+**Реорганізація структури коду за `docs/spec/07-code-structure.md`** (новий файл специфікації) —
+`app/src` розкладено з трьох плоских файлів (`app.rs`/`queries.rs`/`normalize.rs`) у дерево
+`app.rs`+`routes.rs`+`layout/`+`pages/`+`services/`+`types/`+`domain/`+`backend/` (лише `ssr`).
+**Заразом виправлено дефект**: `policy` переїхав `server/src/policy.rs` → `app/src/backend/policy.rs`
+(був фізично недосяжний для `#[server]`-функцій, бо ті живуть у крейті `app`, а `server` залежить
+від `app`, не навпаки) — тепер `search_orgs`/`get_subordination_tree`/`get_org_detail` реально
+фільтрують результат через `policy::visible_org_ids`/`can_view_org` за поточним актором (перша
+реальна перевірка прав у проєкті; `list_orgs` лишається без перевірки — живить сам вибір актора).
+Кожна непорожня тека `app/src/**` має карту `CLAUDE.md` (≤40 рядків); карти не застарівають —
+перевіряє `app/tests/architecture.rs` (`cargo test --test architecture`, без БД). CSS-колокацію
+з того ж плану **відклали**: cargo-leptos не розгортає `@import` і обробляє стилі до збірки
+Rust-крейта — [[css-colocation-deferred]]; `main.css` лишається одним файлом.
+
+**Інтеграційні тести проти реальної БД** ("Як вести розробку далі" §3) — `app/tests/orgs.rs`
+(три Stage-1-критерії з таблиці вище) + `app/tests/policy.rs` ("org_editor з 17 АК не бачить
+сусіднє 7 КШР і його піддерево"), спільний сетап — `app/tests/common/mod.rs`. Кожен тест
+перестворює окрему тестову БД (`DROP`+`CREATE DATABASE`) і ганяє всі міграції (включно з
+dev-сідом) з нуля. Потребують `TEST_DATABASE_URL`; без нього — skip. Запуск:
 ```powershell
 $env:TEST_DATABASE_URL = "postgres://taktoblik:taktoblik@localhost:5432/taktoblik_test"
-cargo test -p app --features ssr queries
+cargo test -p app --features ssr
 ```
-`app/Cargo.toml`: sea-orm тепер тягне повний `sqlx-postgres`+`runtime-tokio-rustls` (не лише
-`macros`) під `ssr`, щоб `queries`-тести могли самі з'єднуватись з Postgres без сервера.
+`app/Cargo.toml`: sea-orm тягне повний `sqlx-postgres`+`runtime-tokio-rustls` (не лише `macros`)
+під `ssr`, щоб тести самі з'єднувались з Postgres без сервера.
 
 **НЕ зроблено (залишається на майбутнє, не є критерієм готовності Етапу 1):**
-- Аналогічні `cargo test` для `migration`/`policy` (EXCLUDE-констрейнти, closure-тригер,
-  `can_view_org`/`can_edit_org`) — поки не потрібні: `policy` ще не викликається жодним CRUD.
+- Аналогічні `cargo test` для `migration` (EXCLUDE-констрейнти, closure-тригер) — поки не критично.
+- `components/`, `widgets/`, `hooks/`, `state/` з 07-code-structure.md ще не існують (нема чого
+  туди класти) — з'являться природно з наступними сторінками Етапу 2+.
 
 ## Каркас (не змінюється до кінця проєкту)
 - Workspace: `app`, `frontend`, `server`, `migration` (Cargo workspace, resolver 2).
@@ -95,7 +95,7 @@ cargo test -p app --features ssr queries
 - mimalloc як глобальний аллокатор, ручний tokio-рантайм (`SERVER_WORKER_THREADS` з env).
 - sea-orm ConnectOptions з обмеженим пулом (`DATABASE_MAX_CONNECTIONS`, дефолт 5).
 - `.env` (локальний, не в git) + `.env.example`; Dockerfile (rust:slim builder → distroless/cc runtime).
-- `#[server] health_check` у `app/src/app.rs` — бере DatabaseConnection з контексту (лишиться як smoke-test).
+- `#[server] health_check` у `app/src/services/health.rs` — бере DatabaseConnection з контексту (лишиться як smoke-test).
 - Docker-збірка і локальний запуск (Windows) перевірені наживо (SSR + БД + міграції) до переходу на спек.
 
 ## Стан ЗАРАЗ
