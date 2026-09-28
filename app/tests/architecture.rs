@@ -286,6 +286,7 @@ fn sanity_the_tree_walk_actually_found_pages() {
         "dictionaries".to_string(),
         "home".to_string(),
         "org_detail".to_string(),
+        "training_form".to_string(),
         "vos_lookup".to_string(),
     ]);
     let found: BTreeSet<String> = fs::read_dir(src_dir().join("pages"))

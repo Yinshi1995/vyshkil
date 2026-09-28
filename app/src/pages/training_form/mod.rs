@@ -1,0 +1,311 @@
+mod components;
+mod server;
+
+use std::time::Duration;
+
+use leptos::ev;
+use leptos::leptos_dom::helpers::{set_interval_with_handle, window_event_listener};
+use leptos::prelude::*;
+
+use crate::hooks::use_actor::use_actor;
+use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
+use crate::widgets::ActorNotice;
+use components::grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
+use server::{commit_grid, get_draft, save_draft};
+
+/// Сітка введення (02): весь рядок вноситься без миші, автозбереження чернетки, `Ctrl+Enter`
+/// фіксує все-або-нічого. Критерій готовності Етапу 4 — `docs/spec/06-roadmap.md`.
+#[component]
+pub fn TrainingFormPage() -> impl IntoView {
+    let actor = use_actor();
+
+    view! {
+        <h1>"Внесення груп на навчанні"</h1>
+        {move || {
+            if actor.get().is_none() {
+                view! { <ActorNotice/> }.into_any()
+            } else {
+                view! { <FormBody/> }.into_any()
+            }
+        }}
+    }
+}
+
+#[component]
+fn FormBody() -> impl IntoView {
+    let actor = use_actor();
+
+    let submission_id = RwSignal::new(None::<i32>);
+    // "Станом на" -- користувач заповнює першим полем; без системного часу навмисно (`domain::
+    // dates` без chrono "clock", [[chrono-in-domain]] -- та сама заборона стосується й цього боку).
+    let as_of_date = RwSignal::new(String::new());
+
+    let next_id = StoredValue::new(1u32);
+    let editable = RwSignal::new(wrap_rows(vec![GroupFormRow::default()], &mut next_id.get_value()));
+    let active_cell = RwSignal::new((0usize, 0usize));
+
+    // Undo/redo (02 §2, Ctrl+Z/Ctrl+Shift+Z) -- знімок усієї сітки перед кожною мутуючою дією
+    // (не по клітинці: простіше, і "в межах сесії редагування" не вимагає точнішої гранулярності).
+    let undo_stack = StoredValue::new(Vec::<Vec<GroupFormRow>>::new());
+    let redo_stack = StoredValue::new(Vec::<Vec<GroupFormRow>>::new());
+    let replace_rows = move |data: Vec<GroupFormRow>| {
+        let mut id_ctr = next_id.get_value();
+        let wrapped = wrap_rows(data, &mut id_ctr);
+        next_id.set_value(id_ctr);
+        editable.set(wrapped);
+    };
+    let snapshot = move || {
+        undo_stack.update_value(|s| s.push(snapshot_rows(editable)));
+        redo_stack.update_value(|s| s.clear());
+    };
+    let undo = move || {
+        let prev = undo_stack.try_update_value(|s| s.pop()).flatten();
+        if let Some(prev) = prev {
+            redo_stack.update_value(|r| r.push(snapshot_rows(editable)));
+            replace_rows(prev);
+        }
+    };
+    let redo = move || {
+        let next = redo_stack.try_update_value(|s| s.pop()).flatten();
+        if let Some(next) = next {
+            undo_stack.update_value(|u| u.push(snapshot_rows(editable)));
+            replace_rows(next);
+        }
+    };
+
+    let cheat_sheet_open = RwSignal::new(true);
+    let command_palette_open = RwSignal::new(false);
+    let save_status = RwSignal::new(String::new());
+    let commit_error = RwSignal::new(None::<(usize, String, String)>);
+
+    // Відновлення чернетки при відкритті форми (02 §6).
+    let draft_loaded = RwSignal::new(false);
+    Effect::new(move |_| {
+        if draft_loaded.get_untracked() {
+            return;
+        }
+        let Some(actor) = actor.get() else { return };
+        draft_loaded.set(true);
+        leptos::task::spawn_local(async move {
+            if let Ok(Some(state)) = get_draft(Some(actor)).await {
+                submission_id.set(Some(state.submission_id));
+                as_of_date.set(state.payload.as_of_date);
+                if !state.payload.rows.is_empty() {
+                    replace_rows(state.payload.rows);
+                }
+                save_status.set(format!("чернетку відновлено ({})", state.updated_at));
+            }
+        });
+    });
+
+    // Автозбереження кожні кілька секунд (02 §6) — незалежно від активності, доки є хоч один
+    // непорожній рядок.
+    Effect::new(move |_| {
+        let Ok(handle) = set_interval_with_handle(
+            move || {
+                let Some(actor) = actor.get_untracked() else { return };
+                let current_rows = snapshot_rows(editable);
+                if current_rows.iter().all(|r| r.sender_org_id.is_none() && r.note.is_empty()) {
+                    return;
+                }
+                let payload =
+                    DraftPayload { as_of_date: as_of_date.get_untracked(), rows: current_rows };
+                let sid = submission_id.get_untracked();
+                leptos::task::spawn_local(async move {
+                    match save_draft(Some(actor), sid, payload).await {
+                        Ok(id) => {
+                            submission_id.set(Some(id));
+                            save_status.set("збережено".to_string());
+                        }
+                        Err(e) => save_status.set(format!("не збереглось: {e}")),
+                    }
+                });
+            },
+            Duration::from_secs(5),
+        ) else {
+            return;
+        };
+        on_cleanup(move || handle.clear());
+    });
+
+    let do_commit = move || {
+        let Some(actor) = actor.get_untracked() else { return };
+        let payload =
+            DraftPayload { as_of_date: as_of_date.get_untracked(), rows: snapshot_rows(editable) };
+        let sid = submission_id.get_untracked();
+        commit_error.set(None);
+        leptos::task::spawn_local(async move {
+            match commit_grid(Some(actor), sid, payload).await {
+                Ok(CommitOutcome::Committed { group_ids }) => {
+                    save_status.set(format!("збережено: {} груп(и)", group_ids.len()));
+                    replace_rows(vec![GroupFormRow::default()]);
+                    submission_id.set(None);
+                    active_cell.set((0, 0));
+                }
+                Ok(CommitOutcome::ValidationFailed { row_index, field, message }) => {
+                    save_status.set("є помилки — перевірте підсвічену клітинку".to_string());
+                    commit_error.set(Some((row_index, field, message)));
+                }
+                Err(e) => save_status.set(format!("не вдалось зберегти: {e}")),
+            }
+        });
+    };
+
+    // Глобальні гарячі клавіші, що не залежать від конкретної клітинки (02 §2).
+    let handle = window_event_listener(ev::keydown, move |ev| {
+        let key = ev.key();
+        if key == "?" || key == "F1" {
+            ev.prevent_default();
+            cheat_sheet_open.update(|v| *v = !*v);
+        } else if ev.ctrl_key() && key.to_lowercase() == "k" {
+            ev.prevent_default();
+            command_palette_open.update(|v| *v = !*v);
+        } else if ev.ctrl_key() && key == "Enter" {
+            ev.prevent_default();
+            do_commit();
+        } else if ev.ctrl_key() && !ev.shift_key() && key.to_lowercase() == "z" {
+            ev.prevent_default();
+            undo();
+        } else if ev.ctrl_key() && ev.shift_key() && key.to_lowercase() == "z" {
+            ev.prevent_default();
+            redo();
+        } else if key == "Escape" {
+            if cheat_sheet_open.get_untracked() {
+                cheat_sheet_open.set(false);
+            }
+            if command_palette_open.get_untracked() {
+                command_palette_open.set(false);
+            }
+        }
+    });
+    on_cleanup(move || handle.remove());
+
+    view! {
+        <div class="training-form">
+            <div class="training-form__header">
+                <label class="training-form__as-of">
+                    "Станом на "
+                    <input
+                        type="date"
+                        prop:value=move || as_of_date.get()
+                        on:input=move |ev| as_of_date.set(event_target_value(&ev))
+                    />
+                </label>
+                <span class="training-form__status">{move || save_status.get()}</span>
+                <button class="btn btn--primary" on:click=move |_| do_commit()>
+                    "Зберегти все (Ctrl+Enter)"
+                </button>
+                <button class="btn btn--outline" on:click=move |_| cheat_sheet_open.update(|v| *v = !*v)>
+                    "? Шпаргалка"
+                </button>
+            </div>
+
+            {move || {
+                commit_error
+                    .get()
+                    .map(|(row_index, field, message)| {
+                        view! {
+                            <p class="status-error">
+                                "Рядок "{row_index + 1}", «"{field}"»: "{message}
+                            </p>
+                        }
+                    })
+            }}
+
+            <Grid editable=editable next_id=next_id active_cell=active_cell before_mutate=snapshot/>
+
+            <Show when=move || cheat_sheet_open.get()>
+                <CheatSheet on_close=move || cheat_sheet_open.set(false)/>
+            </Show>
+            <Show when=move || command_palette_open.get()>
+                <CommandPalette
+                    on_close=move || command_palette_open.set(false)
+                    on_new_row=move || {
+                        snapshot();
+                        let id = next_id.get_value();
+                        next_id.set_value(id + 1);
+                        editable.update(|v| {
+                            v.push(EditableRow { id, data: RwSignal::new(GroupFormRow::default()) })
+                        });
+                    }
+                />
+            </Show>
+        </div>
+    }
+}
+
+#[component]
+fn CheatSheet(#[prop(into)] on_close: Callback<()>) -> impl IntoView {
+    let shortcuts: [(&str, &str); 14] = [
+        ("Tab / Shift+Tab", "наступне / попереднє поле"),
+        ("Enter", "підтвердити і перейти далі (як Tab)"),
+        ("↑ ↓", "рядок вище/нижче в тій самій колонці"),
+        ("Alt+↓", "відкрити підказки поточного поля"),
+        ("Esc", "закрити випадайку / скасувати редагування"),
+        ("Ctrl+D", "скопіювати значення з клітинки вище"),
+        ("Ctrl+Shift+D", "дублювати рядок нижче"),
+        ("Ctrl+Enter", "зберегти всі зміни"),
+        ("Ctrl+Z / Ctrl+Shift+Z", "undo / redo"),
+        ("Ctrl+Delete", "видалити рядок"),
+        ("F2", "редагувати клітинку, не стираючи вміст"),
+        ("? / F1", "ця шпаргалка"),
+        ("Ctrl+K", "командна палітра"),
+        ("Ctrl+V", "вставити блок з Excel"),
+    ];
+
+    view! {
+        <div class="cheat-sheet__overlay" on:click=move |_| on_close.run(())>
+            <div class="cheat-sheet__panel" on:click=|ev| ev.stop_propagation()>
+                <h2>"Гарячі клавіші"</h2>
+                <table>
+                    <tbody>
+                        {shortcuts
+                            .into_iter()
+                            .map(|(k, d)| {
+                                view! {
+                                    <tr>
+                                        <td class="cheat-sheet__key">{k}</td>
+                                        <td>{d}</td>
+                                    </tr>
+                                }
+                            })
+                            .collect_view()}
+                    </tbody>
+                </table>
+                <button class="btn btn--outline" on:click=move |_| on_close.run(())>
+                    "Закрити"
+                </button>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn CommandPalette(
+    #[prop(into)] on_close: Callback<()>,
+    #[prop(into)] on_new_row: Callback<()>,
+) -> impl IntoView {
+    view! {
+        <div class="cheat-sheet__overlay" on:click=move |_| on_close.run(())>
+            <div class="cheat-sheet__panel" on:click=|ev| ev.stop_propagation()>
+                <h2>"Командна палітра"</h2>
+                <ul class="command-palette__list">
+                    <li>
+                        <button
+                            class="btn btn--outline"
+                            on:click=move |_| {
+                                on_new_row.run(());
+                                on_close.run(());
+                            }
+                        >
+                            "Новий рядок"
+                        </button>
+                    </li>
+                    <li class="card__desc">
+                        "«перейти до частини…» і «згенерувати звіт…» — інших етапів, ще не підключено."
+                    </li>
+                </ul>
+            </div>
+        </div>
+    }
+}

@@ -11,4 +11,5 @@
 | `dictionaries/` | довідники Етапу 2 + черга learned-синонімів (своя карта) | `routes.rs` (`/dictionaries`) |
 | `home/` | головна: лічильники, пошук, дерево підпорядкування (своя карта) | `routes.rs` (`/`) |
 | `org_detail/` | картка частини з історією (своя карта) | `routes.rs` (`/org/:id`) |
+| `training_form/` | сітка введення груп (02, своя карта) | `routes.rs` (`/training-form`) |
 | `vos_lookup/` | підказка "ОВТ/сленг → ВОС" (02 §3, своя карта) | `routes.rs` (`/vos-lookup`) |

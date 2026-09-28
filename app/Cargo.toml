@@ -13,6 +13,8 @@ leptos = { workspace = true }
 leptos_meta = { workspace = true }
 leptos_router = { workspace = true }
 serde = { workspace = true }
+# Лише сервер: (де)серіалізація submission.draft_payload (jsonb) — ssr-gated разом із sea-orm.
+serde_json = { version = "1", optional = true }
 # Парсинг/арифметика дат у domain/dates.rs (02 §4, 03 §4) -- чиста дата-математика, без "clock"
 # (не читаємо системний час) і без "wasmbind" (не чіпаємо JS Date) -- компілюється в WASM так само,
 # як і на сервері (рішення: [[chrono-in-domain]]).
@@ -26,6 +28,13 @@ sea-orm = { version = "1", default-features = false, features = [
     "sqlx-postgres",
     "runtime-tokio-rustls",
 ], optional = true }
+# Типи/каст подій і елементів DOM для керування сіткою з клавіатури (Етап 4, pages/training_form).
+# НЕ під feature "hydrate": ці типи потрібні й при звичайній (ssr) збірці компонента -- Leptos
+# рендерить те саме дерево view! і на сервері (розмітка), просто без реального DOM/подій; самі
+# типи компілюються на будь-якому таргеті (структурні визначення wasm-bindgen), функціонують лише
+# в WASM. leptos і так тягне обидва крейти транзитивно завжди -- тут лише називаємо типи явно.
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["HtmlElement", "KeyboardEvent"] }
 
 [dev-dependencies]
 # Тільки для інтеграційних тестів `queries` (окрема тестова БД, "Як вести розробку далі" §3) —
@@ -40,4 +49,5 @@ ssr = [
     "leptos_meta/ssr",
     "leptos_router/ssr",
     "dep:sea-orm",
+    "dep:serde_json",
 ]
