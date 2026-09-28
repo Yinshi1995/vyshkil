@@ -6,6 +6,7 @@ use leptos_router::{
 };
 
 use crate::actor::{Actor, Role};
+use crate::normalize::normalize;
 
 // shell() генерує повний HTML-документ навколо <App/> — його викликає і SSR (перший рендер),
 // і fallback-обробник помилок на сервері, тому він винесений окремо від самого <App/>.
@@ -199,7 +200,166 @@ fn HomePage() -> impl IntoView {
                 <div class="card__desc">"Dev-сід Етапу 1 (зі specи, не з source_files): органи + приклад переходу 17 АК → 7 КШР."</div>
             </div>
         </div>
+        <OrgSearch/>
     }
+}
+
+/// Нечіткий пошук організацій (02 §3): стійкий до опечаток/розкладки/скорочень
+/// ("152НЦ", "а4896", "польша" — усі знаходять канонічну організацію).
+#[component]
+fn OrgSearch() -> impl IntoView {
+    let query = RwSignal::new(String::new());
+    let results = Resource::new(
+        move || query.get(),
+        |q| async move {
+            if q.trim().is_empty() {
+                Ok(Vec::new())
+            } else {
+                search_orgs(q).await
+            }
+        },
+    );
+
+    view! {
+        <div class="eyebrow">"Пошук організацій"</div>
+        <div class="card">
+            <input
+                type="text"
+                class="org-search__input"
+                placeholder="152НЦ, а4896, польша…"
+                prop:value=move || query.get()
+                on:input=move |ev| query.set(event_target_value(&ev))
+            />
+            <Suspense fallback=|| view! { <p>"…"</p> }>
+                {move || {
+                    results
+                        .get()
+                        .map(|res| match res {
+                            Ok(_) if query.get().trim().is_empty() => {
+                                view! { <p class="card__desc">"Почніть вводити номер, назву або синонім."</p> }
+                                    .into_any()
+                            }
+                            Ok(list) if list.is_empty() => {
+                                view! { <p class="card__desc">"Нічого не знайдено."</p> }.into_any()
+                            }
+                            Ok(list) => {
+                                view! {
+                                    <ul class="org-search__results">
+                                        {list
+                                            .into_iter()
+                                            .map(|r| {
+                                                view! {
+                                                    <li class="org-search__result">
+                                                        <span class="org-search__label">{r.label}</span>
+                                                        <span class="org-search__matched">
+                                                            "збіг: \""{r.matched_raw}"\""
+                                                        </span>
+                                                    </li>
+                                                }
+                                            })
+                                            .collect_view()}
+                                    </ul>
+                                }
+                                    .into_any()
+                            }
+                            Err(e) => {
+                                view! { <p class="card__desc status-error">{e.to_string()}</p> }.into_any()
+                            }
+                        })
+                }}
+            </Suspense>
+        </div>
+    }
+}
+
+/// Один результат нечіткого пошуку організацій: канонічна форма + який саме синонім збігся.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct OrgSearchResult {
+    pub org_id: i32,
+    pub label: String,
+    pub matched_raw: String,
+    pub is_exact: bool,
+}
+
+/// Нечіткий пошук організацій по `alias.norm` (02 §3, критерій готовності Етапу 1:
+/// "152НЦ"/"а4896"/"польша" знаходять канонічні організації).
+/// Запит нормалізується тією ж функцією, що й alias.norm при сіді/введенні (01 §"alias") —
+/// інакше "152НЦ" (з великими літерами) не збігся б з засіяним норм-рядком "152нц".
+/// Ранжування — за 02 §3: точний збіг синоніма → частота використання цією організацією → схожість (pg_trgm).
+#[server(SearchOrgs, "/api")]
+pub async fn search_orgs(query: String) -> Result<Vec<OrgSearchResult>, ServerFnError> {
+    use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
+
+    let norm_query = normalize(&query);
+    if norm_query.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        org_id: i32,
+        short_name: String,
+        number: Option<String>,
+        matched_raw: String,
+        is_exact: bool,
+    }
+
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        WITH matches AS (
+            SELECT
+                o.id AS org_id,
+                o.short_name,
+                o.number,
+                a.raw AS matched_raw,
+                a.uses_count,
+                (a.norm = $1) AS is_exact,
+                similarity(a.norm, $1) AS sim
+            FROM alias a
+            JOIN org o ON o.id = a.target_id AND a.target_type = 'org'
+            WHERE o.deleted_at IS NULL
+              AND (a.norm = $1 OR a.norm % $1)
+        ),
+        ranked AS (
+            SELECT
+                *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY org_id
+                    ORDER BY is_exact DESC, uses_count DESC, sim DESC
+                ) AS rn
+            FROM matches
+        )
+        SELECT org_id, short_name, number, matched_raw, is_exact
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY is_exact DESC, uses_count DESC, sim DESC
+        LIMIT 10
+        "#,
+        [norm_query.into()],
+    );
+
+    let rows = Row::find_by_statement(stmt)
+        .all(&db)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let label = match r.number {
+                Some(n) => format!("{} ({n})", r.short_name),
+                None => r.short_name,
+            };
+            OrgSearchResult {
+                org_id: r.org_id,
+                label,
+                matched_raw: r.matched_raw,
+                is_exact: r.is_exact,
+            }
+        })
+        .collect())
 }
 
 // #[server] генерує однакову сигнатуру для обох таргетів: на клієнті це виклик по мережі,
