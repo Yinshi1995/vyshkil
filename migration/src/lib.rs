@@ -24,6 +24,9 @@ mod m20260928_000021_create_attrition_reason_table;
 mod m20260928_000022_attach_audit_triggers_stage2;
 mod m20260928_000023_seed_stage2_dictionaries;
 mod m20260928_000024_seed_full_vos_dictionary;
+mod m20260928_000025_create_training_group_table;
+mod m20260928_000026_create_group_event_table;
+mod m20260928_000027_attach_audit_triggers_stage3;
 
 pub struct Migrator;
 
@@ -59,6 +62,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260928_000022_attach_audit_triggers_stage2::Migration),
             Box::new(m20260928_000023_seed_stage2_dictionaries::Migration),
             Box::new(m20260928_000024_seed_full_vos_dictionary::Migration),
+            Box::new(m20260928_000025_create_training_group_table::Migration),
+            Box::new(m20260928_000026_create_group_event_table::Migration),
+            Box::new(m20260928_000027_attach_audit_triggers_stage3::Migration),
         ]
     }
 }

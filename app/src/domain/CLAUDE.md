@@ -7,3 +7,4 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `normalize.rs` | `normalize(&str) -> String` — єдина функція нормалізації синонімів (лапки/дужки/дефіс/"в-с", Latin→Cyrillic) | `backend/repo/orgs.rs` (пошук), майбутній `app::validation` |
+| `counting.rs` | Воронка групи з подій: `in_training`/`events_on`/`finishing_on`, бітемпоральний `known_at` | `backend/repo/groups.rs` |
