@@ -2,7 +2,7 @@
 //! яка читає/пише доменні дані, викликає щось звідси першою — жодних перевірок прав в іншому місці.
 //! Тип Actor/Role — в `app::actor` (спільний з UI-перемикачем), тут — лише логіка перевірки.
 
-pub use app::actor::{Actor, Role};
+pub use app::types::actor::{Actor, Role};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, Statement};
 
 /// Рядок для `SET LOCAL app.actor` — читає generic-тригер аудиту (audit_log.actor).

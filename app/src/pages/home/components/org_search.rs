@@ -1,0 +1,74 @@
+use leptos::prelude::*;
+
+use crate::pages::home::server::search_orgs;
+
+/// Нечіткий пошук організацій (02 §3): стійкий до опечаток/розкладки/скорочень
+/// ("152НЦ", "а4896", "польша" — усі знаходять канонічну організацію).
+#[component]
+pub fn OrgSearch() -> impl IntoView {
+    let query = RwSignal::new(String::new());
+    let results = Resource::new(
+        move || query.get(),
+        |q| async move {
+            if q.trim().is_empty() {
+                Ok(Vec::new())
+            } else {
+                search_orgs(q).await
+            }
+        },
+    );
+
+    view! {
+        <div class="eyebrow">"Пошук організацій"</div>
+        <div class="card">
+            <input
+                type="text"
+                class="org-search__input"
+                placeholder="152НЦ, а4896, польша…"
+                prop:value=move || query.get()
+                on:input=move |ev| query.set(event_target_value(&ev))
+            />
+            <Suspense fallback=|| view! { <p>"…"</p> }>
+                {move || {
+                    results
+                        .get()
+                        .map(|res| match res {
+                            Ok(_) if query.get().trim().is_empty() => {
+                                view! { <p class="card__desc">"Почніть вводити номер, назву або синонім."</p> }
+                                    .into_any()
+                            }
+                            Ok(list) if list.is_empty() => {
+                                view! { <p class="card__desc">"Нічого не знайдено."</p> }.into_any()
+                            }
+                            Ok(list) => {
+                                view! {
+                                    <ul class="org-search__results">
+                                        {list
+                                            .into_iter()
+                                            .map(|r| {
+                                                view! {
+                                                    <li class="org-search__result">
+                                                        <span class="org-search__label">{r.label}</span>
+                                                        <span class="org-search__matched">
+                                                            "збіг: \""{r.matched_raw}"\""
+                                                        </span>
+                                                        <a href=format!("/org/{}", r.org_id) class="org-search__link">
+                                                            "картка →"
+                                                        </a>
+                                                    </li>
+                                                }
+                                            })
+                                            .collect_view()}
+                                    </ul>
+                                }
+                                    .into_any()
+                            }
+                            Err(e) => {
+                                view! { <p class="card__desc status-error">{e.to_string()}</p> }.into_any()
+                            }
+                        })
+                }}
+            </Suspense>
+        </div>
+    }
+}

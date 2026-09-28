@@ -1,4 +1,12 @@
-pub mod actor;
 pub mod app;
-pub mod normalize;
-pub mod queries;
+pub mod domain;
+pub mod layout;
+pub mod pages;
+pub mod routes;
+pub mod services;
+pub mod types;
+
+// Лише на сервері: SQL/SeaORM (repo) і — від Кроку 3 — перевірка прав (policy). Клієнт (WASM)
+// цю гілку взагалі не бачить (07 §1, §2.3): backend не збирається без sea-orm.
+#[cfg(feature = "ssr")]
+pub mod backend;
