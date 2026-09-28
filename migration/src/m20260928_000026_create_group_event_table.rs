@@ -111,4 +111,7 @@ pub enum GroupEvent {
     AwardOrderDate,
     Shortened,
     Note,
+    // Додано m20260928_000029 (Етап 4) -- тут, а не в новій міграції, бо enum лише мапить назви
+    // колонок, не саму схему; historical up() цього файлу submission_id не створює.
+    SubmissionId,
 }

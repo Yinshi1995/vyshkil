@@ -27,6 +27,9 @@ mod m20260928_000024_seed_full_vos_dictionary;
 mod m20260928_000025_create_training_group_table;
 mod m20260928_000026_create_group_event_table;
 mod m20260928_000027_attach_audit_triggers_stage3;
+mod m20260928_000028_create_submission_table;
+mod m20260928_000029_add_submission_id_to_group_event;
+mod m20260928_000030_attach_audit_trigger_submission;
 
 pub struct Migrator;
 
@@ -65,6 +68,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20260928_000025_create_training_group_table::Migration),
             Box::new(m20260928_000026_create_group_event_table::Migration),
             Box::new(m20260928_000027_attach_audit_triggers_stage3::Migration),
+            // Етап 4: submission(status='draft') для автозбереження форми (02 §6).
+            Box::new(m20260928_000028_create_submission_table::Migration),
+            Box::new(m20260928_000029_add_submission_id_to_group_event::Migration),
+            Box::new(m20260928_000030_attach_audit_trigger_submission::Migration),
         ]
     }
 }

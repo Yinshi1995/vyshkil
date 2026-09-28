@@ -210,6 +210,11 @@ source (seed|manual|learned), confidence, uses_count, created_by, created_at`.
 - `submission` — одна порція даних: `source_type` (`form` / `table` / `official_letter` / `scan` /
   `archive_seed`), `reporting_org_id` (хто подає), `as_of_date` ("станом на"), реквізити документа,
   `file_id`, `status` (`draft` → `parsed` → `validated` → `committed` / `rejected`), `supersedes_id`.
+  Для `source_type='form'` у стані `draft` рядки сітки (ще не розібрані на `reported_*`, не пройшли
+  валідацію) лежать у `draft_payload jsonb` — це буфер автозбереження (02 §6), не нормалізоване
+  подання; `reported_group`/`reported_event` заповнюються при переході в `parsed`. Реквізити
+  документа/`file_id` — для `table`/`official_letter`/`scan`/`archive_seed` (Етап 5+); для `form`
+  лишаються `null`.
 - `reported_group`, `reported_event`, `reported_staffing` — нормалізовані рядки подання **як їх
   подали**, з посиланням на канонічну сутність, до якої їх зіставлено (`matched_group_id`),
   і з оцінкою зіставлення.
