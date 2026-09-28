@@ -3,11 +3,10 @@ mod server;
 use leptos::prelude::*;
 
 use crate::hooks::use_actor::use_actor;
+use crate::services::dictionaries::get_dictionaries_overview;
 use crate::types::dictionaries::DictionaryEntry;
 use crate::widgets::ActorNotice;
-use server::{
-    confirm_learned_alias, get_dictionaries_overview, get_learned_aliases, reject_learned_alias,
-};
+use server::{confirm_learned_alias, get_learned_aliases, reject_learned_alias};
 
 /// Сторінка `/dictionaries`: перегляд усіх "простих" довідників Етапу 2 (01 §2) + для
 /// адміністратора — черга learned-синонімів на підтвердження/відхилення (01 §"Навчання").

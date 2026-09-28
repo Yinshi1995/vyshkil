@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 use crate::hooks::use_actor::use_actor;
-use crate::pages::home::server::search_orgs;
+use crate::services::orgs::search_orgs;
 use crate::widgets::ActorNotice;
 
 /// Нечіткий пошук організацій (02 §3): стійкий до опечаток/розкладки/скорочень

@@ -7,4 +7,5 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `health.rs` | `health_check` — пінг БД, smoke-test | `pages/home` |
-| `orgs.rs` | `list_orgs` — без перевірки прав (живить сам перемикач актора) | `layout::ActorSwitcher`, `pages/home` |
+| `orgs.rs` | `list_orgs` (без прав), `search_orgs` (нечіткий пошук, звужений до видимого піддерева) | `layout::ActorSwitcher`, `pages/home`, `pages/training_form` |
+| `dictionaries.rs` | `get_dictionaries_overview` — усі прості довідники Етапу 2 одним викликом | `pages/dictionaries`, `pages/training_form` |

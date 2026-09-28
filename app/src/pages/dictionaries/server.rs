@@ -1,19 +1,6 @@
 use leptos::prelude::*;
 
 use crate::types::actor::Actor;
-use crate::types::dictionaries::DictionariesOverview;
-
-/// Усі "прості" довідники Етапу 2 (01 §2) — не org-scoped, доступно будь-кому (як
-/// `services::orgs::list_orgs`). Потрібен лише цій сторінці.
-#[server(GetDictionariesOverview, "/api")]
-pub async fn get_dictionaries_overview() -> Result<DictionariesOverview, ServerFnError> {
-    use crate::backend::repo;
-
-    let db = expect_context::<sea_orm::DatabaseConnection>();
-    repo::dictionaries::dictionaries_overview(&db)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
 
 /// Learned-синоніми на підтвердження — лише `admin` (01 §"Навчання": "Адміністратор бачить нові
 /// learned-синоніми в окремому списку").
