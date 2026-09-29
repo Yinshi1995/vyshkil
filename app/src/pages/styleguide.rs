@@ -6,7 +6,7 @@
 
 use leptos::prelude::*;
 
-use crate::components::{Accordion, AccordionItem, Checkbox};
+use crate::components::{Accordion, AccordionItem, Checkbox, Dialog, Modal};
 use crate::hooks::use_actor::use_actor;
 use crate::types::actor::Role;
 use style_macros::cx;
@@ -33,6 +33,8 @@ pub fn StyleguidePage() -> impl IntoView {
     on_cleanup(|| set_theme("night"));
 
     let checkbox_checked = RwSignal::new(false);
+    let modal_open = RwSignal::new(false);
+    let dialog_open = RwSignal::new(false);
 
     view! {
         <Show when=is_admin fallback=|| view! { <p>"Сторінка лише для адміністратора."</p> }>
@@ -121,6 +123,24 @@ pub fn StyleguidePage() -> impl IntoView {
                     </AccordionItem>
                 </Accordion>
             </div>
+
+            <div class=cx!("flex gap3 items-c mt3")>
+                <button class="btn btn--outline" on:click=move |_| modal_open.set(true)>"Відкрити модалку"</button>
+                <button class="btn btn--outline" on:click=move |_| dialog_open.set(true)>"Відкрити діалог"</button>
+            </div>
+            <Modal open=modal_open on_close=Callback::new(move |_| modal_open.set(false))>
+                <h2 class="modal__title">"Довільний вміст"</h2>
+                <p class=cx!("fg-muted")>"Modal — оверлей+панель, Escape закриває, клік-поза НЕ закриває (навмисно)."</p>
+            </Modal>
+            <Dialog
+                open=dialog_open
+                on_close=Callback::new(move |_| dialog_open.set(false))
+                title="Підтвердити дію?".to_string()
+                description="Dialog — Modal + заголовок/опис/рядок дій.".to_string()
+            >
+                <button class="btn btn--outline" on:click=move |_| dialog_open.set(false)>"Скасувати"</button>
+                <button class="btn btn--primary" on:click=move |_| dialog_open.set(false)>"Підтвердити"</button>
+            </Dialog>
 
             <div class="eyebrow">{format!("Усі атоми ({})", style::all_atoms().len())}</div>
             <p class=cx!("fg-muted")>"Повний перелік — для пошуку. Групування за категоріями — style/ATOMS.md."</p>

@@ -259,8 +259,8 @@ fn CheatSheet(#[prop(into)] on_close: Callback<()>) -> impl IntoView {
         // `Show` синхронно демонтує панель ще до завершення спливання події, тож зовнішній
         // обробник встигав спрацювати на вже скинутому closure ("invoked after being dropped").
         // Закриття -- лише кнопкою або `Esc` (глобальний слухач у `FormBody`).
-        <div class="cheat-sheet__overlay">
-            <div class="cheat-sheet__panel">
+        <div class="modal__overlay">
+            <div class="modal__panel">
                 <h2>"Гарячі клавіші"</h2>
                 <table>
                     <tbody>
@@ -291,8 +291,8 @@ fn CommandPalette(
     #[prop(into)] on_new_row: Callback<()>,
 ) -> impl IntoView {
     view! {
-        <div class="cheat-sheet__overlay">
-            <div class="cheat-sheet__panel">
+        <div class="modal__overlay">
+            <div class="modal__panel">
                 <h2>"Командна палітра"</h2>
                 <ul class="command-palette__list">
                     <li>

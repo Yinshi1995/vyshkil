@@ -782,29 +782,79 @@ tr:hover td {
   margin: 8px;
 }
 
-.cheat-sheet__overlay {
+/* Модальна панель (components::Modal/Dialog + перейменовано з .cheat-sheet__* — той самий
+   патерн, HeroUI-референс, feedback користувача). Клік-поза-панеллю НЕ закриває навмисно
+   (training_form/CLAUDE.md: Show синхронно демонтує панель ДО завершення спливання події клацання,
+   зовнішній обробник встигає спрацювати на вже скинутому closure — "invoked after being dropped";
+   закриття лише кнопкою/Esc). */
+.modal__overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-modal);
+  animation: modal-fade-in var(--duration-fast) ease;
 }
 
-.cheat-sheet__panel {
-  background: var(--panel);
+.modal__panel {
+  position: relative;
+  background: var(--surface-raised);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 20px 24px;
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-5);
   max-width: 90vw;
   max-height: 85vh;
   overflow-y: auto;
+  animation: modal-pop-in var(--duration-base) ease;
+}
+
+.modal__close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: var(--space-1);
+  line-height: 0;
+}
+
+.modal__close:hover {
+  color: var(--fg-accent);
+}
+
+.modal__title {
+  margin: 0 0 var(--space-2);
+}
+
+.modal__description {
+  color: var(--fg-muted);
+  margin: 0 0 var(--space-4);
+}
+
+.modal__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-pop-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .cheat-sheet__key {
   font-family: var(--font-heading);
-  color: var(--accent);
+  color: var(--fg-accent);
   white-space: nowrap;
 }
 
