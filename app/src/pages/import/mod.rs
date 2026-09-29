@@ -7,6 +7,7 @@ use leptos::leptos_dom::helpers::{set_interval_with_handle, window_event_listene
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
+use crate::components::{Select, SelectOption};
 use crate::hooks::use_actor::use_actor;
 use crate::types::staffing::{InstructorStaffingRow, StaffingRow};
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
@@ -36,6 +37,15 @@ enum FileKind {
 }
 
 impl FileKind {
+    const ALL: [FileKind; 6] = [
+        FileKind::Fah,
+        FileKind::Bps,
+        FileKind::Kvid,
+        FileKind::Ivs,
+        FileKind::Terminy,
+        FileKind::VchArchive,
+    ];
+
     fn label(self) -> &'static str {
         match self {
             FileKind::Fah => "Фах (Пройшли/Проходять)",
@@ -44,6 +54,30 @@ impl FileKind {
             FileKind::Ivs => "ІВС (інструктори)",
             FileKind::Terminy => "Терміни (БЗВП/Фахова/Адаптація)",
             FileKind::VchArchive => "Архів ВЧ (одноразовий перенос, Етап 6)",
+        }
+    }
+
+    /// Рядковий ключ для `components::Select` (`value`/`on_change` — рядки, як у нативного
+    /// `<select>`) — той самий підхід, що `ActorSwitcher`.
+    fn key(self) -> &'static str {
+        match self {
+            FileKind::Fah => "fah",
+            FileKind::Bps => "bps",
+            FileKind::Kvid => "kvid",
+            FileKind::Ivs => "ivs",
+            FileKind::Terminy => "terminy",
+            FileKind::VchArchive => "vch_archive",
+        }
+    }
+
+    fn from_key(key: &str) -> Self {
+        match key {
+            "bps" => FileKind::Bps,
+            "kvid" => FileKind::Kvid,
+            "ivs" => FileKind::Ivs,
+            "terminy" => FileKind::Terminy,
+            "vch_archive" => FileKind::VchArchive,
+            _ => FileKind::Fah,
         }
     }
 
@@ -386,38 +420,13 @@ fn ImportBody() -> impl IntoView {
                 "частини/ВОС/місця) перед фіксацією."
             </p>
             <div class="training-form__header">
-                <select
-                    on:change=move |ev| {
-                        let v = event_target_value(&ev);
-                        file_kind.set(match v.as_str() {
-                            "bps" => FileKind::Bps,
-                            "kvid" => FileKind::Kvid,
-                            "ivs" => FileKind::Ivs,
-                            "terminy" => FileKind::Terminy,
-                            "vch_archive" => FileKind::VchArchive,
-                            _ => FileKind::Fah,
-                        });
-                    }
-                >
-                    <option value="fah" selected=move || file_kind.get() == FileKind::Fah>
-                        {FileKind::Fah.label()}
-                    </option>
-                    <option value="bps" selected=move || file_kind.get() == FileKind::Bps>
-                        {FileKind::Bps.label()}
-                    </option>
-                    <option value="kvid" selected=move || file_kind.get() == FileKind::Kvid>
-                        {FileKind::Kvid.label()}
-                    </option>
-                    <option value="ivs" selected=move || file_kind.get() == FileKind::Ivs>
-                        {FileKind::Ivs.label()}
-                    </option>
-                    <option value="terminy" selected=move || file_kind.get() == FileKind::Terminy>
-                        {FileKind::Terminy.label()}
-                    </option>
-                    <option value="vch_archive" selected=move || file_kind.get() == FileKind::VchArchive>
-                        {FileKind::VchArchive.label()}
-                    </option>
-                </select>
+                <Select
+                    value=Signal::derive(move || file_kind.get().key().to_string())
+                    options=Signal::derive(|| {
+                        FileKind::ALL.iter().map(|k| SelectOption::new(k.key(), k.label())).collect()
+                    })
+                    on_change=Callback::new(move |v: String| file_kind.set(FileKind::from_key(&v)))
+                />
                 <label class="training-form__as-of">
                     "Станом на "
                     <input

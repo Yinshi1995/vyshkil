@@ -24,13 +24,31 @@ impl SelectOption {
 /// `value`/`on_change` як у нативного `<select>` (рядкове значення) — виклик сам мапить
 /// у свій тип (`i32::parse`, `Role::parse` тощо), той самий підхід, що вже був із `<select
 /// on:change=...>` у `ActorSwitcher`/`Grid`, лише інша розмітка під капотом.
+///
+/// `id`/`on_keydown` — опційні, для вбудовування в `widgets::group_grid::Grid` (замінює
+/// `<select>` у `TrainingKindCell`/`SiteCell`): `id` — щоб `Grid::focus_cell` знаходив саме
+/// кнопку-тригер (фокусований елемент), `on_keydown` — щоб сітка лишалась власником
+/// Tab/Enter/стрілок для навігації МІЖ клітинками (той самий принцип явного передавання
+/// необробленої події, що й `widgets::group_grid::autocomplete` — не покладання на bubbling).
+/// Коли `on_keydown` заданий ("режим сітки"): стрілки/Enter, поки закрито, НЕ відкривають
+/// список (натомість форвардяться в сітку) — відкриття лише кліком або `Alt+↓` (той самий
+/// шорткат, що вже задокументований у шпаргалці для полів з підказками). Без `on_keydown`
+/// (самостійне вживання, напр. `ActorSwitcher`) — поведінка як була: стрілки відкривають.
 #[component]
 pub fn Select(
     #[prop(into)] value: Signal<String>,
     #[prop(into)] options: Signal<Vec<SelectOption>>,
     #[prop(into)] on_change: Callback<String>,
     #[prop(optional, into)] placeholder: String,
+    #[prop(optional)] id: Option<String>,
+    #[prop(optional)] on_keydown: Option<Callback<web_sys::KeyboardEvent>>,
 ) -> impl IntoView {
+    let grid_mode = on_keydown.is_some();
+    let forward = move |ev: web_sys::KeyboardEvent| {
+        if let Some(cb) = on_keydown {
+            cb.run(ev);
+        }
+    };
     let open = RwSignal::new(false);
     let highlighted = RwSignal::new(0usize);
     let root: NodeRef<leptos::html::Div> = NodeRef::new();
@@ -67,24 +85,46 @@ pub fn Select(
     let on_trigger_keydown = move |ev: web_sys::KeyboardEvent| {
         let len = options.get_untracked().len();
         if len == 0 {
+            forward(ev);
             return;
         }
+
+        // Alt+↓ відкриває незалежно від режиму — той самий шорткат, що вже задокументований у
+        // шпаргалці для полів з підказками ("Alt+↓ відкрити підказки поточного поля"); голий
+        // ArrowDown у режимі сітки цього НЕ робить (див. нижче), бо сітка сама володіє стрілками.
+        if ev.key() == "ArrowDown" && ev.alt_key() && !open.get_untracked() {
+            ev.prevent_default();
+            open.set(true);
+            highlighted.set(current_index().unwrap_or(0));
+            return;
+        }
+
         match ev.key().as_str() {
             "ArrowDown" => {
-                ev.prevent_default();
                 if !open.get_untracked() {
+                    if grid_mode {
+                        forward(ev);
+                        return;
+                    }
+                    ev.prevent_default();
                     open.set(true);
                     highlighted.set(current_index().unwrap_or(0));
                 } else {
+                    ev.prevent_default();
                     highlighted.update(|h| *h = (*h + 1).min(len - 1));
                 }
             }
             "ArrowUp" => {
-                ev.prevent_default();
                 if !open.get_untracked() {
+                    if grid_mode {
+                        forward(ev);
+                        return;
+                    }
+                    ev.prevent_default();
                     open.set(true);
                     highlighted.set(current_index().unwrap_or(0));
                 } else {
+                    ev.prevent_default();
                     highlighted.update(|h| *h = h.saturating_sub(1));
                 }
             }
@@ -96,7 +136,24 @@ pub fn Select(
                 ev.prevent_default();
                 highlighted.set(len - 1);
             }
-            "Enter" | " " => {
+            // Enter — у сітці зарезервований нею для переходу до наступної клітинки, поки список
+            // закритий; Space нею ніде не зарезервований, тому завжди може відкривати.
+            "Enter" => {
+                if open.get_untracked() {
+                    ev.prevent_default();
+                    select_index(highlighted.get_untracked());
+                    if grid_mode {
+                        forward(ev);
+                    }
+                } else if grid_mode {
+                    forward(ev);
+                } else {
+                    ev.prevent_default();
+                    open.set(true);
+                    highlighted.set(current_index().unwrap_or(0));
+                }
+            }
+            " " => {
                 ev.prevent_default();
                 if open.get_untracked() {
                     select_index(highlighted.get_untracked());
@@ -109,7 +166,12 @@ pub fn Select(
                 ev.prevent_default();
                 open.set(false);
             }
-            "Tab" => open.set(false),
+            "Tab" => {
+                open.set(false);
+                if grid_mode {
+                    forward(ev);
+                }
+            }
             key if key.chars().count() == 1 && !ev.ctrl_key() && !ev.alt_key() && !ev.meta_key() => {
                 // Друкований символ — той самий "стрибок до першого варіанту, що починається на
                 // цю літеру" (циклічно), що й нативний `<select>` (02 §-незадокументована UX-звичка).
@@ -124,7 +186,11 @@ pub fn Select(
                     highlighted.set(i);
                 }
             }
-            _ => {}
+            _ => {
+                if grid_mode {
+                    forward(ev);
+                }
+            }
         }
     };
 
@@ -142,6 +208,7 @@ pub fn Select(
         <div class="select" node_ref=root>
             <button
                 type="button"
+                id=id
                 class="select__trigger"
                 aria-haspopup="listbox"
                 aria-expanded=move || open.get().to_string()

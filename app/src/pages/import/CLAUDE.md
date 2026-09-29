@@ -6,7 +6,8 @@
 - Права: `viewer` не імпортує; `org_editor` — комітиться лише за власну організацію (той самий
   `policy::can_edit_org` у `commit_grid_impl`, `services/submission_grid.rs`, що й у формі).
 - Шість типів файлу (Фах, БпС, КВід, ІВС, Терміни — Етап 5; Архів ВЧ — Етап 6) — перемикач
-  `<select>` у `ImportBody`, `FileKind` вирішує, який `parse_*_file` викликати.
+  `components::Select` у `ImportBody` (`FileKind::key()`/`from_key()` — рядковий міст), `FileKind`
+  вирішує, який `parse_*_file` викликати.
 - **Fah/Bps/Terminy/VchArchive → `GroupFormRow` → та сама `Grid`**, що й форма, `commit_grid`/
   `services::submission_grid`. Kvid → зовсім інша форма даних (`StaffingRow`, 01 §4) → окрема
   проста `StaffingTable`, без undo/автозбереження → `commit_staffing` (пише `staffing_snapshot`/

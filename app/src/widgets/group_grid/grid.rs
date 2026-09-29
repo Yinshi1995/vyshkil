@@ -437,46 +437,35 @@ fn TrainingKindCell(
     data: RwSignal<GroupFormRow>,
     #[prop(into)] on_keydown: Callback<(usize, web_sys::KeyboardEvent)>,
 ) -> impl IntoView {
+    use crate::components::{Select, SelectOption};
     use crate::services::dictionaries::get_dictionaries_overview;
 
     let kinds = Resource::new(|| (), |_| get_dictionaries_overview());
+    // Тригер-кнопка Select має бути в DOM одразу (щоб Grid::focus_cell могла її сфокусувати
+    // Tab'ом ще до відповіді сервера) — тому читаємо ресурс через Effect у звичайний сигнал, не
+    // Signal::derive напряму (те саме застереження Leptos "reading a resource ... outside
+    // Suspense/effect": Suspense тут ЗНЯЛО б тригер із DOM на час завантаження — регресія супроти
+    // нативного `<select>`, який був у DOM одразу).
+    let options = RwSignal::new(vec![SelectOption::new("", "—")]);
+    Effect::new(move |_| {
+        if let Some(Ok(o)) = kinds.get() {
+            let mut opts = vec![SelectOption::new("", "—")];
+            opts.extend(o.training_kinds.into_iter().map(|k| SelectOption::new(k.id.to_string(), k.label)));
+            options.set(opts);
+        }
+    });
 
     view! {
-        <select
+        <Select
             id=cell_id(row_index, 1)
-            class="cell__input"
-            on:change=move |ev| {
-                let v = event_target_value(&ev);
-                let id: Option<i32> = v.parse().ok();
-                data.update(|d| d.training_kind_id = id);
-            }
-            on:keydown=move |ev| on_keydown.run((1, ev))
-        >
-            <option value="">"—"</option>
-            <Suspense fallback=|| ()>
-                {move || {
-                    kinds
-                        .get()
-                        .map(|res| match res {
-                            Ok(o) => {
-                                o.training_kinds
-                                    .into_iter()
-                                    .map(|k| {
-                                        let selected = move || data.get().training_kind_id == Some(k.id);
-                                        view! {
-                                            <option value=k.id.to_string() selected=selected>
-                                                {k.label}
-                                            </option>
-                                        }
-                                    })
-                                    .collect_view()
-                                    .into_any()
-                            }
-                            Err(_) => ().into_any(),
-                        })
-                }}
-            </Suspense>
-        </select>
+            value=Signal::derive(move || data.get().training_kind_id.map(|id| id.to_string()).unwrap_or_default())
+            options=options
+            placeholder="—"
+            on_change=Callback::new(move |v: String| {
+                data.update(|d| d.training_kind_id = v.parse().ok());
+            })
+            on_keydown=Callback::new(move |ev| on_keydown.run((1, ev)))
+        />
     }
 }
 
@@ -486,6 +475,8 @@ fn SiteCell(
     data: RwSignal<GroupFormRow>,
     #[prop(into)] on_keydown: Callback<(usize, web_sys::KeyboardEvent)>,
 ) -> impl IntoView {
+    use crate::components::{Select, SelectOption};
+
     let sites = Resource::new(
         move || data.get().sender_org_id,
         |org_id| async move {
@@ -495,46 +486,34 @@ fn SiteCell(
             }
         },
     );
+    // Той самий підхід, що TrainingKindCell: Effect у звичайний сигнал, не Suspense — тригер
+    // лишається в DOM одразу, і коректно оновлюється щоразу, як міняється sender_org_id
+    // (sites — це НЕ одноразовий ресурс, перезавантажується при зміні органу).
+    let options = RwSignal::new(vec![SelectOption::new("", "—")]);
+    Effect::new(move |_| {
+        let mut opts = vec![SelectOption::new("", "—")];
+        if let Some(Ok(list)) = sites.get() {
+            opts.extend(list.into_iter().map(|s| SelectOption::new(s.site_id.to_string(), s.label)));
+        }
+        options.set(opts);
+    });
 
     view! {
-        <select
+        <Select
             id=cell_id(row_index, 4)
-            class="cell__input"
-            on:change=move |ev| {
-                let v = event_target_value(&ev);
+            value=Signal::derive(move || data.get().site_id.map(|id| id.to_string()).unwrap_or_default())
+            options=options
+            placeholder="—"
+            on_change=Callback::new(move |v: String| {
                 let id: Option<i32> = v.parse().ok();
-                let sites_now = sites.get().and_then(|r| r.ok()).unwrap_or_default();
+                let sites_now = sites.get_untracked().and_then(|r| r.ok()).unwrap_or_default();
                 let label = sites_now.into_iter().find(|s| Some(s.site_id) == id).map(|s| s.label);
                 data.update(|d| {
                     d.site_id = id;
                     d.site_label = label.unwrap_or_default();
                 });
-            }
-            on:keydown=move |ev| on_keydown.run((4, ev))
-        >
-            <option value="">"—"</option>
-            <Suspense fallback=|| ()>
-                {move || {
-                    sites
-                        .get()
-                        .map(|res| match res {
-                            Ok(list) => {
-                                list.into_iter()
-                                    .map(|s| {
-                                        let selected = move || data.get().site_id == Some(s.site_id);
-                                        view! {
-                                            <option value=s.site_id.to_string() selected=selected>
-                                                {s.label}
-                                            </option>
-                                        }
-                                    })
-                                    .collect_view()
-                                    .into_any()
-                            }
-                            Err(_) => ().into_any(),
-                        })
-                }}
-            </Suspense>
-        </select>
+            })
+            on_keydown=Callback::new(move |ev| on_keydown.run((4, ev)))
+        />
     }
 }
