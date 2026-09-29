@@ -107,6 +107,24 @@ decisions/style-migration-rounds-to-scale.md`): наближати до шкал
 `no_inline_style_attributes_in_view_markup` (жодного нового `style="..."`),
 `every_css_var_reference_in_main_css_is_defined` (typo в `var(--X)` не падає мовчки).
 
+**HeroUI-компонентний прохід (feedback користувача, поза нумерацією фаз) — закрито**:
+`app/src/components/` — `Select` (редизайн, більше не "хуйня но потом розберемся" —
+плаваюча панель+заокруглені пункти, дав.), `Checkbox`, `Accordion`/`AccordionItem`,
+`Modal`/`Dialog` (`.modal__*` — перейменовано з `.cheat-sheet__*`, `training_form::CheatSheet`
+отримав кращий вигляд безкоштовно), `DatePicker` (chrono напряму, без "clock"-feature —
+"сьогодні" через `js_sys::Date`, лише клієнт). Структурні патерни — з heroui.com/docs,
+кольори/форма — наші (гострий радіус, золото, не м'який синій SaaS-стиль).
+
+**Кнопки перевиміряно з живого striy.pp.ua** (feedback: перша версія `.btn`/атома `chamfer` була
+композиційним здогадом 08-документа, не виміряним значенням) — `getComputedStyle` дав інші цифри
+майже по кожній властивості: clip-path — зріз ДВОХ протилежних кутів (15px), не один кут навскіс;
+font-weight 400 не 700; letter-spacing ~0.23em не 0.08em; padding 14px/36px; primary — лінійний
+градієнт (новий примітив `gold-4`), не суцільний колір; hover — підйом на 3px + м'яке золоте
+світіння. Повна таблиця вимірів — `.claude/decisions/ui-visual-style-source.md`.
+
+Усе — живий приклад на `/styleguide` (не лише в коді), кожен компонент — окремий коміт, вручну
+перевірено Playwright перед комітом.
+
 ## Етап: 5, закрито (за `docs/spec/06-roadmap.md`)
 
 **Етап 5 — критерій вимагає ВСІ 5 файлів** (Фах/БпС/КВід/ІВС/Терміни з `source_files/Зразок/
