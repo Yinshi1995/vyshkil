@@ -76,6 +76,9 @@ const PAIRS: &[(&str, &str, f64)] = &[
     ("fg-subtle", "surface-panel", 3.0),
     ("fg-accent", "surface-base", 3.0),
     ("fg-accent", "surface-panel", 3.0),
+    // Текст на суцільній заливці акцентом (кнопка/бірка) — тут "фон" = fg-accent (використовується
+    // як background, не foreground, у bg-accent-атомі); звичайний текстовий бар 4.5:1.
+    ("fg-on-accent", "fg-accent", 4.5),
     ("ok", "surface-base", 3.0),
     ("warn", "surface-base", 3.0),
     ("danger", "surface-base", 3.0),

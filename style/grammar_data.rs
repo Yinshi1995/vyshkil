@@ -143,6 +143,11 @@ const KEYWORD_ATOMS: &[(&str, &str)] = &[
     ("bg-base", "background: var(--surface-base)"),
     ("bg-panel", "background: var(--surface-panel)"),
     ("bg-raised", "background: var(--surface-raised)"),
+    // Заповнення суцільним акцентом (кнопка/бірка) + контрастний текст на ньому + м'який тінт
+    // (hover) — Фаза 3: старі --accent-contrast/--accent-dim, реально вжиті 1/5 разів у main.css.
+    ("bg-accent", "background: var(--fg-accent)"),
+    ("fg-on-accent", "color: var(--fg-on-accent)"),
+    ("bg-accent-dim", "background: var(--accent-dim)"),
     ("bd", "border: 1px solid var(--border)"),
     ("bd-accent", "border: 1px solid var(--border-strong)"),
     ("chamfer", "clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%)"),
@@ -177,6 +182,10 @@ const THEMES: &[Theme] = &[
             // семантичних тонів (fg-main/fg-muted), тому окремий токен, не компресія до двох.
             ("fg-subtle", "#8a8577"),
             ("fg-accent", "var(--gold-2)"),
+            // Текст на суцільному золотому фоні (кнопка/бірка) — старий --accent-contrast, той
+            // самий на всіх темах (темний, читається на будь-якому відтінку золота).
+            ("fg-on-accent", "#14140c"),
+            ("accent-dim", "color-mix(in srgb, var(--gold-2) 12%, transparent)"),
             ("border", "color-mix(in srgb, var(--gold-2) 16%, transparent)"),
             ("border-strong", "var(--gold-2)"),
             ("focus-ring", "var(--gold-2)"),
@@ -195,7 +204,11 @@ const THEMES: &[Theme] = &[
             ("fg-main", "#1a1a14"),
             ("fg-muted", "#4a4638"),
             ("fg-subtle", "#6b6656"),
+            // gold-1 навмисно темний (для тексту НА світлому фоні дня) — саме тому як ФОН під
+            // .btn--primary потребує світлого, не темного, тексту (на відміну від night/print).
             ("fg-accent", "var(--gold-1)"),
+            ("fg-on-accent", "#ffffff"),
+            ("accent-dim", "color-mix(in srgb, var(--gold-1) 12%, transparent)"),
             ("border", "color-mix(in srgb, var(--gold-1) 30%, transparent)"),
             ("border-strong", "var(--gold-1)"),
             ("focus-ring", "var(--gold-1)"),
@@ -215,6 +228,8 @@ const THEMES: &[Theme] = &[
             ("fg-muted", "#404040"),
             ("fg-subtle", "#707070"),
             ("fg-accent", "#000000"),
+            ("fg-on-accent", "#ffffff"),
+            ("accent-dim", "color-mix(in srgb, #000000 12%, transparent)"),
             ("border", "#000000"),
             ("border-strong", "#000000"),
             ("focus-ring", "#000000"),

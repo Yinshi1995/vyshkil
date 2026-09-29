@@ -383,17 +383,22 @@ a:hover {
   margin-top: var(--space-2);
 }
 
-/* Кнопка зі скошеним краєм (clip-path) — той самий мотив, що на striy.pp.ua */
+/* Кнопка зі скошеним краєм (clip-path) — той самий мотив, що на striy.pp.ua. `clip-path`
+   лишається літералом (той самий вираз, що атом `chamfer` — немає var() для форм); решта —
+   токени найближчого кроку шкали (Фаза 3). Округлення padding звело асиметричну 1px-різницю
+   між .btn/.btn--outline (10 vs 11px, компенсація за товщину бордера outline-варіанта) до
+   однакового значення — непомітно (≤1px), але задокументовано, щоб не виглядало забутим. */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-family: var(--font-heading);
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: var(--weight-7);
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 11px 22px 11px 18px;
+  letter-spacing: var(--track-4);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
   border: none;
   cursor: pointer;
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
@@ -401,20 +406,20 @@ a:hover {
 }
 
 .btn--primary {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--fg-accent);
+  color: var(--fg-on-accent);
 }
 
 .btn--primary:hover {
-  background: #ddb95a;
+  background: var(--gold-3);
   text-decoration: none;
 }
 
 .btn--outline {
   background: transparent;
-  color: var(--text-main);
+  color: var(--fg-main);
   border: 1px solid var(--border-strong);
-  padding: 10px 22px 10px 18px;
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
 }
 
 .btn--outline:hover {
@@ -871,6 +876,8 @@ tr:hover td {
     --fg-muted: var(--ink-3);
     --fg-subtle: #8a8577;
     --fg-accent: var(--gold-2);
+    --fg-on-accent: #14140c;
+    --accent-dim: color-mix(in srgb, var(--gold-2) 12%, transparent);
     --border: color-mix(in srgb, var(--gold-2) 16%, transparent);
     --border-strong: var(--gold-2);
     --focus-ring: var(--gold-2);
@@ -888,6 +895,8 @@ tr:hover td {
     --fg-muted: #4a4638;
     --fg-subtle: #6b6656;
     --fg-accent: var(--gold-1);
+    --fg-on-accent: #ffffff;
+    --accent-dim: color-mix(in srgb, var(--gold-1) 12%, transparent);
     --border: color-mix(in srgb, var(--gold-1) 30%, transparent);
     --border-strong: var(--gold-1);
     --focus-ring: var(--gold-1);
@@ -905,6 +914,8 @@ tr:hover td {
     --fg-muted: #404040;
     --fg-subtle: #707070;
     --fg-accent: #000000;
+    --fg-on-accent: #ffffff;
+    --accent-dim: color-mix(in srgb, #000000 12%, transparent);
     --border: #000000;
     --border-strong: #000000;
     --focus-ring: #000000;
@@ -966,6 +977,9 @@ tr:hover td {
   .bg-base { background: var(--surface-base); }
   .bg-panel { background: var(--surface-panel); }
   .bg-raised { background: var(--surface-raised); }
+  .bg-accent { background: var(--fg-accent); }
+  .fg-on-accent { color: var(--fg-on-accent); }
+  .bg-accent-dim { background: var(--accent-dim); }
   .bd { border: 1px solid var(--border); }
   .bd-accent { border: 1px solid var(--border-strong); }
   .chamfer { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
@@ -1174,6 +1188,9 @@ tr:hover td {
   .hover\:bg-base:hover { background: var(--surface-base); }
   .hover\:bg-panel:hover { background: var(--surface-panel); }
   .hover\:bg-raised:hover { background: var(--surface-raised); }
+  .hover\:bg-accent:hover { background: var(--fg-accent); }
+  .hover\:fg-on-accent:hover { color: var(--fg-on-accent); }
+  .hover\:bg-accent-dim:hover { background: var(--accent-dim); }
   .hover\:bd:hover { border: 1px solid var(--border); }
   .hover\:bd-accent:hover { border: 1px solid var(--border-strong); }
   .hover\:chamfer:hover { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
@@ -1379,6 +1396,9 @@ tr:hover td {
   .focus-visible\:bg-base:focus-visible { background: var(--surface-base); }
   .focus-visible\:bg-panel:focus-visible { background: var(--surface-panel); }
   .focus-visible\:bg-raised:focus-visible { background: var(--surface-raised); }
+  .focus-visible\:bg-accent:focus-visible { background: var(--fg-accent); }
+  .focus-visible\:fg-on-accent:focus-visible { color: var(--fg-on-accent); }
+  .focus-visible\:bg-accent-dim:focus-visible { background: var(--accent-dim); }
   .focus-visible\:bd:focus-visible { border: 1px solid var(--border); }
   .focus-visible\:bd-accent:focus-visible { border: 1px solid var(--border-strong); }
   .focus-visible\:chamfer:focus-visible { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
@@ -1584,6 +1604,9 @@ tr:hover td {
   .active\:bg-base:active { background: var(--surface-base); }
   .active\:bg-panel:active { background: var(--surface-panel); }
   .active\:bg-raised:active { background: var(--surface-raised); }
+  .active\:bg-accent:active { background: var(--fg-accent); }
+  .active\:fg-on-accent:active { color: var(--fg-on-accent); }
+  .active\:bg-accent-dim:active { background: var(--accent-dim); }
   .active\:bd:active { border: 1px solid var(--border); }
   .active\:bd-accent:active { border: 1px solid var(--border-strong); }
   .active\:chamfer:active { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
@@ -1789,6 +1812,9 @@ tr:hover td {
   .disabled\:bg-base:disabled { background: var(--surface-base); }
   .disabled\:bg-panel:disabled { background: var(--surface-panel); }
   .disabled\:bg-raised:disabled { background: var(--surface-raised); }
+  .disabled\:bg-accent:disabled { background: var(--fg-accent); }
+  .disabled\:fg-on-accent:disabled { color: var(--fg-on-accent); }
+  .disabled\:bg-accent-dim:disabled { background: var(--accent-dim); }
   .disabled\:bd:disabled { border: 1px solid var(--border); }
   .disabled\:bd-accent:disabled { border: 1px solid var(--border-strong); }
   .disabled\:chamfer:disabled { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
@@ -1994,6 +2020,9 @@ tr:hover td {
   .invalid\:bg-base[aria-invalid="true"] { background: var(--surface-base); }
   .invalid\:bg-panel[aria-invalid="true"] { background: var(--surface-panel); }
   .invalid\:bg-raised[aria-invalid="true"] { background: var(--surface-raised); }
+  .invalid\:bg-accent[aria-invalid="true"] { background: var(--fg-accent); }
+  .invalid\:fg-on-accent[aria-invalid="true"] { color: var(--fg-on-accent); }
+  .invalid\:bg-accent-dim[aria-invalid="true"] { background: var(--accent-dim); }
   .invalid\:bd[aria-invalid="true"] { border: 1px solid var(--border); }
   .invalid\:bd-accent[aria-invalid="true"] { border: 1px solid var(--border-strong); }
   .invalid\:chamfer[aria-invalid="true"] { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
@@ -2199,6 +2228,9 @@ tr:hover td {
   .open\:bg-base[data-state="open"] { background: var(--surface-base); }
   .open\:bg-panel[data-state="open"] { background: var(--surface-panel); }
   .open\:bg-raised[data-state="open"] { background: var(--surface-raised); }
+  .open\:bg-accent[data-state="open"] { background: var(--fg-accent); }
+  .open\:fg-on-accent[data-state="open"] { color: var(--fg-on-accent); }
+  .open\:bg-accent-dim[data-state="open"] { background: var(--accent-dim); }
   .open\:bd[data-state="open"] { border: 1px solid var(--border); }
   .open\:bd-accent[data-state="open"] { border: 1px solid var(--border-strong); }
   .open\:chamfer[data-state="open"] { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
@@ -2481,6 +2513,15 @@ tr:hover td {
   }
   @media (min-width: 768px) {
     .md\:bg-raised { background: var(--surface-raised); }
+  }
+  @media (min-width: 768px) {
+    .md\:bg-accent { background: var(--fg-accent); }
+  }
+  @media (min-width: 768px) {
+    .md\:fg-on-accent { color: var(--fg-on-accent); }
+  }
+  @media (min-width: 768px) {
+    .md\:bg-accent-dim { background: var(--accent-dim); }
   }
   @media (min-width: 768px) {
     .md\:bd { border: 1px solid var(--border); }
@@ -3098,6 +3139,15 @@ tr:hover td {
     .lg\:bg-raised { background: var(--surface-raised); }
   }
   @media (min-width: 1024px) {
+    .lg\:bg-accent { background: var(--fg-accent); }
+  }
+  @media (min-width: 1024px) {
+    .lg\:fg-on-accent { color: var(--fg-on-accent); }
+  }
+  @media (min-width: 1024px) {
+    .lg\:bg-accent-dim { background: var(--accent-dim); }
+  }
+  @media (min-width: 1024px) {
     .lg\:bd { border: 1px solid var(--border); }
   }
   @media (min-width: 1024px) {
@@ -3711,6 +3761,15 @@ tr:hover td {
   }
   @container (min-width: 480px) {
     .\@md\:bg-raised { background: var(--surface-raised); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:bg-accent { background: var(--fg-accent); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:fg-on-accent { color: var(--fg-on-accent); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:bg-accent-dim { background: var(--accent-dim); }
   }
   @container (min-width: 480px) {
     .\@md\:bd { border: 1px solid var(--border); }

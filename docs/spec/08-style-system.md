@@ -76,6 +76,8 @@ Pico.css (пристойний дефолт) — усі як натхнення,
 | `fg-muted` | `ink-3` | — | `color-mix(in srgb, var(--fg-main) 70%, transparent)` — не окремий альфа-токен |
 | `fg-subtle` | `#8a8577` (Фаза 3, старий `--text-muted`) | `#6b6656` (перше наближення) | — |
 | `fg-accent` | `gold-2` | той самий (акцент не змінюється темою) | — |
+| `fg-on-accent` | `#14140c` (Фаза 3, старий `--accent-contrast`) | `#ffffff` (gold-1 темний — потребує світлого тексту) | — |
+| `accent-dim` (Фаза 3, старий `--accent-dim`) | — | — | `color-mix(in srgb, var(--fg-accent) 12%, transparent)` на кожній темі |
 | `border` | — | — | `color-mix(in srgb, var(--fg-accent) 16%, transparent)` (= поточний `--border`) |
 | `border-strong` | `gold-2` | — | — |
 | `focus-ring` | `gold-2` | — | 2px, `:focus-visible` лише |
@@ -104,6 +106,7 @@ Pico.css (пристойний дефолт) — усі як натхнення,
 | `head` | — | font-family: var(--font-heading) (Oswald) |
 | `fg-{main,muted,subtle,accent,ok,warn,danger,info}` | `fg-muted` | color (`fg-subtle` — третій, найтихіший тон, Фаза 3: старий `--text-muted`, не збігався з жодним із двох, `.claude/decisions/style-migration-rounds-to-scale.md`) |
 | `bg-{base,panel,raised}` | `bg-panel` | background |
+| `bg-accent` / `fg-on-accent` / `bg-accent-dim` | `bg-accent` | суцільна заливка акцентом (кнопка/бірка) + контрастний текст на ній + м'який тінт (hover), Фаза 3 |
 | `bd`,`bd-accent` | — | border: 1px solid var(--border\|--border-strong) |
 | `r{0..3}` | `r1` | border-radius зі шкали §2.1 |
 | `chamfer` | — | `clip-path: polygon(...)` скошений кут (той самий мотив, що зараз `.btn`) |
