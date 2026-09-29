@@ -35,5 +35,6 @@
 | `services/` | `#[server]`-функції для ≥ 2 споживачів | `layout/`, `pages/` |
 | `types/` | DTO клієнт↔сервер | будь-хто |
 | `widgets/` | доменні компоненти для ≥ 2 сторінок (`ActorNotice`) | `pages/`, `layout/` |
+| `components/` | UI-примітиви без домену (`Select`) | `layout/`, `widgets/`, `pages/` |
 
-`components/`/`state/` не існують: не створювати наперед (§1).
+`state/` ще не існує: не створювати наперед (§1).

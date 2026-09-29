@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 
+use crate::components::{Select, SelectOption};
 use crate::hooks::use_actor::use_actor;
 use crate::services::orgs::list_orgs;
 use crate::types::actor::{Actor, Role};
@@ -23,41 +24,44 @@ pub fn ActorSwitcher() -> impl IntoView {
                                     .into_any()
                             }
                             Ok(list) => {
-                                let on_org_change = move |ev| {
-                                    let org_id: i32 = event_target_value(&ev).parse().unwrap_or_default();
-                                    let role = actor.get().map(|a| a.role).unwrap_or(Role::Admin);
+                                let org_options: Vec<SelectOption> = list
+                                    .iter()
+                                    .map(|(id, name)| SelectOption::new(id.to_string(), name.clone()))
+                                    .collect();
+                                let role_options: Vec<SelectOption> = Role::ALL
+                                    .iter()
+                                    .map(|r| SelectOption::new(r.as_str(), r.label()))
+                                    .collect();
+                                let org_value = Signal::derive(move || {
+                                    actor.get().map(|a| a.org_id.to_string()).unwrap_or_default()
+                                });
+                                let role_value = Signal::derive(move || {
+                                    actor.get().map(|a| a.role.as_str().to_string()).unwrap_or_default()
+                                });
+                                let on_org_change = Callback::new(move |v: String| {
+                                    let org_id: i32 = v.parse().unwrap_or_default();
+                                    let role = actor.get_untracked().map(|a| a.role).unwrap_or(Role::Admin);
                                     actor.set(Some(Actor { org_id, role }));
-                                };
-                                let on_role_change = move |ev| {
-                                    let role = Role::parse(&event_target_value(&ev)).unwrap_or(Role::Admin);
-                                    if let Some(a) = actor.get() {
+                                });
+                                let on_role_change = Callback::new(move |v: String| {
+                                    let role = Role::parse(&v).unwrap_or(Role::Admin);
+                                    if let Some(a) = actor.get_untracked() {
                                         actor.set(Some(Actor { org_id: a.org_id, role }));
                                     }
-                                };
-                                let current_org = actor.get().map(|a| a.org_id);
+                                });
                                 view! {
-                                    <select on:change=on_org_change>
-                                        {list.iter()
-                                            .map(|(id, name)| {
-                                                let selected = current_org == Some(*id);
-                                                view! {
-                                                    <option value=id.to_string() selected=selected>
-                                                        {name.clone()}
-                                                    </option>
-                                                }
-                                            })
-                                            .collect_view()}
-                                    </select>
-                                    <select on:change=on_role_change>
-                                        {Role::ALL
-                                            .iter()
-                                            .map(|r| {
-                                                view! {
-                                                    <option value=r.as_str()>{r.label()}</option>
-                                                }
-                                            })
-                                            .collect_view()}
-                                    </select>
+                                    <Select
+                                        value=org_value
+                                        options=org_options
+                                        on_change=on_org_change
+                                        placeholder="Оберіть частину"
+                                    />
+                                    <Select
+                                        value=role_value
+                                        options=role_options
+                                        on_change=on_role_change
+                                        placeholder="Роль"
+                                    />
                                 }
                                     .into_any()
                             }
