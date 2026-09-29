@@ -231,7 +231,11 @@ a:hover {
 
 /* Стилізована випадайка (components::Select) — заміна нативного <select>, чий відкритий
    список не можна стилізувати CSS. Той самий візуальний патерн, що й .cell__dropdown
-   (автокомпліт сітки), під своїми класами: тут весь список одразу, не пошук за запитом. */
+   (автокомпліт сітки), під своїми класами: тут весь список одразу, не пошук за запитом.
+   Перероблено (feedback користувача, HeroUI-референс): плаский список без глибини →
+   плаваюча панель (тінь+радіус) з окремими заокругленими "пігулками"-пунктами, які підсвічуються
+   заливкою при hover/active, а не просто фоном на весь рядок — той самий структурний патерн, що
+   в референсі, кольори/радіус — наші (менший радіус, різкіший, золото замість синього). */
 .select {
   position: relative;
   display: inline-block;
@@ -241,16 +245,18 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-3);
   min-width: 160px;
-  background: var(--panel-alt);
-  color: var(--text-main);
+  background: var(--surface-raised);
+  color: var(--fg-main);
   border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 7px 10px;
+  border-radius: var(--radius-1);
+  padding: var(--space-2) var(--space-3);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
   cursor: pointer;
+  transition: border-color var(--duration-fast) ease;
 }
 
 .select__trigger:hover {
@@ -259,11 +265,11 @@ a:hover {
 
 .select__trigger:focus-visible {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--fg-accent);
 }
 
 .select__trigger[aria-expanded="true"] {
-  border-color: var(--accent);
+  border-color: var(--fg-accent);
 }
 
 .select__value {
@@ -273,9 +279,9 @@ a:hover {
 }
 
 .select__chevron {
-  color: var(--accent);
+  color: var(--fg-accent);
   flex-shrink: 0;
-  transition: transform 0.15s ease;
+  transition: transform var(--duration-fast) ease;
 }
 
 .select__trigger[aria-expanded="true"] .select__chevron {
@@ -284,27 +290,33 @@ a:hover {
 
 .select__dropdown {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + var(--space-1));
   left: 0;
-  z-index: 30;
+  z-index: var(--z-dropdown);
   min-width: 100%;
   max-height: 280px;
   overflow-y: auto;
   margin: 0;
-  padding: 4px 0;
+  padding: var(--space-2);
   list-style: none;
-  background: var(--panel-alt);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--surface-raised);
   border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  box-shadow: 0 4px 16px var(--shadow);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
 }
 
 .select__option {
-  padding: 7px 12px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-1);
   cursor: pointer;
-  font-size: 14px;
-  color: var(--text-main);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+  color: var(--fg-main);
   white-space: nowrap;
+  transition: background var(--duration-fast) ease;
 }
 
 .select__option--active,
@@ -313,7 +325,8 @@ a:hover {
 }
 
 .select__option--selected {
-  color: var(--accent);
+  color: var(--fg-accent);
+  font-weight: var(--weight-5);
 }
 
 /* Іконка в золотій рамці — той самий мотив, що на striy.pp.ua. Токенізовано (Фаза 3): 52px→48px,
