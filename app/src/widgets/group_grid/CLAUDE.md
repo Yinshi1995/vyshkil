@@ -28,5 +28,5 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `grid.rs` | `Grid`, `EditableRow`/`wrap_rows`/`snapshot_rows` (рядок = власний сигнал, щоб фокус не губився при перерендері) | `pages/training_form/mod.rs`, `pages/import/mod.rs` |
-| `autocomplete.rs` | `OrgAutocomplete`, `VosPositionCourseAutocomplete` (02 §3) | `grid.rs` |
+| `autocomplete.rs` | `OrgAutocomplete` (реекспортовано з `mod.rs` — Етап 7 забрав другого споживача поза `Grid`), `VosPositionCourseAutocomplete` (02 §3) | `grid.rs`, `pages::documents` |
 | `row_editor.rs` | `RowEditor` — форма всіх полів рядка в `Drawer` ("як Notion"), `CompositionEditor` | `grid.rs` |

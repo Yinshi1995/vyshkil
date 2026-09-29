@@ -11,7 +11,8 @@
 |---|---|---|
 | `accordion.rs` | `Accordion`/`AccordionItem` — розгортання розміткою, CSS grid-rows-анімація | — |
 | `checkbox.rs` | `Checkbox` — стилізований чекбокс (справжній `<input>`, приховано лише візуально) | — |
-| `date_picker.rs` | `DatePicker` — календар-панель, `chrono` напряму (не `domain::dates` — не знає домену) | `pages::import`, `pages::training_form`, `pages::home` |
+| `date_picker.rs` | `DatePicker` — календар-панель, `chrono` напряму (не `domain::dates` — не знає домену) | `pages::import`, `pages::training_form`, `pages::home`, `pages::documents` |
+| `download.rs` | `download_bytes` — браузерне скачування готових байтів без URL-ендпоінта (`Blob`+`<a download>`) | `pages::documents` |
 | `drawer.rs` | `Drawer` — бічна панель на всю висоту (той самий контракт, що `Modal`, `hooks::use_escape_close`), для "розгорнути рядок у форму" | `widgets::group_grid` (RowEditor) |
 | `file_dropzone.rs` | `FileDropzone` — перетягнути файл або клікнути (прихований `<input type="file">` — одне джерело `web_sys::File` для обох шляхів); `read_file_bytes` — спільне читання файлу в байти (`File::array_buffer()`) | `pages::training_form`, `pages::import` |
 | `modal.rs` | `Modal`/`Dialog` — оверлей+панель, Escape закриває, клік-поза НЕ закриває (навмисно, `.modal__*` — той самий клас, що `training_form::CheatSheet`) | — |

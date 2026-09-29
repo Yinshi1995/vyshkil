@@ -13,3 +13,4 @@
 | `policy.rs` | `Actor`/`Role` (реекспорт), `can_view_org`/`visible_org_ids`, `can_edit_org`, `is_admin`, `restrict_tree`, `set_session_actor` | `pages/*/server.rs`, `services/` |
 | `repo/` | SQL/SeaORM по агрегатах (своя карта) | `pages/*/server.rs`, `services/` |
 | `import/` | Структурні екстрактори файлів, без БД (своя карта) | `repo/imports_*.rs` |
+| `documents/` | Генератори документів (Етап 7, 05), байти з готових даних, без БД (своя карта) | `pages/documents/server.rs` |

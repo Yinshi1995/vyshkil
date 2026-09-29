@@ -1,4 +1,5 @@
 pub mod dictionaries;
+pub mod documents;
 pub mod groups;
 pub mod imports_bps;
 pub mod imports_fah;

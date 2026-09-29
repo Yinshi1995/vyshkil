@@ -34,3 +34,5 @@ date: 2026-09-27
 - [`wasm-bindgen`/`web-sys` прямими залежностями `app`](../decisions/wasm-bindgen-in-pages.md) — керування фокусом клітинки сітки (Етап 4) потребує називати `web_sys::HtmlElement`/`JsCast` явно; не під feature `hydrate` — той самий `view!` компілюється й для SSR.
 - [Власна стильова система замість Tailwind/UnoCSS](../decisions/style-system-architecture.md) — токени+граматика+`cx!`-макрос, статична валідація класів на етапі компіляції, без Node/CDN.
 - [Фаза 3: наближати legacy-пікселі до шкали, не розширювати шкалу](../decisions/style-migration-rounds-to-scale.md) — закритість шкали токенів важливіша за пиксель-точну відповідність виміряному еталону.
+- [Об'єднаний `source_type='form'` для ручного вводу й імпорту таблиць](../decisions/unified-training-form-source-type.md) — одна сітка/одна чернетка на `/training-form`, `source_type` не впливає на алгоритм звірки.
+- [Щоденні агреговані підрахунки архіву (Контролька) — відкласти до Етапу 8](../decisions/archive-daily-counts-deferred.md) — нема схеми для агрегованих подань без деталізації (`reported_group` — ще Етап 8), дані лишаються еталонами на диску.

@@ -1,4 +1,5 @@
 pub mod dictionaries;
+pub mod documents;
 pub mod home;
 pub mod import;
 pub mod org_detail;

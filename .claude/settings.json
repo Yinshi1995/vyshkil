@@ -31,10 +31,8 @@
     "deny": [
       "Read(.env)",
       "Bash(git push *)",
-      "Read(*.pptx)",
       "Read(*.pdf)",
       "Read(*.zip)",
-      "Read(docs/templates/**)",
       "Read(target/site/**)",
       "Read(preview.html)"
     ]

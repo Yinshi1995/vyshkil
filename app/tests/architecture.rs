@@ -350,6 +350,7 @@ fn every_css_var_reference_in_main_css_is_defined() {
 fn sanity_the_tree_walk_actually_found_pages() {
     let pages = BTreeSet::from([
         "dictionaries".to_string(),
+        "documents".to_string(),
         "home".to_string(),
         "import".to_string(),
         "org_detail".to_string(),

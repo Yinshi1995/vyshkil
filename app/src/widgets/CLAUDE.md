@@ -6,4 +6,4 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `actor_notice.rs` | `ActorNotice` — "оберіть актора вгорі" замість мовчазного порожнього результату | `pages::home` (пошук, дерево), `pages::org_detail` |
-| `group_grid/` | `Grid` — сітка рядків-груп з клавіатурою й автокомплітом (своя карта) | `pages::training_form`, `pages::import` |
+| `group_grid/` | `Grid` — сітка рядків-груп з клавіатурою й автокомплітом; `OrgAutocomplete` реекспортовано й поза `Grid` (своя карта) | `pages::training_form`, `pages::import`, `pages::documents` (лише `OrgAutocomplete`) |
