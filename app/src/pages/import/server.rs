@@ -13,67 +13,6 @@ const KVID_CATEGORY: &str = "squad_leaders";
 /// константою на боці клієнта в `FileKind::source_type()`, не приходить з форми).
 const ARCHIVE_SOURCE_TYPE: &str = "archive_seed";
 
-/// Розбір файлу "Фах" (03 §1-3): байти → структурні рядки (без БД) → резолюція org/vos/посада/
-/// місце через довідники → сітка (той самий шлях далі, що й ручне введення). Помилки розбору
-/// (не той тип файлу, пошкоджений xlsx) зупиняють увесь імпорт; нерозпізнані клітинки в межах
-/// одного рядка — ні, вони просто лишаються `*_id = None` для ручного підтвердження в сітці.
-#[server(ParseFahFile, "/api")]
-pub async fn parse_fah_file(
-    actor: Option<Actor>,
-    bytes: Vec<u8>,
-) -> Result<Vec<GroupFormRow>, ServerFnError> {
-    use crate::backend::{import, policy, repo};
-
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
-    if actor.role == policy::Role::Viewer {
-        return Err(ServerFnError::new("перегляд не імпортує дані"));
-    }
-
-    let raw_rows =
-        import::fah::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
-    if raw_rows.is_empty() {
-        return Err(ServerFnError::new(
-            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «Фах» \
-             (аркуші «Пройшли»/«Проходять», заголовок Підрозділ/Місце/Посада/ВОС/ОВТ/Термін/Кількість)",
-        ));
-    }
-
-    let db = expect_context::<sea_orm::DatabaseConnection>();
-    repo::imports_fah::resolve_rows(&db, raw_rows)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
-
-/// Розбір файлу "БпС" — та сама ідея, інша структура джерела (`backend/import/CLAUDE.md`):
-/// дворівневий заголовок, funnel-воронка ("Завершилась": Викликали→Прибуло до НЦ→Успішно
-/// завершило; "Навчаються": Викликали→Проходять) замість однієї "Кількість".
-#[server(ParseBpsFile, "/api")]
-pub async fn parse_bps_file(
-    actor: Option<Actor>,
-    bytes: Vec<u8>,
-) -> Result<Vec<GroupFormRow>, ServerFnError> {
-    use crate::backend::{import, policy, repo};
-
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
-    if actor.role == policy::Role::Viewer {
-        return Err(ServerFnError::new("перегляд не імпортує дані"));
-    }
-
-    let raw_rows =
-        import::bps::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
-    if raw_rows.is_empty() {
-        return Err(ServerFnError::new(
-            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «БпС» \
-             (аркуші «Завершилась»/«Навчаються», заголовок Тип БпАК/ВОС/Військова частина/…)",
-        ));
-    }
-
-    let db = expect_context::<sea_orm::DatabaseConnection>();
-    repo::imports_bps::resolve_rows(&db, raw_rows)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
-}
-
 /// Розбір файлу "КВід" — інша структура ЗНОВУ (одноrівневий заголовок, але це не group-подібні
 /// дані узагалі: `staffing_snapshot`/`staffing_metric`, 01 §4). Превʼю для цього типу — не
 /// `widgets::group_grid` (форма даних інша), проста таблиця в `pages/import/mod.rs`.
@@ -104,9 +43,11 @@ pub async fn parse_kvid_file(
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
-/// Розбір файлу "ІВС" — П'ЯТИЙ тип, і єдиний, що дає ОДРАЗУ два різних результати з одного файлу
+/// Розбір файлу "ІВС" — єдиний тип, що дає ОДРАЗУ два різних результати з одного файлу
 /// (`backend/import/ivs.rs` пояснює чому): укомплектованість (`InstructorStaffingRow`, проста
-/// таблиця, як КВід) і стажування+курси РАЗОМ (`GroupFormRow`, та сама сітка, що й Фах/БпС).
+/// таблиця, як КВід) і стажування+курси РАЗОМ (`GroupFormRow`, та сама сітка) — саме тому
+/// лишився на `/import`, а не переїхав з Фах/БпС/Терміни на `/training-form`
+/// ([[unified-training-form-source-type]]).
 #[server(ParseIvsFile, "/api")]
 pub async fn parse_ivs_file(
     actor: Option<Actor>,
@@ -133,34 +74,6 @@ pub async fn parse_ivs_file(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
     Ok((resolved.staffing, resolved.groups))
-}
-
-/// Розбір файлу "Терміни" — П'ЯТИЙ і останній тип (Етап 5 повністю): три паралельні списки
-/// (БЗВП/Фахова/Адаптація, `backend/import/terminy.rs`) РАЗОМ у ту саму сітку, що й усі попередні.
-#[server(ParseTerminyFile, "/api")]
-pub async fn parse_terminy_file(
-    actor: Option<Actor>,
-    bytes: Vec<u8>,
-) -> Result<Vec<GroupFormRow>, ServerFnError> {
-    use crate::backend::{import, policy, repo};
-
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
-    if actor.role == policy::Role::Viewer {
-        return Err(ServerFnError::new("перегляд не імпортує дані"));
-    }
-
-    let extract = import::terminy::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
-    if extract.bzvp.is_empty() && extract.special.is_empty() && extract.adapt.is_empty() {
-        return Err(ServerFnError::new(
-            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «Терміни» \
-             (заголовок № з/п/Підрозділ/БЗВП/Фахова підготовка/Адаптація)",
-        ));
-    }
-
-    let db = expect_context::<sea_orm::DatabaseConnection>();
-    repo::imports_terminy::resolve_rows(&db, extract)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
 /// Розбір архіву ВЧ (Етап 6, `source_type='archive_seed'`) — **лише реальний файл**

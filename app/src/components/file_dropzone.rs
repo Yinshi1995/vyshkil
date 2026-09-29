@@ -6,6 +6,18 @@
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
+/// Читає обраний файл у байти клієнтським `File::array_buffer()` (Promise → `JsFuture`) — спільний
+/// шлях для click-обрання й drag-drop (`FileDropzone` віддає той самий `web_sys::File` з обох
+/// джерел). Використовують сторінки, що приймають малі (десятки КБ) файли без multipart.
+pub fn read_file_bytes(file: web_sys::File, on_bytes: impl FnOnce(Vec<u8>) + 'static) {
+    leptos::task::spawn_local(async move {
+        let promise = file.array_buffer();
+        let Ok(buf) = wasm_bindgen_futures::JsFuture::from(promise).await else { return };
+        let bytes = js_sys::Uint8Array::new(&buf).to_vec();
+        on_bytes(bytes);
+    });
+}
+
 #[component]
 pub fn FileDropzone(
     #[prop(into)] on_file: Callback<web_sys::File>,

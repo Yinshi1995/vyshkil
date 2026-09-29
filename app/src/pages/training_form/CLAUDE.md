@@ -1,4 +1,4 @@
-# app/src/pages/training_form — сітка введення груп (`/training-form`, 02)
+# app/src/pages/training_form — об'єднана сітка ручного вводу й імпорту (`/training-form`, 02)
 
 - Можна: `services`, `widgets`, `hooks`, `types`, `domain`, `backend` (лише з `server.rs`, під `ssr`).
   Не можна: інші сторінки.
@@ -8,6 +8,13 @@
   (`policy::can_edit_org` перевіряється в `commit_grid` на сервері, ПЕРЕД записом).
 - `server.rs` тепер лише тонкі `#[server]`-обгортки над `services::submission_grid::*_impl`
   (`source_type="form"`) — спільна логіка з `pages/import` (Етап 5).
+- **Об'єднання з імпортом (feedback користувача, [[unified-training-form-source-type]])**: Фах/БпС/
+  Терміни (`FileKind` тут, лише 3 варіанти) переїхали з `pages::import` разом зі своїми
+  `parse_*_file` — та сама `Grid`, той самий `source_type='form'`, немає більше окремої чернетки
+  "превʼю імпорту". `FileDropzone` у шапці — якщо в сітці вже є непорожні рядки, розібрані рядки
+  ДОДАЮТЬСЯ в кінець (`on_file_selected` у `mod.rs`), інакше замінюють єдиний порожній
+  рядок-заглушку. КВід/ІВС/Архів ВЧ лишились на `/import` — інша форма даних або окремий
+  `source_type`, об'єднання їм не підходить (`pages/import/CLAUDE.md`).
 - e2e (Playwright, критерій готовності Етапу 4) — `e2e/tests/training-form.spec.ts`, окремий
   Node-проєкт (не Cargo workspace). Перед запуском: `docker start taktoblik-db`,
   `cargo leptos build`, підняти `server.exe`, `DELETE FROM group_event; DELETE FROM training_group;
@@ -20,5 +27,5 @@
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
-| `mod.rs` | `TrainingFormPage` — стан сітки, автозбереження, undo/redo, глобальні гарячі клавіші, шпаргалка, командна палітра | `pages/CLAUDE.md` → `routes.rs` |
-| `server.rs` | `get_draft`/`save_draft`/`commit_grid` (тонкі обгортки над `services::submission_grid`) | `mod.rs` |
+| `mod.rs` | `TrainingFormPage` — стан сітки, автозбереження, undo/redo, глобальні гарячі клавіші, шпаргалка, командна палітра, `FileKind`/`on_file_selected` (Фах/БпС/Терміни) | `pages/CLAUDE.md` → `routes.rs` |
+| `server.rs` | `get_draft`/`save_draft`/`commit_grid` (тонкі обгортки над `services::submission_grid`), `parse_fah_file`/`parse_bps_file`/`parse_terminy_file` | `mod.rs` |

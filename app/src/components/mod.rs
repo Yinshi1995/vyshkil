@@ -10,6 +10,6 @@ pub use accordion::{Accordion, AccordionItem};
 pub use checkbox::Checkbox;
 pub use date_picker::DatePicker;
 pub use drawer::Drawer;
-pub use file_dropzone::FileDropzone;
+pub use file_dropzone::{read_file_bytes, FileDropzone};
 pub use modal::{Dialog, Modal};
 pub use select::{Select, SelectOption};

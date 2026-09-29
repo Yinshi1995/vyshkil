@@ -6,15 +6,56 @@ use leptos::ev;
 use leptos::leptos_dom::helpers::{set_interval_with_handle, window_event_listener};
 use leptos::prelude::*;
 
-use crate::components::DatePicker;
+use crate::components::{read_file_bytes, DatePicker, FileDropzone, Select, SelectOption};
 use crate::hooks::use_actor::use_actor;
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
 use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use crate::widgets::ActorNotice;
-use server::{commit_grid, get_draft, save_draft};
+use server::{commit_grid, get_draft, parse_bps_file, parse_fah_file, parse_terminy_file, save_draft};
+
+/// Тип файлу, яким можна ДОПОВНИТИ сітку — Фах/БпС/Терміни, чисті виробники `GroupFormRow`
+/// (03, Етап 5, перенесено з `pages::import` при об'єднанні з ручним вводом —
+/// [[unified-training-form-source-type]]). КВід/ІВС/Архів ВЧ лишились на `/import`: інша форма
+/// даних або окремий `source_type`, об'єднання їм не підходить (`pages/import/mod.rs` пояснює чому).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileKind {
+    Fah,
+    Bps,
+    Terminy,
+}
+
+impl FileKind {
+    const ALL: [FileKind; 3] = [FileKind::Fah, FileKind::Bps, FileKind::Terminy];
+
+    fn label(self) -> &'static str {
+        match self {
+            FileKind::Fah => "Фах (Пройшли/Проходять)",
+            FileKind::Bps => "БпС (Завершилась/Навчаються)",
+            FileKind::Terminy => "Терміни (БЗВП/Фахова/Адаптація)",
+        }
+    }
+
+    fn key(self) -> &'static str {
+        match self {
+            FileKind::Fah => "fah",
+            FileKind::Bps => "bps",
+            FileKind::Terminy => "terminy",
+        }
+    }
+
+    fn from_key(key: &str) -> Self {
+        match key {
+            "bps" => FileKind::Bps,
+            "terminy" => FileKind::Terminy,
+            _ => FileKind::Fah,
+        }
+    }
+}
 
 /// Сітка введення (02): весь рядок вноситься без миші, автозбереження чернетки, `Ctrl+Enter`
-/// фіксує все-або-нічого. Критерій готовності Етапу 4 — `docs/spec/06-roadmap.md`.
+/// фіксує все-або-нічого. Критерій готовності Етапу 4 — `docs/spec/06-roadmap.md`. Доповнюється
+/// файлом (Фах/БпС/Терміни) в тому самому редагуванні — `FileDropzone` нижче
+/// ([[unified-training-form-source-type]]).
 #[component]
 pub fn TrainingFormPage() -> impl IntoView {
     let actor = use_actor();
@@ -74,6 +115,8 @@ fn FormBody() -> impl IntoView {
     let command_palette_open = RwSignal::new(false);
     let save_status = RwSignal::new(String::new());
     let commit_error = RwSignal::new(None::<(usize, String, String)>);
+    let file_kind = RwSignal::new(FileKind::Fah);
+    let parsing = RwSignal::new(false);
 
     // Відновлення чернетки при відкритті форми (02 §6).
     let draft_loaded = RwSignal::new(false);
@@ -153,6 +196,47 @@ fn FormBody() -> impl IntoView {
         });
     };
 
+    // Імпорт файлу в ту саму сітку (03, Етап 5, перенесено з `pages::import` —
+    // [[unified-training-form-source-type]]): якщо в сітці вже є непорожні рядки (людина вручну
+    // щось вносить), розібрані рядки ДОДАЮТЬСЯ в кінець (той самий `submission_id`/чернетка —
+    // одна сесія редагування, не дві); якщо сітка порожня (типовий єдиний рядок-заглушка) —
+    // замінюються, щоб не лишати зайвий порожній рядок зверху.
+    let on_file_selected = move |file: web_sys::File| {
+        parsing.set(true);
+        save_status.set("розбираю файл…".to_string());
+        let kind = file_kind.get_untracked();
+        read_file_bytes(file, move |bytes| {
+            let actor_val = actor.get_untracked();
+            leptos::task::spawn_local(async move {
+                let result = match kind {
+                    FileKind::Fah => parse_fah_file(actor_val, bytes).await,
+                    FileKind::Bps => parse_bps_file(actor_val, bytes).await,
+                    FileKind::Terminy => parse_terminy_file(actor_val, bytes).await,
+                };
+                match result {
+                    Ok(rows) => {
+                        let n = rows.len();
+                        let existing = snapshot_rows(editable);
+                        let is_blank = existing
+                            .iter()
+                            .all(|r| r.sender_org_id.is_none() && r.note.is_empty());
+                        snapshot();
+                        if is_blank {
+                            replace_rows(rows);
+                        } else {
+                            let mut merged = existing;
+                            merged.extend(rows);
+                            replace_rows(merged);
+                        }
+                        save_status.set(format!("розібрано {n} рядків — перевірте перед збереженням"));
+                    }
+                    Err(e) => save_status.set(format!("не вдалось розібрати: {e}")),
+                }
+                parsing.set(false);
+            });
+        });
+    };
+
     // Глобальні гарячі клавіші, що не залежать від конкретної клітинки (02 §2).
     let handle = window_event_listener(ev::keydown, move |ev| {
         let key = ev.key();
@@ -197,6 +281,18 @@ fn FormBody() -> impl IntoView {
                         placeholder="дд.мм.рррр".to_string()
                     />
                 </label>
+                <Select
+                    value=Signal::derive(move || file_kind.get().key().to_string())
+                    options=Signal::derive(|| {
+                        FileKind::ALL.iter().map(|k| SelectOption::new(k.key(), k.label())).collect()
+                    })
+                    on_change=Callback::new(move |v: String| file_kind.set(FileKind::from_key(&v)))
+                />
+                <FileDropzone
+                    accept=".xlsx".to_string()
+                    disabled=Signal::derive(move || parsing.get())
+                    on_file=Callback::new(on_file_selected)
+                />
                 <span class="training-form__status">{move || save_status.get()}</span>
                 <button class="btn btn--primary" on:click=move |_| do_commit()>
                     "Зберегти все (Ctrl+Enter)"

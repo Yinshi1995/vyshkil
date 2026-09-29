@@ -6,7 +6,7 @@ use leptos::ev;
 use leptos::leptos_dom::helpers::{set_interval_with_handle, window_event_listener};
 use leptos::prelude::*;
 
-use crate::components::{DatePicker, FileDropzone, Select, SelectOption};
+use crate::components::{read_file_bytes, DatePicker, FileDropzone, Select, SelectOption};
 use crate::hooks::use_actor::use_actor;
 use crate::types::staffing::{InstructorStaffingRow, StaffingRow};
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
@@ -14,44 +14,30 @@ use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use crate::widgets::ActorNotice;
 use server::{
     commit_archive_grid, commit_grid, commit_instructor_staffing, commit_staffing, get_draft,
-    parse_bps_file, parse_fah_file, parse_ivs_file, parse_kvid_file, parse_terminy_file,
-    parse_vch_archive_file, save_draft,
+    parse_ivs_file, parse_kvid_file, parse_vch_archive_file, save_draft,
 };
 
-/// Тип файлу, що імпортуємо (03, критерій готовності Етапу 5 — усі п'ять,
-/// `backend/import/CLAUDE.md` пояснює чому не один детектор; VchArchive — Етап 6, окремий
-/// `source_type`, не критерій Етапу 5). Fah/Bps/Terminy/VchArchive —
-/// group-подібні дані (та сама `widgets::group_grid::Grid`, що й форма); Kvid — укомплектованість
-/// (01 §4), зовсім інша форма даних (`StaffingRow`), своя проста таблиця нижче; Ivs — ОБИДВІ форми
-/// одразу з одного файлу (стажування+курси в `Grid`, укомплектованість інструкторів у своїй
-/// таблиці) — `backend/import/ivs.rs` пояснює чому.
+/// Тип файлу, що лишився на цій сторінці (03, Етап 5/6) — Фах/БпС/Терміни переїхали на
+/// `/training-form` при об'єднанні з ручним вводом ([[unified-training-form-source-type]]): це
+/// чисті виробники `GroupFormRow` без побічного виводу. Тут лишились форми, яким об'єднання не
+/// підходить: Kvid — зовсім інша форма даних (`StaffingRow`, 01 §4), своя проста таблиця нижче;
+/// Ivs — ОБИДВІ форми одразу з одного файлу (стажування+курси в `Grid`, укомплектованість
+/// інструкторів у своїй таблиці) — `backend/import/ivs.rs` пояснює чому розділяти на дві сторінки
+/// не варто; VchArchive (Етап 6) — одноразовий перенос з іншим `source_type`, не поточна робота.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileKind {
-    Fah,
-    Bps,
     Kvid,
     Ivs,
-    Terminy,
     VchArchive,
 }
 
 impl FileKind {
-    const ALL: [FileKind; 6] = [
-        FileKind::Fah,
-        FileKind::Bps,
-        FileKind::Kvid,
-        FileKind::Ivs,
-        FileKind::Terminy,
-        FileKind::VchArchive,
-    ];
+    const ALL: [FileKind; 3] = [FileKind::Kvid, FileKind::Ivs, FileKind::VchArchive];
 
     fn label(self) -> &'static str {
         match self {
-            FileKind::Fah => "Фах (Пройшли/Проходять)",
-            FileKind::Bps => "БпС (Завершилась/Навчаються)",
             FileKind::Kvid => "КВід (укомплектованість)",
             FileKind::Ivs => "ІВС (інструктори)",
-            FileKind::Terminy => "Терміни (БЗВП/Фахова/Адаптація)",
             FileKind::VchArchive => "Архів ВЧ (одноразовий перенос, Етап 6)",
         }
     }
@@ -60,23 +46,17 @@ impl FileKind {
     /// `<select>`) — той самий підхід, що `ActorSwitcher`.
     fn key(self) -> &'static str {
         match self {
-            FileKind::Fah => "fah",
-            FileKind::Bps => "bps",
             FileKind::Kvid => "kvid",
             FileKind::Ivs => "ivs",
-            FileKind::Terminy => "terminy",
             FileKind::VchArchive => "vch_archive",
         }
     }
 
     fn from_key(key: &str) -> Self {
         match key {
-            "bps" => FileKind::Bps,
-            "kvid" => FileKind::Kvid,
             "ivs" => FileKind::Ivs,
-            "terminy" => FileKind::Terminy,
             "vch_archive" => FileKind::VchArchive,
-            _ => FileKind::Fah,
+            _ => FileKind::Kvid,
         }
     }
 
@@ -114,26 +94,13 @@ pub fn ImportPage() -> impl IntoView {
     }
 }
 
-/// Читає обраний файл у байти клієнтським `File::array_buffer()` (Promise → `JsFuture`) — файли
-/// цього типу малі (десятки КБ), тож простий `Vec<u8>`-аргумент server fn (без multipart) досить.
-/// Приймає `web_sys::File` напряму (не `Event`) — той самий шлях для click-обрання й drag-drop
-/// (`components::FileDropzone` віддає файл уже здобутим з обох джерел, деталі різні лише в ньому).
-fn read_file_bytes(file: web_sys::File, on_bytes: impl FnOnce(Vec<u8>) + 'static) {
-    leptos::task::spawn_local(async move {
-        let promise = file.array_buffer();
-        let Ok(buf) = wasm_bindgen_futures::JsFuture::from(promise).await else { return };
-        let bytes = js_sys::Uint8Array::new(&buf).to_vec();
-        on_bytes(bytes);
-    });
-}
-
 #[component]
 fn ImportBody() -> impl IntoView {
     let actor = use_actor();
 
     let submission_id = RwSignal::new(None::<i32>);
     let as_of_date = RwSignal::new(String::new());
-    let file_kind = RwSignal::new(FileKind::Fah);
+    let file_kind = RwSignal::new(FileKind::Kvid);
     let next_id = StoredValue::new(0u32);
     let editable = RwSignal::new(Vec::<EditableRow>::new());
     let active_cell = RwSignal::new((0usize, 0usize));
@@ -227,28 +194,20 @@ fn ImportBody() -> impl IntoView {
                     parsing.set(false);
                     return;
                 }
-                // Ivs/Kvid уже повернулись вище -- сюди доходять Fah/Bps/Terminy/VchArchive.
-                let result = match kind {
-                    FileKind::Fah => parse_fah_file(actor_val, bytes).await,
-                    FileKind::Bps => parse_bps_file(actor_val, bytes).await,
-                    FileKind::Terminy => parse_terminy_file(actor_val, bytes).await,
-                    FileKind::VchArchive => parse_vch_archive_file(actor_val, bytes).await,
-                    FileKind::Kvid | FileKind::Ivs => unreachable!("повертають раніше"),
-                };
-                match result {
+                // Ivs/Kvid уже повернулись вище -- сюди доходить лише VchArchive.
+                match parse_vch_archive_file(actor_val, bytes).await {
                     Ok(rows) => {
                         let n = rows.len();
                         // Звіт переносу (Етап 6, роадмап: "скільки рядків, скільки відхилено") --
-                        // лише для архіву: непізнана частина заздалегідь підказує обсяг ручної
-                        // роботи ДО спроби фіксації (сама фіксація все одно все-або-нічого).
-                        let unresolved =
-                            kind.is_archive().then(|| rows.iter().filter(|r| r.sender_org_id.is_none()).count());
+                        // непізнана частина заздалегідь підказує обсяг ручної роботи ДО спроби
+                        // фіксації (сама фіксація все одно все-або-нічого).
+                        let unresolved = rows.iter().filter(|r| r.sender_org_id.is_none()).count();
                         snapshot();
                         replace_rows(rows);
                         submission_id.set(None);
                         status.set(match unresolved {
-                            Some(0) | None => format!("розібрано {n} рядків — перевірте перед фіксацією"),
-                            Some(u) => format!(
+                            0 => format!("розібрано {n} рядків — перевірте перед фіксацією"),
+                            u => format!(
                                 "розібрано {n} рядків, {u} з нерозпізнаною частиною — перевірте перед фіксацією"
                             ),
                         });
