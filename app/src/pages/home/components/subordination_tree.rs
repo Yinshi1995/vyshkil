@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 
+use crate::components::DatePicker;
 use crate::hooks::use_actor::use_actor;
 use crate::pages::home::server::get_subordination_tree;
 use crate::types::org::OrgTreeRow;
@@ -45,10 +46,14 @@ pub fn SubordinationTree() -> impl IntoView {
                 </label>
                 <label class="tree-controls__date">
                     " на дату "
-                    <input
-                        type="date"
-                        prop:value=move || as_of.get()
-                        on:input=move |ev| as_of.set(event_target_value(&ev))
+                    <DatePicker
+                        value=Signal::derive(move || {
+                            chrono::NaiveDate::parse_from_str(&as_of.get(), "%Y-%m-%d").ok()
+                        })
+                        on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                            as_of.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                        })
+                        placeholder="дд.мм.рррр".to_string()
                     />
                 </label>
             </div>

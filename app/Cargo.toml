@@ -34,7 +34,7 @@ sea-orm = { version = "1", default-features = false, features = [
 # типи компілюються на будь-якому таргеті (структурні визначення wasm-bindgen), функціонують лише
 # в WASM. leptos і так тягне обидва крейти транзитивно завжди -- тут лише називаємо типи явно.
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["HtmlElement", "KeyboardEvent", "File", "FileList"] }
+web-sys = { version = "0.3", features = ["HtmlElement", "KeyboardEvent", "File", "FileList", "DragEvent", "DataTransfer"] }
 # Читання байтів обраного файлу (Етап 5, `pages/import`) -- `File::array_buffer()` повертає
 # JS Promise, потрібен `wasm_bindgen_futures::JsFuture` щоб await-нути його з Rust; `js_sys` --
 # для Uint8Array/зняття байтів із ArrayBuffer. Той самий принцип, що й wasm-bindgen/web-sys вище

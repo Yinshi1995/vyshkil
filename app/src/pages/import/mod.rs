@@ -5,9 +5,8 @@ use std::time::Duration;
 use leptos::ev;
 use leptos::leptos_dom::helpers::{set_interval_with_handle, window_event_listener};
 use leptos::prelude::*;
-use wasm_bindgen::JsCast;
 
-use crate::components::{Select, SelectOption};
+use crate::components::{DatePicker, FileDropzone, Select, SelectOption};
 use crate::hooks::use_actor::use_actor;
 use crate::types::staffing::{InstructorStaffingRow, StaffingRow};
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
@@ -117,14 +116,9 @@ pub fn ImportPage() -> impl IntoView {
 
 /// Читає обраний файл у байти клієнтським `File::array_buffer()` (Promise → `JsFuture`) — файли
 /// цього типу малі (десятки КБ), тож простий `Vec<u8>`-аргумент server fn (без multipart) досить.
-fn read_file_bytes(ev: leptos::ev::Event, on_bytes: impl FnOnce(Vec<u8>) + 'static) {
-    let Some(input) = ev.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
-    else {
-        return;
-    };
-    let Some(files) = input.files() else { return };
-    let Some(file) = files.get(0) else { return };
-
+/// Приймає `web_sys::File` напряму (не `Event`) — той самий шлях для click-обрання й drag-drop
+/// (`components::FileDropzone` віддає файл уже здобутим з обох джерел, деталі різні лише в ньому).
+fn read_file_bytes(file: web_sys::File, on_bytes: impl FnOnce(Vec<u8>) + 'static) {
     leptos::task::spawn_local(async move {
         let promise = file.array_buffer();
         let Ok(buf) = wasm_bindgen_futures::JsFuture::from(promise).await else { return };
@@ -196,11 +190,11 @@ fn ImportBody() -> impl IntoView {
         });
     });
 
-    let on_file_change = move |ev: leptos::ev::Event| {
+    let on_file_selected = move |file: web_sys::File| {
         parsing.set(true);
         status.set("розбираю файл…".to_string());
         let kind = file_kind.get_untracked();
-        read_file_bytes(ev, move |bytes| {
+        read_file_bytes(file, move |bytes| {
             let actor_val = actor.get_untracked();
             leptos::task::spawn_local(async move {
                 if kind == FileKind::Ivs {
@@ -429,13 +423,21 @@ fn ImportBody() -> impl IntoView {
                 />
                 <label class="training-form__as-of">
                     "Станом на "
-                    <input
-                        type="date"
-                        prop:value=move || as_of_date.get()
-                        on:input=move |ev| as_of_date.set(event_target_value(&ev))
+                    <DatePicker
+                        value=Signal::derive(move || {
+                            chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d").ok()
+                        })
+                        on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                            as_of_date.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                        })
+                        placeholder="дд.мм.рррр".to_string()
                     />
                 </label>
-                <input type="file" accept=".xlsx" disabled=move || parsing.get() on:change=on_file_change/>
+                <FileDropzone
+                    accept=".xlsx".to_string()
+                    disabled=Signal::derive(move || parsing.get())
+                    on_file=Callback::new(on_file_selected)
+                />
                 <span class="training-form__status">{move || status.get()}</span>
                 <button class="btn btn--primary" on:click=move |_| do_commit()>
                     "Зафіксувати все (Ctrl+Enter)"

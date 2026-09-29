@@ -6,6 +6,7 @@ use leptos::ev;
 use leptos::leptos_dom::helpers::{set_interval_with_handle, window_event_listener};
 use leptos::prelude::*;
 
+use crate::components::DatePicker;
 use crate::hooks::use_actor::use_actor;
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
 use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
@@ -186,10 +187,14 @@ fn FormBody() -> impl IntoView {
             <div class="training-form__header">
                 <label class="training-form__as-of">
                     "Станом на "
-                    <input
-                        type="date"
-                        prop:value=move || as_of_date.get()
-                        on:input=move |ev| as_of_date.set(event_target_value(&ev))
+                    <DatePicker
+                        value=Signal::derive(move || {
+                            chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d").ok()
+                        })
+                        on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                            as_of_date.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                        })
+                        placeholder="дд.мм.рррр".to_string()
                     />
                 </label>
                 <span class="training-form__status">{move || save_status.get()}</span>

@@ -1100,6 +1100,56 @@ tr:hover td {
   padding-bottom: var(--space-3);
 }
 
+/* Зона перетягування файлу (components::FileDropzone, feedback користувача) — заміна голого
+   <input type="file"> з системною кнопкою "Choose file". Пунктирна рамка — навмисний літерал
+   (не на шкалі товщини бордера — той самий підхід, що 2px в .icon-box/.app-header__mark). */
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-2);
+  color: var(--fg-muted);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color var(--duration-fast) ease, background var(--duration-fast) ease;
+}
+
+.dropzone:hover,
+.dropzone:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--accent-dim);
+  outline: none;
+}
+
+.dropzone--dragging {
+  border-color: var(--fg-accent);
+  background: var(--accent-dim);
+}
+
+.dropzone--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.dropzone__icon {
+  color: var(--fg-accent);
+}
+
+.dropzone__text {
+  margin: 0;
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+}
+
+.dropzone__input {
+  display: none;
+}
+
 /* === style::generate_css() — НЕ РЕДАГУВАТИ ВРУЧНУ, cargo run -p style --bin gen === */
 @layer reset, tokens, base, components, atoms, overrides;
 
