@@ -236,33 +236,33 @@ pub async fn find_or_create_training_site(
     Ok(row.id)
 }
 
-/// Одна помилка валідації рядка сітки: (назва поля, текст) — для `CommitOutcome::ValidationFailed`
-/// (02 §5). Перевіряє тільки те, що `domain` вміє без БД (дати, порядок воронки, обов'язкові поля);
-/// биту зовнішню посилальну цілісність (неіснуючий vos_id тощо) ловить FK-обмеження при INSERT.
+/// Одна помилка валідації рядка сітки: (назва ПОЛЯ СІТКИ українською — той самий підпис, що й
+/// заголовок колонки в `widgets::group_grid::Grid`, не ім'я поля `GroupFormRow` в Rust-коді, —
+/// показується користувачу напряму) для `CommitOutcome::ValidationFailed` (02 §5). Перевіряє
+/// тільки те, що `domain` вміє без БД (дати, порядок воронки, обов'язкові поля); биту зовнішню
+/// посилальну цілісність (неіснуючий vos_id тощо) ловить FK-обмеження при INSERT.
 pub fn validate_row(row: &GroupFormRow, as_of: NaiveDate) -> Result<ValidatedRow, (String, String)> {
     let Some(_) = row.sender_org_id else {
-        return Err(("sender_org_id".into(), "не вказано частину-відправника".into()));
+        return Err(("Частина".into(), "не вказано частину-відправника".into()));
     };
     let Some(_) = row.training_kind_id else {
-        return Err(("training_kind_id".into(), "не вказано вид підготовки".into()));
+        return Err(("Вид підготовки".into(), "не вказано вид підготовки".into()));
     };
     let Some(_) = row.site_id else {
-        return Err(("site_id".into(), "не вказано місце проведення".into()));
+        return Err(("Місце".into(), "не вказано місце проведення".into()));
     };
 
     let map_date_err = |field: &str, e: DateError| (field.to_string(), e.message());
 
     let (start, range_end) = parse_maybe_range(&row.planned_start_raw, as_of)
-        .map_err(|e| map_date_err("planned_start_raw", e))?;
+        .map_err(|e| map_date_err("З", e))?;
 
     let end = if row.planned_end_raw.trim().is_empty() {
-        range_end.ok_or_else(|| {
-            ("planned_end_raw".to_string(), "не вказано термін «по»".to_string())
-        })?
+        range_end.ok_or_else(|| ("По".to_string(), "не вказано термін «по»".to_string()))?
     } else {
-        parse_end_date(&row.planned_end_raw, start).map_err(|e| map_date_err("planned_end_raw", e))?
+        parse_end_date(&row.planned_end_raw, start).map_err(|e| map_date_err("По", e))?
     };
-    validate_period(start, end).map_err(|e| map_date_err("planned_end_raw", e))?;
+    validate_period(start, end).map_err(|e| map_date_err("По", e))?;
 
     let map_count_err = |field: &str, e: CountError| {
         let message = match e {
@@ -274,12 +274,15 @@ pub fn validate_row(row: &GroupFormRow, as_of: NaiveDate) -> Result<ValidatedRow
         (field.to_string(), message)
     };
     validate_funnel_order(row.planned_count, row.arrived_count, row.in_training_count)
-        .map_err(|e| map_count_err("planned_count", e))?;
+        .map_err(|e| map_count_err("План", e))?;
 
     let basis_doc_date = if row.basis_doc_date_raw.trim().is_empty() {
         None
     } else {
-        Some(parse_date(&row.basis_doc_date_raw, as_of).map_err(|e| map_date_err("basis_doc_date_raw", e))?)
+        Some(
+            parse_date(&row.basis_doc_date_raw, as_of)
+                .map_err(|e| map_date_err("Дата розпорядження", e))?,
+        )
     };
 
     Ok(ValidatedRow { start, end, basis_doc_date })
