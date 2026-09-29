@@ -1,0 +1,13 @@
+[package]
+name = "style"
+version = "0.1.0"
+edition = "2021"
+
+# Без залежностей: чисті Rust-дані (токени, граматика), компілюється і нативно (генератор CSS),
+# і в wasm32 (якби колись знадобилось рахувати класи в рантаймі клієнта — не плануємо, але
+# перевірка "без sea-orm/tokio/fs" сама себе гарантує відсутністю залежностей).
+[dependencies]
+
+[dev-dependencies]
+leptos = { workspace = true, features = ["ssr"] }
+style_macros = { path = "../style_macros" }
