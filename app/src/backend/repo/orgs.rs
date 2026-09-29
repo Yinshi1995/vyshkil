@@ -112,11 +112,87 @@ pub async fn search_orgs(
         .collect())
 }
 
-/// Найкращий кандидат для сирого тексту (Етап 5, 03 §4: "номер у тексті має пріоритет над назвою"
-/// — уже забезпечено ранжуванням `search_orgs`, тут просто беремо перший). `None` — "частина не
-/// розпізнана" (03 §5, помилка блокує фіксацію рядка).
+/// Ведучий числовий префікс нормалізованого рядка ("128 овмбр" → "128"), якщо він є. `None`, якщо
+/// рядок не починається з цифр (напр. "чбп", "республіка польща").
+fn leading_number(s: &str) -> Option<&str> {
+    let len = s.chars().take_while(|c| c.is_ascii_digit()).count();
+    (len > 0).then(|| &s[..len])
+}
+
+/// Найкращий кандидат для сирого тексту імпорту (Етап 5-6). **Суворіше за `search_orgs`**
+/// (яка живить інтерактивний пошук, де людина сама бачить і відкидає слабкі варіанти): коли
+/// запит має ведучий номер частини, кандидат приймається лише якщо його номер СПІВПАДАЄ (або
+/// точний збіг alias) — інакше `None`. Причина (грабля, спіймана на реальному файлі Етапу 6):
+/// pg_trgm-схожість НЕ розрізняє "17 овмбр" від "128 овмбр" (спільний суфікс "овмбр" домінує
+/// в короткому рядку, sim 0.583) — і ця схожість ВИЩА за деякі легітимні alias-варіанти
+/// ("423 обБпС"/"423 опБпС", sim 0.538), тому проста межа схожості не рятує: потрібен номер.
+/// Без ведучого номера в запиті (ЧБП, Республіка Польща) — той самий шлях, що й раніше (перший
+/// кандидат `search_orgs`, без додаткової перевірки — там ризик коротко-суфіксної колізії різний).
+/// `None` — "частина не розпізнана" (03 §5, помилка блокує фіксацію рядка).
 pub async fn resolve_org(db: &DatabaseConnection, raw: &str) -> Result<Option<OrgSearchResult>, DbErr> {
-    Ok(search_orgs(db, raw).await?.into_iter().next())
+    let norm_query = normalize(raw);
+    let Some(query_number) = leading_number(&norm_query) else {
+        return Ok(search_orgs(db, raw).await?.into_iter().next());
+    };
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        org_id: i32,
+        short_name: String,
+        number: Option<String>,
+        matched_raw: String,
+        matched_norm: String,
+        is_exact: bool,
+    }
+
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        WITH matches AS (
+            SELECT
+                o.id AS org_id,
+                o.short_name,
+                o.number,
+                a.raw AS matched_raw,
+                a.norm AS matched_norm,
+                a.uses_count,
+                (a.norm = $1) AS is_exact,
+                similarity(a.norm, $1) AS sim
+            FROM alias a
+            JOIN org o ON o.id = a.target_id AND a.target_type = 'org'
+            WHERE o.deleted_at IS NULL
+              AND (a.norm = $1 OR a.norm % $1)
+        ),
+        ranked AS (
+            SELECT
+                *,
+                ROW_NUMBER() OVER (
+                    PARTITION BY org_id
+                    ORDER BY is_exact DESC, uses_count DESC, sim DESC
+                ) AS rn
+            FROM matches
+        )
+        SELECT org_id, short_name, number, matched_raw, matched_norm, is_exact
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY is_exact DESC, uses_count DESC, sim DESC
+        LIMIT 10
+        "#,
+        [norm_query.clone().into()],
+    );
+
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+
+    Ok(rows
+        .into_iter()
+        .find(|r| r.is_exact || leading_number(&r.matched_norm) == Some(query_number))
+        .map(|r| {
+            let label = match r.number {
+                Some(n) => format!("{} ({n})", r.short_name),
+                None => r.short_name,
+            };
+            OrgSearchResult { org_id: r.org_id, label, matched_raw: r.matched_raw, is_exact: r.is_exact }
+        }))
 }
 
 /// Дерево підпорядкування на дату (06-roadmap.md, Етап 1): перемикач осі штатне/оперативне.

@@ -5,7 +5,7 @@
 
 mod common;
 
-use app::backend::repo::orgs::{org_detail, search_orgs, subordination_tree};
+use app::backend::repo::orgs::{org_detail, resolve_org, search_orgs, subordination_tree};
 use app::types::org::OrgTreeRow;
 use common::fresh_test_db;
 
@@ -108,4 +108,29 @@ async fn stage1_readiness_scenarios() {
 
     let missing = org_detail(&db, -1).await.unwrap();
     assert!(missing.is_none(), "org_detail(-1) має повернути None");
+
+    // --- resolve_org: числовий префікс обов'язковий для НЕ-exact збігу (Етап 6 грабля,
+    // сесія: pg_trgm-схожість "17 овмбр"↔"128 овмбр" 0.583 — вища за легітимний alias-варіант
+    // "423 обБпС"↔"423 опБпС" 0.538, тому сама лише межа схожості нічого не рятує). ---
+    let wrong_unit = resolve_org(&db, "17 овмбр").await.unwrap();
+    assert!(
+        wrong_unit.is_none(),
+        "«17 овмбр» не існує в сіді — НЕ має фаззі-збігтись на «128 овмбр»: {wrong_unit:?}"
+    );
+
+    // Реальний текст імпорту з кодом частини все ще резолвиться (не exact, sim 0.625, АЛЕ
+    // ведучий номер «128» збігається) — інакше регрес усіх імпортів цієї сесії (Фах/БпС/ІВС/
+    // Терміни годують саме такий текст).
+    let with_code = resolve_org(&db, "128 овмбр\n(А7384)").await.unwrap();
+    assert!(
+        with_code.is_some_and(|r| r.label.starts_with("128 овмбр")),
+        "«128 овмбр (А7384)» (номер частини збігається) має резолвитись"
+    );
+
+    // Без ведучого номера в запиті — стара поведінка (перший кандидат search_orgs) лишається.
+    let no_number = resolve_org(&db, "Республіка Польща").await.unwrap();
+    assert!(
+        no_number.is_some_and(|r| r.label == "Республіка Польща"),
+        "«Республіка Польща» (без номера) має резолвитись, як і раніше"
+    );
 }
