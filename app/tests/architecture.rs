@@ -277,6 +277,72 @@ fn every_server_fn_lives_in_services_or_a_page_server_file() {
     assert!(violations.is_empty(), "\n{}", violations.join("\n"));
 }
 
+/// Фаза 4 (docs/spec/08-style-system.md) — жодного нового `style="..."` в розмітці `view!`: класи
+/// компонента мають бути атомами `style`-крейту (skill `styling`, CLAUDE.md), не інлайн-стилями.
+/// Текстовий пошук, не парсер `view!` — свідомо просто, фолс-позитив (рядок/коментар, що містить
+/// той самий текст) виправляється перейменуванням, не applies_to-складністю в самому тесті.
+#[test]
+fn no_inline_style_attributes_in_view_markup() {
+    let root = src_dir();
+    let mut files = Vec::new();
+    all_rs_files(&root, &mut files);
+
+    let mut violations = Vec::new();
+
+    for file in &files {
+        let content = fs::read_to_string(file).unwrap();
+        for (i, line) in content.lines().enumerate() {
+            if line.contains("style=\"") {
+                violations.push(format!(
+                    "{}:{} — style=\"...\" (інлайн-стиль); клас — атоми `style`-крейту, skill `styling` (08 §Фаза 3)",
+                    display_rel(&root, file),
+                    i + 1
+                ));
+            }
+        }
+    }
+
+    assert!(violations.is_empty(), "\n{}", violations.join("\n"));
+}
+
+/// Фаза 4 — кожен `var(--X)` у `app/style/main.css` (ручна частина, до маркера генератора)
+/// посилається на реально визначений токен (десь у файлі — примітивний `:root` вгорі чи семантичний
+/// у згенерованій частині, порядок оголошення не важливий для `var()`) — ловить typo в назві
+/// токена ще до того, як CSS мовчки впаде на `unset`-значення в браузері.
+#[test]
+fn every_css_var_reference_in_main_css_is_defined() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("style/main.css");
+    let content = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("не читається {}: {e}", path.display()));
+
+    let mut defined = BTreeSet::new();
+    let mut referenced = BTreeSet::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("--") {
+            if let Some((name, _)) = rest.split_once(':') {
+                defined.insert(name.trim().to_string());
+            }
+        }
+        let mut rest = line;
+        while let Some(idx) = rest.find("var(--") {
+            let after = &rest[idx + 6..];
+            let name_end = after.find(|c: char| c == ')' || c == ',' || c.is_whitespace());
+            if let Some(end) = name_end {
+                referenced.insert(after[..end].to_string());
+            }
+            rest = &after[name_end.unwrap_or(after.len())..];
+        }
+    }
+
+    let undefined: Vec<&String> = referenced.difference(&defined).collect();
+    assert!(
+        undefined.is_empty(),
+        "app/style/main.css посилається на невизначені токени: {undefined:?} (typo в назві?)"
+    );
+}
+
 /// Карти не дублюють одна одну помилково (той самий шлях згаданий у батьківській карті теки, у
 /// якої ВЖЕ є власна карта, — не помилка сама собою, але порожня множина elements підказує, що
 /// список тек під контролем; тримаємо як smoke-test, що обхід дерева взагалі щось знайшов).
