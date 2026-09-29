@@ -134,6 +134,7 @@ const KEYWORD_ATOMS: &[(&str, &str)] = &[
     ("head", "font-family: var(--font-heading)"),
     ("fg-main", "color: var(--fg-main)"),
     ("fg-muted", "color: var(--fg-muted)"),
+    ("fg-subtle", "color: var(--fg-subtle)"),
     ("fg-accent", "color: var(--fg-accent)"),
     ("fg-ok", "color: var(--ok)"),
     ("fg-warn", "color: var(--warn)"),
@@ -171,6 +172,10 @@ const THEMES: &[Theme] = &[
             ("surface-raised", "var(--ink-2)"),
             ("fg-main", "var(--ink-4)"),
             ("fg-muted", "var(--ink-3)"),
+            // Третій, найтихіший текстовий тон — старий --text-muted (#8a8577), реально вжитий
+            // 10 разів у наявному main.css (Фаза 3) — не збігається з жодним із двох існуючих
+            // семантичних тонів (fg-main/fg-muted), тому окремий токен, не компресія до двох.
+            ("fg-subtle", "#8a8577"),
             ("fg-accent", "var(--gold-2)"),
             ("border", "color-mix(in srgb, var(--gold-2) 16%, transparent)"),
             ("border-strong", "var(--gold-2)"),
@@ -189,6 +194,7 @@ const THEMES: &[Theme] = &[
             ("surface-raised", "#ebe7da"),
             ("fg-main", "#1a1a14"),
             ("fg-muted", "#4a4638"),
+            ("fg-subtle", "#6b6656"),
             ("fg-accent", "var(--gold-1)"),
             ("border", "color-mix(in srgb, var(--gold-1) 30%, transparent)"),
             ("border-strong", "var(--gold-1)"),
@@ -207,6 +213,7 @@ const THEMES: &[Theme] = &[
             ("surface-raised", "#f0f0f0"),
             ("fg-main", "#000000"),
             ("fg-muted", "#404040"),
+            ("fg-subtle", "#707070"),
             ("fg-accent", "#000000"),
             ("border", "#000000"),
             ("border-strong", "#000000"),

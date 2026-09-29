@@ -70,6 +70,10 @@ const PAIRS: &[(&str, &str, f64)] = &[
     ("fg-main", "surface-raised", 4.5),
     ("fg-muted", "surface-base", 4.5),
     ("fg-muted", "surface-panel", 4.5),
+    // Найтихіший тон — навмисно де-акцентований (лейбли/дрібні підписи, не абзаци), тому та сама
+    // нижча межа, що й fg-accent, а не повний body-text бар.
+    ("fg-subtle", "surface-base", 3.0),
+    ("fg-subtle", "surface-panel", 3.0),
     ("fg-accent", "surface-base", 3.0),
     ("fg-accent", "surface-panel", 3.0),
     ("ok", "surface-base", 3.0),

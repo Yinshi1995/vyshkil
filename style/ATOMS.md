@@ -24,8 +24,8 @@
 `cols-3` `cols-4` `cols-6` `items-s` `items-c` `items-e` `justify-s`
 `justify-c` `justify-e` `justify-b` `w-full` `w-auto` `maxw-prose` `maxw-full`
 `fw4` `fw5` `fw7` `up` `num` `mono` `head`
-`fg-main` `fg-muted` `fg-accent` `fg-ok` `fg-warn` `fg-danger` `fg-info`
-`bg-base` `bg-panel` `bg-raised` `bd` `bd-accent` `chamfer`
+`fg-main` `fg-muted` `fg-subtle` `fg-accent` `fg-ok` `fg-warn` `fg-danger`
+`fg-info` `bg-base` `bg-panel` `bg-raised` `bd` `bd-accent` `chamfer`
 `bracket` (кутові скоби, тактичний мотив)
 
 ## Варіанти (префікс перед `:`)

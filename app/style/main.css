@@ -137,84 +137,95 @@ a:hover {
 }
 
 /* Шапка з логотипом і перемикачем актора (02 §8, 01 §6 — dev-режим без автентифікації) */
+/* Токенізовано (Фаза 3, .claude/decisions/style-migration-rounds-to-scale.md): усі магічні числа
+   замінено токенами з найближчого кроку шкали. Точні збіги (без округлення): gap 16px,
+   box-shadow (shadow1), --border-strong{fg-accent}-кольори, brand-gap 12px, mark border-radius
+   (999px на квадраті = ідентично 50%), mark font-size 15px, title letter-spacing 0.08em, nav a
+   font-size 13px і letter-spacing 0.05em, nav margin-left 24px, actor-switcher letter-spacing
+   0.1em. Округлено (≤1-2px/крок, непомітно): header padding 14px→16px, mark 34px→32px, title
+   18px→19px, nav gap 18px→16px, actor-switcher gap 10px→12px і font-size 12px→13px. */
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 24px;
-  background: var(--panel);
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-panel);
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 2px 12px var(--shadow);
+  box-shadow: var(--shadow-1);
 }
 
 .app-header__brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .app-header__mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid var(--accent);
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-3);
+  border: 2px solid var(--fg-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent);
+  color: var(--fg-accent);
   font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: var(--weight-7);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
   flex-shrink: 0;
 }
 
 .app-header__title {
   font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 18px;
+  font-weight: var(--weight-7);
+  font-size: var(--text-lg-size);
+  line-height: var(--text-lg-line);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-main);
+  letter-spacing: var(--track-4);
+  color: var(--fg-main);
 }
 
 .app-header__nav {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: var(--space-4);
   margin-right: auto;
-  margin-left: 24px;
+  margin-left: var(--space-5);
 }
 
 .app-header__nav a {
   font-family: var(--font-heading);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  font-weight: var(--weight-7);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
+  letter-spacing: var(--track-3);
+  color: var(--fg-muted);
 }
 
 .app-header__nav a:hover {
-  color: var(--accent);
+  color: var(--fg-accent);
   text-decoration: none;
 }
 
 .actor-switcher {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   font-family: var(--font-heading);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  font-weight: var(--weight-7);
+  color: var(--fg-subtle);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--track-5);
 }
 
 .actor-switcher .status-error {
   text-transform: none;
-  letter-spacing: normal;
+  letter-spacing: var(--track-0);
   font-family: var(--font-body);
 }
 
@@ -854,6 +865,7 @@ tr:hover td {
     --surface-raised: var(--ink-2);
     --fg-main: var(--ink-4);
     --fg-muted: var(--ink-3);
+    --fg-subtle: #8a8577;
     --fg-accent: var(--gold-2);
     --border: color-mix(in srgb, var(--gold-2) 16%, transparent);
     --border-strong: var(--gold-2);
@@ -870,6 +882,7 @@ tr:hover td {
     --surface-raised: #ebe7da;
     --fg-main: #1a1a14;
     --fg-muted: #4a4638;
+    --fg-subtle: #6b6656;
     --fg-accent: var(--gold-1);
     --border: color-mix(in srgb, var(--gold-1) 30%, transparent);
     --border-strong: var(--gold-1);
@@ -886,6 +899,7 @@ tr:hover td {
     --surface-raised: #f0f0f0;
     --fg-main: #000000;
     --fg-muted: #404040;
+    --fg-subtle: #707070;
     --fg-accent: #000000;
     --border: #000000;
     --border-strong: #000000;
@@ -939,6 +953,7 @@ tr:hover td {
   .head { font-family: var(--font-heading); }
   .fg-main { color: var(--fg-main); }
   .fg-muted { color: var(--fg-muted); }
+  .fg-subtle { color: var(--fg-subtle); }
   .fg-accent { color: var(--fg-accent); }
   .fg-ok { color: var(--ok); }
   .fg-warn { color: var(--warn); }
@@ -1146,6 +1161,7 @@ tr:hover td {
   .hover\:head:hover { font-family: var(--font-heading); }
   .hover\:fg-main:hover { color: var(--fg-main); }
   .hover\:fg-muted:hover { color: var(--fg-muted); }
+  .hover\:fg-subtle:hover { color: var(--fg-subtle); }
   .hover\:fg-accent:hover { color: var(--fg-accent); }
   .hover\:fg-ok:hover { color: var(--ok); }
   .hover\:fg-warn:hover { color: var(--warn); }
@@ -1350,6 +1366,7 @@ tr:hover td {
   .focus-visible\:head:focus-visible { font-family: var(--font-heading); }
   .focus-visible\:fg-main:focus-visible { color: var(--fg-main); }
   .focus-visible\:fg-muted:focus-visible { color: var(--fg-muted); }
+  .focus-visible\:fg-subtle:focus-visible { color: var(--fg-subtle); }
   .focus-visible\:fg-accent:focus-visible { color: var(--fg-accent); }
   .focus-visible\:fg-ok:focus-visible { color: var(--ok); }
   .focus-visible\:fg-warn:focus-visible { color: var(--warn); }
@@ -1554,6 +1571,7 @@ tr:hover td {
   .active\:head:active { font-family: var(--font-heading); }
   .active\:fg-main:active { color: var(--fg-main); }
   .active\:fg-muted:active { color: var(--fg-muted); }
+  .active\:fg-subtle:active { color: var(--fg-subtle); }
   .active\:fg-accent:active { color: var(--fg-accent); }
   .active\:fg-ok:active { color: var(--ok); }
   .active\:fg-warn:active { color: var(--warn); }
@@ -1758,6 +1776,7 @@ tr:hover td {
   .disabled\:head:disabled { font-family: var(--font-heading); }
   .disabled\:fg-main:disabled { color: var(--fg-main); }
   .disabled\:fg-muted:disabled { color: var(--fg-muted); }
+  .disabled\:fg-subtle:disabled { color: var(--fg-subtle); }
   .disabled\:fg-accent:disabled { color: var(--fg-accent); }
   .disabled\:fg-ok:disabled { color: var(--ok); }
   .disabled\:fg-warn:disabled { color: var(--warn); }
@@ -1962,6 +1981,7 @@ tr:hover td {
   .invalid\:head[aria-invalid="true"] { font-family: var(--font-heading); }
   .invalid\:fg-main[aria-invalid="true"] { color: var(--fg-main); }
   .invalid\:fg-muted[aria-invalid="true"] { color: var(--fg-muted); }
+  .invalid\:fg-subtle[aria-invalid="true"] { color: var(--fg-subtle); }
   .invalid\:fg-accent[aria-invalid="true"] { color: var(--fg-accent); }
   .invalid\:fg-ok[aria-invalid="true"] { color: var(--ok); }
   .invalid\:fg-warn[aria-invalid="true"] { color: var(--warn); }
@@ -2166,6 +2186,7 @@ tr:hover td {
   .open\:head[data-state="open"] { font-family: var(--font-heading); }
   .open\:fg-main[data-state="open"] { color: var(--fg-main); }
   .open\:fg-muted[data-state="open"] { color: var(--fg-muted); }
+  .open\:fg-subtle[data-state="open"] { color: var(--fg-subtle); }
   .open\:fg-accent[data-state="open"] { color: var(--fg-accent); }
   .open\:fg-ok[data-state="open"] { color: var(--ok); }
   .open\:fg-warn[data-state="open"] { color: var(--warn); }
@@ -2429,6 +2450,9 @@ tr:hover td {
   }
   @media (min-width: 768px) {
     .md\:fg-muted { color: var(--fg-muted); }
+  }
+  @media (min-width: 768px) {
+    .md\:fg-subtle { color: var(--fg-subtle); }
   }
   @media (min-width: 768px) {
     .md\:fg-accent { color: var(--fg-accent); }
@@ -3043,6 +3067,9 @@ tr:hover td {
     .lg\:fg-muted { color: var(--fg-muted); }
   }
   @media (min-width: 1024px) {
+    .lg\:fg-subtle { color: var(--fg-subtle); }
+  }
+  @media (min-width: 1024px) {
     .lg\:fg-accent { color: var(--fg-accent); }
   }
   @media (min-width: 1024px) {
@@ -3653,6 +3680,9 @@ tr:hover td {
   }
   @container (min-width: 480px) {
     .\@md\:fg-muted { color: var(--fg-muted); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:fg-subtle { color: var(--fg-subtle); }
   }
   @container (min-width: 480px) {
     .\@md\:fg-accent { color: var(--fg-accent); }

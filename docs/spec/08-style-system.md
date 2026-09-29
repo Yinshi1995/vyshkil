@@ -74,6 +74,7 @@ Pico.css (пристойний дефолт) — усі як натхнення,
 | `surface-raised` | `ink-2` (`#1f2217`) | — | — |
 | `fg-main` | `ink-4` (`#e8e4d8`) | темний нейтральний | — |
 | `fg-muted` | `ink-3` | — | `color-mix(in srgb, var(--fg-main) 70%, transparent)` — не окремий альфа-токен |
+| `fg-subtle` | `#8a8577` (Фаза 3, старий `--text-muted`) | `#6b6656` (перше наближення) | — |
 | `fg-accent` | `gold-2` | той самий (акцент не змінюється темою) | — |
 | `border` | — | — | `color-mix(in srgb, var(--fg-accent) 16%, transparent)` (= поточний `--border`) |
 | `border-strong` | `gold-2` | — | — |
@@ -101,7 +102,7 @@ Pico.css (пристойний дефолт) — усі як натхнення,
 | `num` | — | font-variant-numeric: tabular-nums (щільні таблиці, колонки чисел не "гуляють") |
 | `mono` | — | font-family: моноширинний (бірки частин, `<kbd>`) |
 | `head` | — | font-family: var(--font-heading) (Oswald) |
-| `fg-{main,muted,accent,ok,warn,danger,info}` | `fg-muted` | color |
+| `fg-{main,muted,subtle,accent,ok,warn,danger,info}` | `fg-muted` | color (`fg-subtle` — третій, найтихіший тон, Фаза 3: старий `--text-muted`, не збігався з жодним із двох, `.claude/decisions/style-migration-rounds-to-scale.md`) |
 | `bg-{base,panel,raised}` | `bg-panel` | background |
 | `bd`,`bd-accent` | — | border: 1px solid var(--border\|--border-strong) |
 | `r{0..3}` | `r1` | border-radius зі шкали §2.1 |
