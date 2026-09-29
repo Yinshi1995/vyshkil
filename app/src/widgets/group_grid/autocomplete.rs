@@ -6,9 +6,9 @@
 use leptos::prelude::*;
 
 use crate::hooks::use_actor::use_actor;
+use crate::services::groups::search_vos_position_course;
 use crate::services::orgs::search_orgs;
 use crate::types::submission::{VosPositionCourseHint, VosPositionCourseKind};
-use crate::pages::training_form::server::search_vos_position_course;
 
 /// Пошук організації (02 §1 колонки 1 і 9) — звужений до видимого акторові піддерева (сервер
 /// сам фільтрує через `policy::visible_org_ids`, як і `pages::home::components::OrgSearch`).

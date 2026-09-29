@@ -1,4 +1,3 @@
-mod components;
 mod server;
 
 use std::time::Duration;
@@ -9,8 +8,8 @@ use leptos::prelude::*;
 
 use crate::hooks::use_actor::use_actor;
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
+use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use crate::widgets::ActorNotice;
-use components::grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use server::{commit_grid, get_draft, save_draft};
 
 /// Сітка введення (02): весь рядок вноситься без миші, автозбереження чернетки, `Ctrl+Enter`

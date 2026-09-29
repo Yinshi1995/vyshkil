@@ -1,7 +1,8 @@
-//! SQL для чернеток форми (`submission`, 01 §5, 02 §6) — лише `source_type='form'`.
-//! Фіксація (draft → committed, запис у `training_group`/`group_event`) — `repo::groups::
-//! commit_group_rows`, викликається разом з `mark_committed` у транзакції з `pages/training_form/
-//! server.rs`.
+//! SQL для чернеток (`submission`, 01 §5, 02 §6) — спільна для форми (`source_type='form'`) і
+//! імпорту (`'table'`, Етап 5): обидва однаково зберігають/відновлюють чернетку сітки, різниться
+//! лише джерело подання. Фіксація (draft → committed, запис у `training_group`/`group_event`) —
+//! `repo::groups::commit_group_rows`, викликається разом з `mark_committed` у транзакції з
+//! `pages/training_form/server.rs` / `pages/import/server.rs`.
 
 use crate::types::submission::{DraftPayload, DraftState};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
@@ -27,15 +28,16 @@ fn row_to_state(row: DraftRow) -> Result<DraftState, DbErr> {
 pub async fn latest_draft_for_org(
     db: &DatabaseConnection,
     reporting_org_id: i32,
+    source_type: &str,
 ) -> Result<Option<DraftState>, DbErr> {
     let stmt = Statement::from_sql_and_values(
         db.get_database_backend(),
         "SELECT id, draft_payload::text AS payload, \
                 to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS updated_at \
          FROM submission \
-         WHERE reporting_org_id = $1 AND source_type = 'form' AND status = 'draft' \
+         WHERE reporting_org_id = $1 AND source_type = $2 AND status = 'draft' \
          ORDER BY updated_at DESC LIMIT 1",
-        [reporting_org_id.into()],
+        [reporting_org_id.into(), source_type.into()],
     );
     let row = DraftRow::find_by_statement(stmt).one(db).await?;
     row.map(row_to_state).transpose()
@@ -48,6 +50,7 @@ pub async fn save_draft(
     db: &impl ConnectionTrait,
     submission_id: Option<i32>,
     reporting_org_id: i32,
+    source_type: &str,
     payload: &DraftPayload,
 ) -> Result<i32, DbErr> {
     let payload_json = serde_json::to_string(payload)
@@ -83,8 +86,13 @@ pub async fn save_draft(
     let row = NewId::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
         "INSERT INTO submission (source_type, reporting_org_id, as_of_date, status, draft_payload) \
-         VALUES ('form', $1, $2::date, 'draft', $3::jsonb) RETURNING id",
-        [reporting_org_id.into(), payload.as_of_date.clone().into(), payload_json.into()],
+         VALUES ($1, $2, $3::date, 'draft', $4::jsonb) RETURNING id",
+        [
+            source_type.into(),
+            reporting_org_id.into(),
+            payload.as_of_date.clone().into(),
+            payload_json.into(),
+        ],
     ))
     .one(db)
     .await?

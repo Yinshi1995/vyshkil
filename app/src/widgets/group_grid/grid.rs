@@ -14,7 +14,7 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use super::autocomplete::{OrgAutocomplete, VosPositionCourseAutocomplete};
-use crate::pages::training_form::server::get_training_sites;
+use crate::services::groups::get_training_sites;
 use crate::types::submission::{GroupFormRow, VosPositionCourseHint, VosPositionCourseKind};
 
 pub const N_COLS: usize = 14;
