@@ -11,5 +11,6 @@
 |---|---|---|
 | `accordion.rs` | `Accordion`/`AccordionItem` — розгортання розміткою, CSS grid-rows-анімація | — |
 | `checkbox.rs` | `Checkbox` — стилізований чекбокс (справжній `<input>`, приховано лише візуально) | — |
+| `date_picker.rs` | `DatePicker` — календар-панель, `chrono` напряму (не `domain::dates` — не знає домену) | — |
 | `modal.rs` | `Modal`/`Dialog` — оверлей+панель, Escape закриває, клік-поза НЕ закриває (навмисно, `.modal__*` — той самий клас, що `training_form::CheatSheet`) | — |
 | `select.rs` | `Select`/`SelectOption` — стилізована випадайка (клавіатура: стрілки/Enter/Escape/друк-до-літери, клік поза — закриває), заміна нативного `<select>` | `layout::ActorSwitcher` |

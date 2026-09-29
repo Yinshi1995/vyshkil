@@ -6,7 +6,7 @@
 
 use leptos::prelude::*;
 
-use crate::components::{Accordion, AccordionItem, Checkbox, Dialog, Modal};
+use crate::components::{Accordion, AccordionItem, Checkbox, DatePicker, Dialog, Modal};
 use crate::hooks::use_actor::use_actor;
 use crate::types::actor::Role;
 use style_macros::cx;
@@ -35,6 +35,7 @@ pub fn StyleguidePage() -> impl IntoView {
     let checkbox_checked = RwSignal::new(false);
     let modal_open = RwSignal::new(false);
     let dialog_open = RwSignal::new(false);
+    let picked_date = RwSignal::new(None::<chrono::NaiveDate>);
 
     view! {
         <Show when=is_admin fallback=|| view! { <p>"Сторінка лише для адміністратора."</p> }>
@@ -112,6 +113,7 @@ pub fn StyleguidePage() -> impl IntoView {
             <div class="eyebrow">"Компоненти (HeroUI-референс, feedback користувача)"</div>
             <div class=cx!("flex gap4 items-c")>
                 <Checkbox checked=checkbox_checked on_change=Callback::new(move |v| checkbox_checked.set(v)) label="Прийняти умови".to_string()/>
+                <DatePicker value=picked_date on_change=Callback::new(move |v| picked_date.set(v)) placeholder="дд.мм.рррр".to_string()/>
             </div>
             <div class=cx!("mt3 maxw-prose")>
                 <Accordion>

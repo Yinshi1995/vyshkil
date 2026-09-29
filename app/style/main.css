@@ -329,6 +329,133 @@ a:hover {
   font-weight: var(--weight-5);
 }
 
+/* Календар-вибір дати (components::DatePicker, HeroUI-референс, feedback користувача) — той
+   самий плаваючий-панель-патерн, що .select__*. */
+.date-picker {
+  position: relative;
+  display: inline-block;
+}
+
+.date-picker__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 160px;
+  background: var(--surface-raised);
+  color: var(--fg-main);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease;
+}
+
+.date-picker__trigger:hover {
+  border-color: var(--border-strong);
+}
+
+.date-picker__trigger[aria-expanded="true"] {
+  border-color: var(--fg-accent);
+}
+
+.date-picker__trigger svg {
+  color: var(--fg-accent);
+  flex-shrink: 0;
+}
+
+.date-picker__panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: var(--z-dropdown);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
+}
+
+.date-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.date-picker__month {
+  font-family: var(--font-heading);
+  font-weight: var(--weight-5);
+  color: var(--fg-main);
+}
+
+.date-picker__nav {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  color: var(--fg-accent);
+  width: var(--space-5);
+  height: var(--space-5);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.date-picker__nav:hover {
+  border-color: var(--border-strong);
+}
+
+.date-picker__weekdays,
+.date-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-1);
+}
+
+.date-picker__weekdays {
+  margin-bottom: var(--space-1);
+  text-align: center;
+  color: var(--fg-subtle);
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-line);
+  text-transform: uppercase;
+}
+
+.date-picker__day {
+  width: var(--space-6);
+  height: var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-3);
+  color: var(--fg-main);
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  cursor: pointer;
+}
+
+.date-picker__day:hover {
+  background: var(--accent-dim);
+}
+
+.date-picker__day--muted {
+  color: var(--fg-subtle);
+}
+
+.date-picker__day--today {
+  border-color: var(--border-strong);
+}
+
+.date-picker__day--selected {
+  background: var(--fg-accent);
+  color: var(--fg-on-accent);
+}
+
 /* Іконка в золотій рамці — той самий мотив, що на striy.pp.ua. Токенізовано (Фаза 3): 52px→48px,
    14px→16px округлені на ≤2px; 4px/16px/26px→24px/6px/8px/11px/0.1em/32px→34px/14px→15px — решта
    точні або 1px-округлення, непомітно. */
