@@ -131,6 +131,8 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "style",
+ "style_macros",
  "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",

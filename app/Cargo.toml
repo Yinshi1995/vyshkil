@@ -43,6 +43,11 @@ js-sys = "0.3"
 wasm-bindgen-futures = "0.4"
 # xlsx-екстрактор (Етап 5, 03 §2) -- лише сервер: розбір файлу відбувається в server fn.
 calamine = { version = "0.36", features = ["chrono"], optional = true }
+# Стильова система (Фаза 2, docs/spec/08-style-system.md) -- style без рантайм-залежностей
+# (компілюється в wasm так само, як на сервері); style_macros -- proc-macro, компілюється
+# для host незалежно від таргету консюмера.
+style = { path = "../style" }
+style_macros = { path = "../style_macros" }
 
 [dev-dependencies]
 # Тільки для інтеграційних тестів `queries` (окрема тестова БД, "Як вести розробку далі" §3) —

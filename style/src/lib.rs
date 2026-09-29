@@ -27,6 +27,17 @@ pub fn closest_atom(unknown: &str) -> Option<String> {
         .min_by_key(|name| levenshtein(unknown, name))
 }
 
+/// Усі базові імена атомів — для `/styleguide` (Фаза 2), який показує весь перелік динамічно
+/// (не літералами `cx!`, тому без макро-валідації — саме тому existence-тест на неї не спирається).
+pub fn all_atoms() -> Vec<String> {
+    all_atom_names()
+}
+
+/// Імена тем (`"night"`, `"day"`, `"print"`) — для перемикача тем на `/styleguide`.
+pub fn theme_names() -> Vec<&'static str> {
+    THEMES.iter().map(|t| t.name).collect()
+}
+
 /// Шпаргалка атомів (≤80 рядків, токен-економія для агента — див. другий pasted_content брифу)
 /// — будується З ТИХ САМИХ таблиць `grammar_data.rs`, тому додавання нового сімейства/ключового
 /// слова автоматично зʼявляється тут (і ламає `atoms_md_matches_committed_file`, якщо забули
