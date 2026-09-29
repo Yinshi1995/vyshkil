@@ -14,3 +14,4 @@
 | `fah.rs` | `extract`/`RawFahRow` — аркуші "Пройшли"/"Проходять" (03 §2-3) | `repo::imports_fah`, `app/tests/import_fah.rs` |
 | `bps.rs` | `extract`/`RawBpsRow` — аркуші "Завершилась"/"Навчаються", дворівневий заголовок, funnel-воронка | `repo::imports_bps`, `app/tests/import_bps.rs` |
 | `kvid.rs` | `extract`/`RawKvidRow` — укомплектованість (01 §4), не group-подібні дані | `repo::imports_kvid`, `app/tests/import_kvid.rs` |
+| `ivs.rs` | `extract`/`IvsExtract` — ОДИН аркуш, ДВІ таблиці: укомплектованість інструкторів (`RawIvsStaffingRow`, 01 §4) + стажування з вільного тексту (`RawInternshipRow`) + курси (`RawIvsCourseRow`) | `repo::imports_ivs`, `app/tests/import_ivs.rs` |

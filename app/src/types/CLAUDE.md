@@ -10,4 +10,4 @@
 | `org.rs` | `OrgSearchResult`, `OrgTreeRow`, `OrgDetail` | `backend/repo/orgs.rs`, `pages/home`, `pages/org_detail` |
 | `dictionaries.rs` | `EquipmentVosHint`, `DictionaryEntry`, `DictionariesOverview`, `LearnedAlias` | `backend/repo/dictionaries.rs`, `pages/vos_lookup`, `pages/dictionaries` |
 | `submission.rs` | `GroupFormRow`, `DraftPayload`/`DraftState` (02 §6), `VosPositionCourseHint`, `TrainingSiteOption`, `CommitOutcome` | `backend/repo/groups.rs`, `backend/repo/submissions.rs`, `pages/training_form` |
-| `staffing.rs` | `StaffingRow` — укомплектованість (01 §4): org + сім чисел, не group-подібні дані | `backend/repo/staffing.rs`, `backend/repo/imports_kvid.rs`, `pages/import` |
+| `staffing.rs` | `StaffingRow` (КВід) / `InstructorStaffingRow` (ІВС) — укомплектованість (01 §4): org + кілька чисел, РІЗНІ набори метрик, не group-подібні дані | `backend/repo/staffing.rs`, `backend/repo/imports_kvid.rs`/`imports_ivs.rs`, `pages/import` |

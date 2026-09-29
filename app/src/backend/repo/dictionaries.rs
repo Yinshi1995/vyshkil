@@ -264,6 +264,29 @@ pub async fn resolve_position(
     Ok(row.map(|r| (r.id, r.name)))
 }
 
+/// Курс за точною назвою (Етап 5, ІВС) — назви в джерелі (КІБР/КПК/СККВ/…) збігаються з
+/// `course.name` буквально (сід із 01 §2), точний регістронезалежний збіг достатній, без
+/// `alias`/нечіткого пошуку (на відміну від `resolve_position` — там реальні синоніми в джерелі).
+pub async fn resolve_course(db: &DatabaseConnection, raw: &str) -> Result<Option<(i32, String)>, DbErr> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+        name: String,
+    }
+    let row = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT id, name FROM course WHERE deleted_at IS NULL AND lower(name) = lower($1)",
+        [raw.into()],
+    ))
+    .one(db)
+    .await?;
+    Ok(row.map(|r| (r.id, r.name)))
+}
+
 /// `training_kind.id` за фіксованим кодом (Етап 5) — файли одного типу завжди одного виду
 /// підготовки ("Фах" → `code='special'`), не потребує пошуку.
 pub async fn training_kind_id_by_code(db: &DatabaseConnection, code: &str) -> Result<Option<i32>, DbErr> {

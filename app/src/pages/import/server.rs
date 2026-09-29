@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 use crate::types::actor::Actor;
-use crate::types::staffing::StaffingRow;
+use crate::types::staffing::{InstructorStaffingRow, StaffingRow};
 use crate::types::submission::{CommitOutcome, DraftPayload, DraftState, GroupFormRow};
 
 const SOURCE_TYPE: &str = "table";
@@ -99,6 +99,37 @@ pub async fn parse_kvid_file(
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
+/// Розбір файлу "ІВС" — П'ЯТИЙ тип, і єдиний, що дає ОДРАЗУ два різних результати з одного файлу
+/// (`backend/import/ivs.rs` пояснює чому): укомплектованість (`InstructorStaffingRow`, проста
+/// таблиця, як КВід) і стажування+курси РАЗОМ (`GroupFormRow`, та сама сітка, що й Фах/БпС).
+#[server(ParseIvsFile, "/api")]
+pub async fn parse_ivs_file(
+    actor: Option<Actor>,
+    bytes: Vec<u8>,
+) -> Result<(Vec<InstructorStaffingRow>, Vec<GroupFormRow>), ServerFnError> {
+    use crate::backend::{import, policy, repo};
+
+    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    if actor.role == policy::Role::Viewer {
+        return Err(ServerFnError::new("перегляд не імпортує дані"));
+    }
+
+    let extract = import::ivs::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
+    if extract.staffing.is_empty() && extract.internships.is_empty() && extract.courses.is_empty() {
+        return Err(ServerFnError::new(
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «ІВС» \
+             («ВІДОМІСТЬ укомплектованості та навченості груп інструкторів» + «ВІДОМІСТЬ \
+             проходження підготовки інструкторами» на одному аркуші)",
+        ));
+    }
+
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    let resolved = repo::imports_ivs::resolve_rows(&db, extract)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok((resolved.staffing, resolved.groups))
+}
+
 /// Фіксація укомплектованості — усе-або-нічого, як і `commit_grid`: перевіряє право редагування
 /// й резолюцію організації ДО запису, пише `submission` (`status='committed'` одразу — тут нема
 /// проміжного стану "чернетка", превʼю не автозберігається) + `staffing_snapshot`/`_metric` на
@@ -158,6 +189,72 @@ pub async fn commit_staffing(
     for row in &rows {
         let org_id = row.org_id.expect("перевірено вище");
         repo::staffing::insert_snapshot(&txn, org_id, &as_of_date, KVID_CATEGORY, submission.id, row)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        count += 1;
+    }
+
+    txn.commit().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok(count)
+}
+
+/// Те саме для ІВС (`category='instructors'`) — окрема функція, бо `InstructorStaffingRow` —
+/// інший тип за `StaffingRow` (`types/staffing.rs` пояснює чому: різні набори метрик, 01 §4).
+#[server(CommitInstructorStaffing, "/api")]
+pub async fn commit_instructor_staffing(
+    actor: Option<Actor>,
+    as_of_date: String,
+    rows: Vec<InstructorStaffingRow>,
+) -> Result<usize, ServerFnError> {
+    use crate::backend::{db, policy, repo};
+    use sea_orm::FromQueryResult;
+
+    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    if actor.role == policy::Role::Viewer {
+        return Err(ServerFnError::new("перегляд не зберігає дані"));
+    }
+    if rows.is_empty() {
+        return Err(ServerFnError::new("немає жодного рядка для збереження"));
+    }
+    if chrono::NaiveDate::parse_from_str(&as_of_date, "%Y-%m-%d").is_err() {
+        return Err(ServerFnError::new("«станом на»: неможлива дата"));
+    }
+    for row in &rows {
+        let Some(org_id) = row.org_id else {
+            return Err(ServerFnError::new(format!(
+                "«{}»: частину не розпізнано — оберіть вручну перед фіксацією",
+                row.org_label
+            )));
+        };
+        if !policy::can_edit_org(actor, org_id) {
+            return Err(ServerFnError::new(format!(
+                "немає права вносити дані за «{}»",
+                row.org_label
+            )));
+        }
+    }
+
+    let txn = db::actor_transaction(actor).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    #[derive(FromQueryResult)]
+    struct NewId {
+        id: i32,
+    }
+    let submission = NewId::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        sea_orm::ConnectionTrait::get_database_backend(&txn),
+        "INSERT INTO submission (source_type, reporting_org_id, as_of_date, status) \
+         VALUES ('table', $1, $2::date, 'committed') RETURNING id",
+        [actor.org_id.into(), as_of_date.clone().into()],
+    ))
+    .one(&txn)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?
+    .ok_or_else(|| ServerFnError::new("INSERT submission не повернув id"))?;
+
+    let mut count = 0;
+    for row in &rows {
+        let org_id = row.org_id.expect("перевірено вище");
+        repo::staffing::insert_instructor_snapshot(&txn, org_id, &as_of_date, submission.id, row)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
         count += 1;
