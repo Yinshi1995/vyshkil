@@ -14,11 +14,11 @@ use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use crate::widgets::ActorNotice;
 use server::{
     commit_grid, commit_instructor_staffing, commit_staffing, get_draft, parse_bps_file,
-    parse_fah_file, parse_ivs_file, parse_kvid_file, save_draft,
+    parse_fah_file, parse_ivs_file, parse_kvid_file, parse_terminy_file, save_draft,
 };
 
-/// Тип файлу, що імпортуємо (03, критерій готовності Етапу 5 — тут чотири з п'яти, Терміни
-/// окремим кроком, `backend/import/CLAUDE.md` пояснює чому не один детектор). Fah/Bps —
+/// Тип файлу, що імпортуємо (03, критерій готовності Етапу 5 — усі п'ять,
+/// `backend/import/CLAUDE.md` пояснює чому не один детектор). Fah/Bps/Terminy —
 /// group-подібні дані (та сама `widgets::group_grid::Grid`, що й форма); Kvid — укомплектованість
 /// (01 §4), зовсім інша форма даних (`StaffingRow`), своя проста таблиця нижче; Ivs — ОБИДВІ форми
 /// одразу з одного файлу (стажування+курси в `Grid`, укомплектованість інструкторів у своїй
@@ -29,6 +29,7 @@ enum FileKind {
     Bps,
     Kvid,
     Ivs,
+    Terminy,
 }
 
 impl FileKind {
@@ -38,6 +39,7 @@ impl FileKind {
             FileKind::Bps => "БпС (Завершилась/Навчаються)",
             FileKind::Kvid => "КВід (укомплектованість)",
             FileKind::Ivs => "ІВС (інструктори)",
+            FileKind::Terminy => "Терміни (БЗВП/Фахова/Адаптація)",
         }
     }
 
@@ -184,10 +186,11 @@ fn ImportBody() -> impl IntoView {
                     parsing.set(false);
                     return;
                 }
-                // Ivs/Kvid уже повернулись вище -- сюди доходять лише Fah/Bps.
+                // Ivs/Kvid уже повернулись вище -- сюди доходять Fah/Bps/Terminy.
                 let result = match kind {
                     FileKind::Fah => parse_fah_file(actor_val, bytes).await,
                     FileKind::Bps => parse_bps_file(actor_val, bytes).await,
+                    FileKind::Terminy => parse_terminy_file(actor_val, bytes).await,
                     FileKind::Kvid | FileKind::Ivs => unreachable!("повертають раніше"),
                 };
                 match result {
@@ -341,6 +344,7 @@ fn ImportBody() -> impl IntoView {
                             "bps" => FileKind::Bps,
                             "kvid" => FileKind::Kvid,
                             "ivs" => FileKind::Ivs,
+                            "terminy" => FileKind::Terminy,
                             _ => FileKind::Fah,
                         });
                     }
@@ -356,6 +360,9 @@ fn ImportBody() -> impl IntoView {
                     </option>
                     <option value="ivs" selected=move || file_kind.get() == FileKind::Ivs>
                         {FileKind::Ivs.label()}
+                    </option>
+                    <option value="terminy" selected=move || file_kind.get() == FileKind::Terminy>
+                        {FileKind::Terminy.label()}
                     </option>
                 </select>
                 <label class="training-form__as-of">

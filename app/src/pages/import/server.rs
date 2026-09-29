@@ -130,6 +130,34 @@ pub async fn parse_ivs_file(
     Ok((resolved.staffing, resolved.groups))
 }
 
+/// Розбір файлу "Терміни" — П'ЯТИЙ і останній тип (Етап 5 повністю): три паралельні списки
+/// (БЗВП/Фахова/Адаптація, `backend/import/terminy.rs`) РАЗОМ у ту саму сітку, що й усі попередні.
+#[server(ParseTerminyFile, "/api")]
+pub async fn parse_terminy_file(
+    actor: Option<Actor>,
+    bytes: Vec<u8>,
+) -> Result<Vec<GroupFormRow>, ServerFnError> {
+    use crate::backend::{import, policy, repo};
+
+    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    if actor.role == policy::Role::Viewer {
+        return Err(ServerFnError::new("перегляд не імпортує дані"));
+    }
+
+    let extract = import::terminy::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
+    if extract.bzvp.is_empty() && extract.special.is_empty() && extract.adapt.is_empty() {
+        return Err(ServerFnError::new(
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «Терміни» \
+             (заголовок № з/п/Підрозділ/БЗВП/Фахова підготовка/Адаптація)",
+        ));
+    }
+
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    repo::imports_terminy::resolve_rows(&db, extract)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
 /// Фіксація укомплектованості — усе-або-нічого, як і `commit_grid`: перевіряє право редагування
 /// й резолюцію організації ДО запису, пише `submission` (`status='committed'` одразу — тут нема
 /// проміжного стану "чернетка", превʼю не автозберігається) + `staffing_snapshot`/`_metric` на

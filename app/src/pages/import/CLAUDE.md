@@ -1,16 +1,15 @@
-# app/src/pages/import — превʼю імпорту (`/import`, 03, Етап 5)
+# app/src/pages/import — превʼю імпорту (`/import`, 03, Етап 5 — усі 5 типів файлу)
 
 - Можна: `services`, `widgets`, `hooks`, `types`, `domain`, `backend` (лише з `server.rs`, під `ssr`).
   Не можна: інші сторінки.
 - `server.rs` оголошений без `pub` (`mod server;`) — приватний для цієї сторінки.
 - Права: `viewer` не імпортує; `org_editor` — комітиться лише за власну організацію (той самий
   `policy::can_edit_org` у `commit_grid_impl`, `services/submission_grid.rs`, що й у формі).
-- Чотири типи файлу зараз (Фах, БпС, КВід, ІВС) — перемикач `<select>` у `ImportBody`, `FileKind`
-  вирішує, який `parse_*_file` викликати. Терміни з критерію готовності Етапу 5 ще не додано (3
-  паралельні блоки з вертикально злитими комірками — найскладніша структура, `backend/import/
-  CLAUDE.md`) — окремим кроком.
-- **Fah/Bps vs Kvid vs Ivs — три різні гілки UI, `FileKind::is_staffing()` розводить лише перші
-  дві**: Fah/Bps → `GroupFormRow` → `widgets::group_grid::Grid` (та сама сітка, що й форма) →
+- Усі п'ять типів файлу (Фах, БпС, КВід, ІВС, Терміни) — перемикач `<select>` у `ImportBody`,
+  `FileKind` вирішує, який `parse_*_file` викликати.
+- **Fah/Bps/Terminy vs Kvid vs Ivs — три різні гілки UI, `FileKind::is_staffing()` розводить лише
+  Kvid**: Fah/Bps/Terminy → `GroupFormRow` → `widgets::group_grid::Grid` (та сама сітка, що й
+  форма) →
   `commit_grid`/`services::submission_grid`, з draft-автозбереженням і undo/redo. Kvid →
   `StaffingRow` (01 §4, org + сім чисел, БЕЗ ВОС/дат/воронки) → окрема проста `StaffingTable`
   (плейн `<input type="number">`, без undo/автозбереження — задокументоване спрощення, менший
@@ -24,7 +23,10 @@
   `training_kind='internship'`/`'special'+course_id` замість `vos`/`position`). `Ctrl+Enter`
   комітить ОБИДВА окремими викликами (`commit_instructor_staffing` + `commit_grid`) — не
   атомарно разом: часткова невдача одного не блокує інший, той самий рівень, що й "спробуй ще
-  раз" для решти імпортів сторінки.
+  раз" для решти імпортів сторінки. **Terminy — теж "рядок групи", три `training_kind` замість
+  одного** (`backend/import/terminy.rs`: БЗВП/Фахова/Адаптація — три незалежні списки з ОДНОГО
+  файлу, `repo::imports_terminy` зливає їх в один `Vec<GroupFormRow>`) — жодної нової гілки UI не
+  треба, той самий `Grid`, що й Фах/БпС/Ivs-групи.
 - Файл читається в байти на клієнті (`File::array_buffer()`, без multipart — файли малі) і
   надсилається як `Vec<u8>` в `#[server]`-аргументі.
 - Дублює частину каркасу `training_form/mod.rs` (автозбереження, undo/redo, гарячі клавіші) —
@@ -34,4 +36,4 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `mod.rs` | `ImportPage`, `ImportBody` (Фах/БпС/Ivs-груп стан), `StaffingTable`/`StaffingTableRow` (Kvid превʼю), `InstructorStaffingTable`/`InstructorStaffingTableRow` (Ivs превʼю) | `pages/CLAUDE.md` → `routes.rs` |
-| `server.rs` | `parse_fah_file`/`parse_bps_file`/`parse_kvid_file`/`parse_ivs_file`, `commit_staffing`/`commit_instructor_staffing`, `get_draft`/`save_draft`/`commit_grid` (тонкі обгортки над `services::submission_grid`) | `mod.rs` |
+| `server.rs` | `parse_fah_file`/`parse_bps_file`/`parse_kvid_file`/`parse_ivs_file`/`parse_terminy_file`, `commit_staffing`/`commit_instructor_staffing`, `get_draft`/`save_draft`/`commit_grid` (тонкі обгортки над `services::submission_grid`) | `mod.rs` |

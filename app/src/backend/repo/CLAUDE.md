@@ -16,4 +16,5 @@
 | `imports_bps.rs` | `resolve_rows` — `RawBpsRow` → `GroupFormRow`, org/site через `org.number` (точніше за фах-текст) | `pages/import/server.rs` |
 | `imports_kvid.rs` | `resolve_rows` — `RawKvidRow` → `StaffingRow`, лише org резолюція | `pages/import/server.rs` |
 | `imports_ivs.rs` | `resolve_rows` — `IvsExtract` → `(InstructorStaffingRow, GroupFormRow)` РАЗОМ: стажування+курси йдуть у ту саму сітку, що й Фах/БпС | `pages/import/server.rs` |
+| `imports_terminy.rs` | `resolve_rows` — `TerminyExtract` (3 паралельні списки) → `GroupFormRow`, той самий Grid, різні `training_kind` (bzvp/special/adaptation) | `pages/import/server.rs` |
 | `staffing.rs` | `insert_snapshot`/`insert_instructor_snapshot` — `staffing_snapshot`+`staffing_metric` (01 §4, різні набори метрик КВід/ІВС) | `pages/import/server.rs` |

@@ -15,3 +15,4 @@
 | `bps.rs` | `extract`/`RawBpsRow` — аркуші "Завершилась"/"Навчаються", дворівневий заголовок, funnel-воронка | `repo::imports_bps`, `app/tests/import_bps.rs` |
 | `kvid.rs` | `extract`/`RawKvidRow` — укомплектованість (01 §4), не group-подібні дані | `repo::imports_kvid`, `app/tests/import_kvid.rs` |
 | `ivs.rs` | `extract`/`IvsExtract` — ОДИН аркуш, ДВІ таблиці: укомплектованість інструкторів (`RawIvsStaffingRow`, 01 §4) + стажування з вільного тексту (`RawInternshipRow`) + курси (`RawIvsCourseRow`) | `repo::imports_ivs`, `app/tests/import_ivs.rs` |
+| `terminy.rs` | `extract`/`TerminyExtract` — ОДИН заголовок, ТРИ паралельні незалежні списки в спільному діапазоні рядків (БЗВП/Фахова/Адаптація, `RawBzvpRow`/`RawSpecialRow`/`RawAdaptRow`), окремий файл поза zip-архівом | `repo::imports_terminy`, `app/tests/import_terminy.rs` |
