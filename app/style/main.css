@@ -316,23 +316,25 @@ a:hover {
   color: var(--accent);
 }
 
-/* Іконка в золотій рамці — той самий мотив, що на striy.pp.ua */
+/* Іконка в золотій рамці — той самий мотив, що на striy.pp.ua. Токенізовано (Фаза 3): 52px→48px,
+   14px→16px округлені на ≤2px; 4px/16px/26px→24px/6px/8px/11px/0.1em/32px→34px/14px→15px — решта
+   точні або 1px-округлення, непомітно. */
 .icon-box {
-  width: 52px;
-  height: 52px;
-  border: 2px solid var(--accent);
-  border-radius: 4px;
+  width: var(--space-7);
+  height: var(--space-7);
+  border: 2px solid var(--fg-accent);
+  border-radius: var(--radius-1);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent);
-  margin-bottom: 14px;
+  color: var(--fg-accent);
+  margin-bottom: var(--space-4);
   flex-shrink: 0;
 }
 
 .icon-box svg {
-  width: 26px;
-  height: 26px;
+  width: var(--space-5);
+  height: var(--space-5);
   stroke: currentColor;
   fill: none;
 }
@@ -341,16 +343,16 @@ a:hover {
 .card-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  margin: 24px 0;
+  gap: var(--space-4);
+  margin: var(--space-5) 0;
 }
 
 .card {
-  background: var(--panel);
+  background: var(--surface-panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 22px;
-  box-shadow: 0 4px 20px var(--shadow);
+  border-radius: var(--radius-2);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-2);
   flex: 1 1 240px;
   min-width: 220px;
 }
@@ -358,25 +360,27 @@ a:hover {
 .card__label {
   font-family: var(--font-heading);
   text-transform: uppercase;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  margin-bottom: 6px;
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-line);
+  font-weight: var(--weight-7);
+  letter-spacing: var(--track-5);
+  color: var(--fg-subtle);
+  margin-bottom: var(--space-2);
 }
 
 .card__value {
   font-family: var(--font-heading);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--accent);
-  line-height: 1.1;
+  font-size: var(--text-display-size);
+  line-height: var(--text-display-line);
+  font-weight: var(--weight-7);
+  color: var(--fg-accent);
 }
 
 .card__desc {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin-top: 8px;
+  color: var(--fg-muted);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+  margin-top: var(--space-2);
 }
 
 /* Кнопка зі скошеним краєм (clip-path) — той самий мотив, що на striy.pp.ua */
