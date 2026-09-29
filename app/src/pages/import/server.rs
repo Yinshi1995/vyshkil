@@ -7,6 +7,11 @@ use crate::types::submission::{CommitOutcome, DraftPayload, DraftState, GroupFor
 const SOURCE_TYPE: &str = "table";
 /// "КВід" = командири відділень — `staffing_snapshot.category` (01 §4).
 const KVID_CATEGORY: &str = "squad_leaders";
+/// Архів ВЧ (Етап 6) — одноразовий перенос, інший `submission.source_type` за решту цієї
+/// сторінки; тому окремий сталий рядок і окремий тріо `get_archive_draft`/`commit_archive_grid`
+/// (не runtime-параметр у спільних `get_draft`/`commit_grid` — джерело подання типізоване
+/// константою на боці клієнта в `FileKind::source_type()`, не приходить з форми).
+const ARCHIVE_SOURCE_TYPE: &str = "archive_seed";
 
 /// Розбір файлу "Фах" (03 §1-3): байти → структурні рядки (без БД) → резолюція org/vos/посада/
 /// місце через довідники → сітка (той самий шлях далі, що й ручне введення). Помилки розбору
@@ -156,6 +161,70 @@ pub async fn parse_terminy_file(
     repo::imports_terminy::resolve_rows(&db, extract)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+/// Розбір архіву ВЧ (Етап 6, `source_type='archive_seed'`) — **лише реальний файл**
+/// (`20 АК/ОблікФаховоїПідготовкиАК.xlsx`, рішення користувача: решта `Дельта/` синтетична,
+/// `docs/source-analysis.md` §1). Той самий шлях, що й Фах (однорівневий заголовок), дати вже
+/// справжні `datetime`.
+#[server(ParseVchArchiveFile, "/api")]
+pub async fn parse_vch_archive_file(
+    actor: Option<Actor>,
+    bytes: Vec<u8>,
+) -> Result<Vec<GroupFormRow>, ServerFnError> {
+    use crate::backend::{import, policy, repo};
+
+    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    if actor.role == policy::Role::Viewer {
+        return Err(ServerFnError::new("перегляд не імпортує дані"));
+    }
+
+    let raw_rows =
+        import::vch_archive::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
+    if raw_rows.is_empty() {
+        return Err(ServerFnError::new(
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл архіву ВЧ \
+             (аркуш «Записи», заголовок Військова частина/Місце проведення/Спеціальність/ВОС/ОВТ/\
+             Термін з/Термін по/План/Фактично навчається)",
+        ));
+    }
+
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    repo::imports_vch_archive::resolve_rows(&db, raw_rows)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+/// Чернетка/фіксація архіву ВЧ — той самий `services::submission_grid`, що й решта сторінки,
+/// але `ARCHIVE_SOURCE_TYPE` замість `SOURCE_TYPE` (окреме тріо, не runtime-параметр — див.
+/// коментар при `ARCHIVE_SOURCE_TYPE`).
+#[server(GetArchiveDraft, "/api")]
+pub async fn get_archive_draft(actor: Option<Actor>) -> Result<Option<DraftState>, ServerFnError> {
+    use crate::services::submission_grid::get_draft_impl;
+
+    get_draft_impl(actor, ARCHIVE_SOURCE_TYPE).await.map_err(ServerFnError::new)
+}
+
+#[server(SaveArchiveDraft, "/api")]
+pub async fn save_archive_draft(
+    actor: Option<Actor>,
+    submission_id: Option<i32>,
+    payload: DraftPayload,
+) -> Result<i32, ServerFnError> {
+    use crate::services::submission_grid::save_draft_impl;
+
+    save_draft_impl(actor, submission_id, ARCHIVE_SOURCE_TYPE, payload).await.map_err(ServerFnError::new)
+}
+
+#[server(CommitArchiveGrid, "/api")]
+pub async fn commit_archive_grid(
+    actor: Option<Actor>,
+    submission_id: Option<i32>,
+    payload: DraftPayload,
+) -> Result<CommitOutcome, ServerFnError> {
+    use crate::services::submission_grid::commit_grid_impl;
+
+    commit_grid_impl(actor, submission_id, ARCHIVE_SOURCE_TYPE, payload).await.map_err(ServerFnError::new)
 }
 
 /// Фіксація укомплектованості — усе-або-нічого, як і `commit_grid`: перевіряє право редагування

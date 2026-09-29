@@ -13,12 +13,14 @@ use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
 use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use crate::widgets::ActorNotice;
 use server::{
-    commit_grid, commit_instructor_staffing, commit_staffing, get_draft, parse_bps_file,
-    parse_fah_file, parse_ivs_file, parse_kvid_file, parse_terminy_file, save_draft,
+    commit_archive_grid, commit_grid, commit_instructor_staffing, commit_staffing, get_draft,
+    parse_bps_file, parse_fah_file, parse_ivs_file, parse_kvid_file, parse_terminy_file,
+    parse_vch_archive_file, save_draft,
 };
 
 /// Тип файлу, що імпортуємо (03, критерій готовності Етапу 5 — усі п'ять,
-/// `backend/import/CLAUDE.md` пояснює чому не один детектор). Fah/Bps/Terminy —
+/// `backend/import/CLAUDE.md` пояснює чому не один детектор; VchArchive — Етап 6, окремий
+/// `source_type`, не критерій Етапу 5). Fah/Bps/Terminy/VchArchive —
 /// group-подібні дані (та сама `widgets::group_grid::Grid`, що й форма); Kvid — укомплектованість
 /// (01 §4), зовсім інша форма даних (`StaffingRow`), своя проста таблиця нижче; Ivs — ОБИДВІ форми
 /// одразу з одного файлу (стажування+курси в `Grid`, укомплектованість інструкторів у своїй
@@ -30,6 +32,7 @@ enum FileKind {
     Kvid,
     Ivs,
     Terminy,
+    VchArchive,
 }
 
 impl FileKind {
@@ -40,6 +43,7 @@ impl FileKind {
             FileKind::Kvid => "КВід (укомплектованість)",
             FileKind::Ivs => "ІВС (інструктори)",
             FileKind::Terminy => "Терміни (БЗВП/Фахова/Адаптація)",
+            FileKind::VchArchive => "Архів ВЧ (одноразовий перенос, Етап 6)",
         }
     }
 
@@ -47,6 +51,15 @@ impl FileKind {
     /// з таблицею укомплектованості — не сюди, власна гілка в `ImportBody`.
     fn is_staffing(self) -> bool {
         matches!(self, FileKind::Kvid)
+    }
+
+    /// Одноразовий перенос (Етап 6) — інший `submission.source_type` ("archive_seed" замість
+    /// "table"), окреме тріо `get_archive_draft`/`save_archive_draft`/`commit_archive_grid` у
+    /// `server.rs`. Без автозбереження чернетки (`ImportBody` пропускає інтервал для цього виду) —
+    /// перенос робиться раз, чернетка-в-часі тут не потрібна (той самий принцип спрощення, що й
+    /// Kvid без undo).
+    fn is_archive(self) -> bool {
+        matches!(self, FileKind::VchArchive)
     }
 }
 
@@ -186,20 +199,31 @@ fn ImportBody() -> impl IntoView {
                     parsing.set(false);
                     return;
                 }
-                // Ivs/Kvid уже повернулись вище -- сюди доходять Fah/Bps/Terminy.
+                // Ivs/Kvid уже повернулись вище -- сюди доходять Fah/Bps/Terminy/VchArchive.
                 let result = match kind {
                     FileKind::Fah => parse_fah_file(actor_val, bytes).await,
                     FileKind::Bps => parse_bps_file(actor_val, bytes).await,
                     FileKind::Terminy => parse_terminy_file(actor_val, bytes).await,
+                    FileKind::VchArchive => parse_vch_archive_file(actor_val, bytes).await,
                     FileKind::Kvid | FileKind::Ivs => unreachable!("повертають раніше"),
                 };
                 match result {
                     Ok(rows) => {
                         let n = rows.len();
+                        // Звіт переносу (Етап 6, роадмап: "скільки рядків, скільки відхилено") --
+                        // лише для архіву: непізнана частина заздалегідь підказує обсяг ручної
+                        // роботи ДО спроби фіксації (сама фіксація все одно все-або-нічого).
+                        let unresolved =
+                            kind.is_archive().then(|| rows.iter().filter(|r| r.sender_org_id.is_none()).count());
                         snapshot();
                         replace_rows(rows);
                         submission_id.set(None);
-                        status.set(format!("розібрано {n} рядків — перевірте перед фіксацією"));
+                        status.set(match unresolved {
+                            Some(0) | None => format!("розібрано {n} рядків — перевірте перед фіксацією"),
+                            Some(u) => format!(
+                                "розібрано {n} рядків, {u} з нерозпізнаною частиною — перевірте перед фіксацією"
+                            ),
+                        });
                     }
                     Err(e) => status.set(format!("не вдалось розібрати: {e}")),
                 }
@@ -209,9 +233,14 @@ fn ImportBody() -> impl IntoView {
     };
 
     // Автозбереження чернетки превʼю кожні 5с (02 §6) — та сама логіка, що й training_form.
+    // VchArchive пропускає: одноразовий перенос, чернетка-в-часі не потрібна (`FileKind::
+    // is_archive` doc-comment) — інакше зберігав би архівні рядки під ЧУЖИЙ source_type='table'.
     Effect::new(move |_| {
         let Ok(handle) = set_interval_with_handle(
             move || {
+                if file_kind.get_untracked().is_archive() {
+                    return;
+                }
                 let Some(actor) = actor.get_untracked() else { return };
                 let as_of = as_of_date.get_untracked();
                 if as_of.trim().is_empty() {
@@ -290,6 +319,26 @@ fn ImportBody() -> impl IntoView {
             });
             return;
         }
+        if file_kind.get_untracked().is_archive() {
+            // Без submission_id -- одноразовий перенос завжди створює нове подання
+            // (`is_archive()` doc-comment: чернетка-в-часі не ведеться).
+            let payload =
+                DraftPayload { as_of_date: as_of_date.get_untracked(), rows: snapshot_rows(editable) };
+            leptos::task::spawn_local(async move {
+                match commit_archive_grid(Some(actor), None, payload).await {
+                    Ok(CommitOutcome::Committed { group_ids }) => {
+                        status.set(format!("перенесено: {} груп(и)", group_ids.len()));
+                        replace_rows(Vec::new());
+                    }
+                    Ok(CommitOutcome::ValidationFailed { row_index, field, message }) => {
+                        status.set("є помилки — перевірте підсвічену клітинку".to_string());
+                        commit_error.set(Some((row_index, field, message)));
+                    }
+                    Err(e) => status.set(format!("не вдалось перенести: {e}")),
+                }
+            });
+            return;
+        }
         let payload =
             DraftPayload { as_of_date: as_of_date.get_untracked(), rows: snapshot_rows(editable) };
         let sid = submission_id.get_untracked();
@@ -345,6 +394,7 @@ fn ImportBody() -> impl IntoView {
                             "kvid" => FileKind::Kvid,
                             "ivs" => FileKind::Ivs,
                             "terminy" => FileKind::Terminy,
+                            "vch_archive" => FileKind::VchArchive,
                             _ => FileKind::Fah,
                         });
                     }
@@ -363,6 +413,9 @@ fn ImportBody() -> impl IntoView {
                     </option>
                     <option value="terminy" selected=move || file_kind.get() == FileKind::Terminy>
                         {FileKind::Terminy.label()}
+                    </option>
+                    <option value="vch_archive" selected=move || file_kind.get() == FileKind::VchArchive>
+                        {FileKind::VchArchive.label()}
                     </option>
                 </select>
                 <label class="training-form__as-of">
