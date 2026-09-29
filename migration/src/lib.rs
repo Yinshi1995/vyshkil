@@ -35,6 +35,7 @@ mod m20260928_000032_create_group_composition_table;
 mod m20260928_000033_attach_audit_trigger_group_composition;
 mod m20260929_000034_create_staffing_tables;
 mod m20260929_000035_attach_audit_triggers_staffing;
+mod m20260929_000036_refine_subordination_dates_from_kontrolka;
 
 pub struct Migrator;
 
@@ -85,6 +86,9 @@ impl MigratorTrait for Migrator {
             // в жодному попередньому етапі.
             Box::new(m20260929_000034_create_staffing_tables::Migration),
             Box::new(m20260929_000035_attach_audit_triggers_staffing::Migration),
+            // Етап 6: реальні дати переходу 17 АК → 7 КШР з Контролька (замість умовної
+            // 01.08.2026 у dev-сіді).
+            Box::new(m20260929_000036_refine_subordination_dates_from_kontrolka::Migration),
         ]
     }
 }

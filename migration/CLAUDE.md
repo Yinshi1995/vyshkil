@@ -25,3 +25,4 @@
 | `m…_000033_attach_audit_trigger_group_composition` | audit-тригер на `group_composition` | — |
 | `m…_000034_create_staffing_tables` | `staffing_snapshot`+`staffing_metric` (01 §4, Етап 5 — КВід/ІВС) | `backend/repo/imports_kvid.rs` |
 | `m…_000035_attach_audit_triggers_staffing` | audit-тригери на обидві | — |
+| `m…_000036_refine_subordination_dates_from_kontrolka` | Етап 6: реальні дати переходу 17 АК→7 КШР з Контролька замість умовної 01.08.2026 у dev-сіді (сам факт переходу не змінюється) | — |
