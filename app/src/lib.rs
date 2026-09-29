@@ -1,3 +1,8 @@
+// RowEditor (widgets/group_grid) — один view! з ~14 підписаних полів поспіль генерує глибоко
+// вкладені типи (кожен сиблінг у view! — ще один шар кортежу) — типовий Leptos-ліміт для довгих
+// форм, не симптом реальної проблеми з кодом.
+#![recursion_limit = "256"]
+
 pub mod app;
 pub mod components;
 pub mod domain;

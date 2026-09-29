@@ -4,9 +4,9 @@
 //! спливання click-події, зовнішній `mousedown`-обробник встигає спрацювати на вже скинутому
 //! closure ("invoked after being dropped"). Закриття — лише кнопкою "×" або `Escape`.
 
-use leptos::ev;
-use leptos::leptos_dom::helpers::window_event_listener;
 use leptos::prelude::*;
+
+use crate::hooks::use_escape_close::use_escape_close;
 
 #[component]
 pub fn Modal(
@@ -14,12 +14,7 @@ pub fn Modal(
     #[prop(into)] on_close: Callback<()>,
     children: ChildrenFn,
 ) -> impl IntoView {
-    let handle = window_event_listener(ev::keydown, move |ev| {
-        if open.get_untracked() && ev.key() == "Escape" {
-            on_close.run(());
-        }
-    });
-    on_cleanup(move || handle.remove());
+    use_escape_close(open, on_close);
 
     view! {
         <Show when=move || open.get()>

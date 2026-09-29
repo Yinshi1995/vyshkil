@@ -810,9 +810,23 @@ tr:hover td {
 .grid__header,
 .grid__row {
   display: grid;
-  grid-template-columns: repeat(14, minmax(110px, 1fr));
+  grid-template-columns: 44px repeat(14, minmax(110px, 1fr));
   gap: 1px;
   min-width: 1600px;
+}
+
+.grid__expand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.grid__expand:hover {
+  color: var(--fg-accent);
 }
 
 .grid__header {
@@ -1148,6 +1162,101 @@ tr:hover td {
 
 .dropzone__input {
   display: none;
+}
+
+/* Бічна панель (components::Drawer, feedback користувача — "як Notion") — той самий overlay-фон,
+   що .modal__overlay, але панель прикріплена до правого краю на всю висоту й виїжджає збоку. */
+.drawer__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: var(--z-modal);
+  display: flex;
+  justify-content: flex-end;
+  animation: modal-fade-in var(--duration-fast) ease;
+}
+
+.drawer__panel {
+  position: relative;
+  width: min(420px, 90vw);
+  height: 100%;
+  background: var(--surface-raised);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-5);
+  overflow-y: auto;
+  animation: drawer-slide-in var(--duration-base) ease;
+}
+
+.drawer__close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: var(--space-1);
+  line-height: 0;
+}
+
+.drawer__close:hover {
+  color: var(--fg-accent);
+}
+
+@keyframes drawer-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Форма редагування рядка в Drawer (widgets::group_grid::RowEditor, "як Notion") — вертикальний
+   список підписаних полів, замість тісних клітинок сітки. */
+.row-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.row-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.row-editor__field label {
+  font-family: var(--font-heading);
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-line);
+  text-transform: uppercase;
+  letter-spacing: var(--track-3);
+  color: var(--fg-subtle);
+}
+
+.row-editor__row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.row-editor__row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.composition-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.composition-editor__row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.composition-editor__row > *:first-child {
+  flex: 1;
 }
 
 /* === style::generate_css() — НЕ РЕДАГУВАТИ ВРУЧНУ, cargo run -p style --bin gen === */

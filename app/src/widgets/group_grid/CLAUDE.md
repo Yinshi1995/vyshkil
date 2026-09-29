@@ -11,7 +11,12 @@
   реалізовано) — для 2+ аргументів (`Callback<(P1, P2)>`) навпаки: closure з окремими параметрами
   (`move |a, b| ...`), не `move |(a, b)| ...`.
 - Свідомі спрощення (задокументовано в коді): віртуалізація — прогресивне дорендерювання, не
-  ковзне вікно; "Розподіл за підрозділами" поза Tab-послідовністю; вставка з Excel не підключена.
+  ковзне вікно; вставка з Excel не підключена.
+- "Розгорнути рядок" (feedback користувача — "як Notion") — `.grid__expand` у кожному `Row`,
+  спільний `components::Drawer` на всю `Grid` (не по одному на рядок), тримає посилання на
+  `RwSignal<GroupFormRow>` обраного рядка. `tabindex="-1"` навмисно — поза Tab-послідовністю
+  (02 §1 колонка 8, "Розподіл за підрозділами" — тепер тут, `RowEditor::CompositionEditor`,
+  перший реальний спосіб РУЧНОГО введення composition, раніше лише з імпорту).
 - `TrainingKindCell`/`SiteCell` — `components::Select` з `id`/`on_keydown` (не голий `<select>`):
   стрілки/Enter, поки список закритий, форвардяться в `on_cell_keydown` (сітка лишається власником
   навігації МІЖ клітинками), відкриття — `Alt+↓` (той самий шорткат, що вже в шпаргалці).
@@ -24,3 +29,4 @@
 |---|---|---|
 | `grid.rs` | `Grid`, `EditableRow`/`wrap_rows`/`snapshot_rows` (рядок = власний сигнал, щоб фокус не губився при перерендері) | `pages/training_form/mod.rs`, `pages/import/mod.rs` |
 | `autocomplete.rs` | `OrgAutocomplete`, `VosPositionCourseAutocomplete` (02 §3) | `grid.rs` |
+| `row_editor.rs` | `RowEditor` — форма всіх полів рядка в `Drawer` ("як Notion"), `CompositionEditor` | `grid.rs` |

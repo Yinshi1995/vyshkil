@@ -14,6 +14,8 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use super::autocomplete::{OrgAutocomplete, VosPositionCourseAutocomplete};
+use super::row_editor::RowEditor;
+use crate::components::Drawer;
 use crate::services::groups::get_training_sites;
 use crate::types::submission::{GroupFormRow, VosPositionCourseHint, VosPositionCourseKind};
 
@@ -70,6 +72,10 @@ pub fn Grid(
     #[prop(into)] before_mutate: Callback<()>,
 ) -> impl IntoView {
     let visible_count = RwSignal::new(INITIAL_VISIBLE);
+    // "Розгорнути рядок" (feedback користувача — "як Notion") — один спільний Drawer на всю
+    // сітку, не по одному на рядок: тримає лише RwSignal<GroupFormRow> обраного рядка, переживає
+    // видалення/перестановку рядків (це посилання на сигнал, не індекс).
+    let editing_row = RwSignal::new(None::<RwSignal<GroupFormRow>>);
 
     let fresh_row = move || {
         let id = next_id.get_value();
@@ -180,6 +186,7 @@ pub fn Grid(
     view! {
         <div class="grid" role="table">
             <div class="grid__header" role="row">
+                <span></span>
                 <span>"Частина"</span>
                 <span>"Вид підготовки"</span>
                 <span>"ВОС / посада / курс"</span>
@@ -217,6 +224,7 @@ pub fn Grid(
                                 on_keydown=move |col: usize, ev: web_sys::KeyboardEvent| {
                                     on_cell_keydown(row_index, col, ev)
                                 }
+                                on_expand=Callback::new(move |_| editing_row.set(Some(row.data)))
                             />
                         }
                     }
@@ -233,6 +241,12 @@ pub fn Grid(
                 "+ рядок"
             </button>
         </div>
+        <Drawer
+            open=Signal::derive(move || editing_row.get().is_some())
+            on_close=Callback::new(move |_| editing_row.set(None))
+        >
+            {move || editing_row.get().map(|d| view! { <RowEditor data=d/> })}
+        </Drawer>
     }
 }
 
@@ -278,9 +292,21 @@ fn Row(
     row_index: usize,
     data: RwSignal<GroupFormRow>,
     #[prop(into)] on_keydown: Callback<(usize, web_sys::KeyboardEvent)>,
+    #[prop(into)] on_expand: Callback<()>,
 ) -> impl IntoView {
     view! {
         <div class="grid__row" role="row">
+            <button
+                type="button"
+                class="grid__expand"
+                aria-label="Розгорнути рядок"
+                tabindex="-1"
+                on:click=move |_| on_expand.run(())
+            >
+                <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+                    <path d="M2 2h3M2 2v3M10 2H7M10 2v3M2 10h3M2 10V7M10 10H7M10 10V7" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+                </svg>
+            </button>
             <OrgAutocomplete
                 id=cell_id(row_index, 0)
                 label=Signal::derive(move || data.get().sender_org_label)

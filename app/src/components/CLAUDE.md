@@ -12,6 +12,7 @@
 | `accordion.rs` | `Accordion`/`AccordionItem` — розгортання розміткою, CSS grid-rows-анімація | — |
 | `checkbox.rs` | `Checkbox` — стилізований чекбокс (справжній `<input>`, приховано лише візуально) | — |
 | `date_picker.rs` | `DatePicker` — календар-панель, `chrono` напряму (не `domain::dates` — не знає домену) | `pages::import`, `pages::training_form`, `pages::home` |
+| `drawer.rs` | `Drawer` — бічна панель на всю висоту (той самий контракт, що `Modal`, `hooks::use_escape_close`), для "розгорнути рядок у форму" | `widgets::group_grid` (RowEditor) |
 | `file_dropzone.rs` | `FileDropzone` — перетягнути файл або клікнути (прихований `<input type="file">` — одне джерело `web_sys::File` для обох шляхів) | `pages::import` |
 | `modal.rs` | `Modal`/`Dialog` — оверлей+панель, Escape закриває, клік-поза НЕ закриває (навмисно, `.modal__*` — той самий клас, що `training_form::CheatSheet`) | — |
 | `select.rs` | `Select`/`SelectOption` — стилізована випадайка (клавіатура: стрілки/Enter/Escape/друк-до-літери, клік поза — закриває), заміна нативного `<select>`; опційні `id`/`on_keydown` — для вбудовування в `Grid` (стрілки/Enter лишаються за сіткою, відкриття — `Alt+↓`) | `layout::ActorSwitcher`, `pages::import` (FileKind), `widgets::group_grid::Grid` (TrainingKindCell/SiteCell) |

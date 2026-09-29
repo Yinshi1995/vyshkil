@@ -8,3 +8,4 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `use_actor.rs` | `use_actor()` — поточний `RwSignal<Option<Actor>>` з контексту | `layout::ActorSwitcher`, `pages::home`, `pages::org_detail` |
+| `use_escape_close.rs` | `use_escape_close(open, on_close)` — Escape закриває, поки `open` | `components::Modal`, `components::Drawer` |
