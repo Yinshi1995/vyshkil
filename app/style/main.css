@@ -107,19 +107,24 @@ a:hover {
   text-decoration: underline;
 }
 
-/* Секційний лейбл: "РОЗДІЛ 01" з лініями обабіч (для майбутніх секцій — форми/звіти) */
+/* Секційний лейбл: "РОЗДІЛ 01" з лініями обабіч (для майбутніх секцій — форми/звіти).
+   Значення — токени стильової системи (Фаза 3, [[style-migration-rounds-to-scale]]), не магічні
+   числа: gap/margin (12px/8px) і letter-spacing (0.2em) збіглися зі шкалою точно; font-size 12px і
+   font-weight 600 округлені до найближчого кроку (t-xs=11px, weight-7=700) — рішення користувача
+   наближати до шкали, а не розширювати її під кожне legacy-значення. */
 .eyebrow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: center;
   font-family: var(--font-heading);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.2em;
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-line);
+  font-weight: var(--weight-7);
+  letter-spacing: var(--track-6);
   text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 8px;
+  color: var(--fg-accent);
+  margin-bottom: var(--space-2);
 }
 
 .eyebrow::before,
@@ -787,6 +792,13 @@ tr:hover td {
     --radius-1: 4px;
     --radius-2: 8px;
     --radius-3: 999px;
+    --track-0: normal;
+    --track-1: 0.03em;
+    --track-2: 0.04em;
+    --track-3: 0.05em;
+    --track-4: 0.08em;
+    --track-5: 0.1em;
+    --track-6: 0.2em;
     --ink-0: #0d0f0a;
     --ink-1: #171912;
     --ink-2: #1f2217;
@@ -922,7 +934,6 @@ tr:hover td {
   .fw5 { font-weight: var(--weight-5); }
   .fw7 { font-weight: var(--weight-7); }
   .up { text-transform: uppercase; }
-  .track-wide { letter-spacing: 0.08em; }
   .num { font-variant-numeric: tabular-nums; }
   .mono { font-family: ui-monospace, "Cascadia Code", monospace; }
   .head { font-family: var(--font-heading); }
@@ -1082,6 +1093,13 @@ tr:hover td {
   .r1 { border-radius: var(--radius-1); }
   .r2 { border-radius: var(--radius-2); }
   .r3 { border-radius: var(--radius-3); }
+  .track0 { letter-spacing: var(--track-0); }
+  .track1 { letter-spacing: var(--track-1); }
+  .track2 { letter-spacing: var(--track-2); }
+  .track3 { letter-spacing: var(--track-3); }
+  .track4 { letter-spacing: var(--track-4); }
+  .track5 { letter-spacing: var(--track-5); }
+  .track6 { letter-spacing: var(--track-6); }
   .shadow0 { box-shadow: var(--shadow-0); }
   .shadow1 { box-shadow: var(--shadow-1); }
   .shadow2 { box-shadow: var(--shadow-2); }
@@ -1123,7 +1141,6 @@ tr:hover td {
   .hover\:fw5:hover { font-weight: var(--weight-5); }
   .hover\:fw7:hover { font-weight: var(--weight-7); }
   .hover\:up:hover { text-transform: uppercase; }
-  .hover\:track-wide:hover { letter-spacing: 0.08em; }
   .hover\:num:hover { font-variant-numeric: tabular-nums; }
   .hover\:mono:hover { font-family: ui-monospace, "Cascadia Code", monospace; }
   .hover\:head:hover { font-family: var(--font-heading); }
@@ -1280,6 +1297,13 @@ tr:hover td {
   .hover\:r1:hover { border-radius: var(--radius-1); }
   .hover\:r2:hover { border-radius: var(--radius-2); }
   .hover\:r3:hover { border-radius: var(--radius-3); }
+  .hover\:track0:hover { letter-spacing: var(--track-0); }
+  .hover\:track1:hover { letter-spacing: var(--track-1); }
+  .hover\:track2:hover { letter-spacing: var(--track-2); }
+  .hover\:track3:hover { letter-spacing: var(--track-3); }
+  .hover\:track4:hover { letter-spacing: var(--track-4); }
+  .hover\:track5:hover { letter-spacing: var(--track-5); }
+  .hover\:track6:hover { letter-spacing: var(--track-6); }
   .hover\:shadow0:hover { box-shadow: var(--shadow-0); }
   .hover\:shadow1:hover { box-shadow: var(--shadow-1); }
   .hover\:shadow2:hover { box-shadow: var(--shadow-2); }
@@ -1321,7 +1345,6 @@ tr:hover td {
   .focus-visible\:fw5:focus-visible { font-weight: var(--weight-5); }
   .focus-visible\:fw7:focus-visible { font-weight: var(--weight-7); }
   .focus-visible\:up:focus-visible { text-transform: uppercase; }
-  .focus-visible\:track-wide:focus-visible { letter-spacing: 0.08em; }
   .focus-visible\:num:focus-visible { font-variant-numeric: tabular-nums; }
   .focus-visible\:mono:focus-visible { font-family: ui-monospace, "Cascadia Code", monospace; }
   .focus-visible\:head:focus-visible { font-family: var(--font-heading); }
@@ -1478,6 +1501,13 @@ tr:hover td {
   .focus-visible\:r1:focus-visible { border-radius: var(--radius-1); }
   .focus-visible\:r2:focus-visible { border-radius: var(--radius-2); }
   .focus-visible\:r3:focus-visible { border-radius: var(--radius-3); }
+  .focus-visible\:track0:focus-visible { letter-spacing: var(--track-0); }
+  .focus-visible\:track1:focus-visible { letter-spacing: var(--track-1); }
+  .focus-visible\:track2:focus-visible { letter-spacing: var(--track-2); }
+  .focus-visible\:track3:focus-visible { letter-spacing: var(--track-3); }
+  .focus-visible\:track4:focus-visible { letter-spacing: var(--track-4); }
+  .focus-visible\:track5:focus-visible { letter-spacing: var(--track-5); }
+  .focus-visible\:track6:focus-visible { letter-spacing: var(--track-6); }
   .focus-visible\:shadow0:focus-visible { box-shadow: var(--shadow-0); }
   .focus-visible\:shadow1:focus-visible { box-shadow: var(--shadow-1); }
   .focus-visible\:shadow2:focus-visible { box-shadow: var(--shadow-2); }
@@ -1519,7 +1549,6 @@ tr:hover td {
   .active\:fw5:active { font-weight: var(--weight-5); }
   .active\:fw7:active { font-weight: var(--weight-7); }
   .active\:up:active { text-transform: uppercase; }
-  .active\:track-wide:active { letter-spacing: 0.08em; }
   .active\:num:active { font-variant-numeric: tabular-nums; }
   .active\:mono:active { font-family: ui-monospace, "Cascadia Code", monospace; }
   .active\:head:active { font-family: var(--font-heading); }
@@ -1676,6 +1705,13 @@ tr:hover td {
   .active\:r1:active { border-radius: var(--radius-1); }
   .active\:r2:active { border-radius: var(--radius-2); }
   .active\:r3:active { border-radius: var(--radius-3); }
+  .active\:track0:active { letter-spacing: var(--track-0); }
+  .active\:track1:active { letter-spacing: var(--track-1); }
+  .active\:track2:active { letter-spacing: var(--track-2); }
+  .active\:track3:active { letter-spacing: var(--track-3); }
+  .active\:track4:active { letter-spacing: var(--track-4); }
+  .active\:track5:active { letter-spacing: var(--track-5); }
+  .active\:track6:active { letter-spacing: var(--track-6); }
   .active\:shadow0:active { box-shadow: var(--shadow-0); }
   .active\:shadow1:active { box-shadow: var(--shadow-1); }
   .active\:shadow2:active { box-shadow: var(--shadow-2); }
@@ -1717,7 +1753,6 @@ tr:hover td {
   .disabled\:fw5:disabled { font-weight: var(--weight-5); }
   .disabled\:fw7:disabled { font-weight: var(--weight-7); }
   .disabled\:up:disabled { text-transform: uppercase; }
-  .disabled\:track-wide:disabled { letter-spacing: 0.08em; }
   .disabled\:num:disabled { font-variant-numeric: tabular-nums; }
   .disabled\:mono:disabled { font-family: ui-monospace, "Cascadia Code", monospace; }
   .disabled\:head:disabled { font-family: var(--font-heading); }
@@ -1874,6 +1909,13 @@ tr:hover td {
   .disabled\:r1:disabled { border-radius: var(--radius-1); }
   .disabled\:r2:disabled { border-radius: var(--radius-2); }
   .disabled\:r3:disabled { border-radius: var(--radius-3); }
+  .disabled\:track0:disabled { letter-spacing: var(--track-0); }
+  .disabled\:track1:disabled { letter-spacing: var(--track-1); }
+  .disabled\:track2:disabled { letter-spacing: var(--track-2); }
+  .disabled\:track3:disabled { letter-spacing: var(--track-3); }
+  .disabled\:track4:disabled { letter-spacing: var(--track-4); }
+  .disabled\:track5:disabled { letter-spacing: var(--track-5); }
+  .disabled\:track6:disabled { letter-spacing: var(--track-6); }
   .disabled\:shadow0:disabled { box-shadow: var(--shadow-0); }
   .disabled\:shadow1:disabled { box-shadow: var(--shadow-1); }
   .disabled\:shadow2:disabled { box-shadow: var(--shadow-2); }
@@ -1915,7 +1957,6 @@ tr:hover td {
   .invalid\:fw5[aria-invalid="true"] { font-weight: var(--weight-5); }
   .invalid\:fw7[aria-invalid="true"] { font-weight: var(--weight-7); }
   .invalid\:up[aria-invalid="true"] { text-transform: uppercase; }
-  .invalid\:track-wide[aria-invalid="true"] { letter-spacing: 0.08em; }
   .invalid\:num[aria-invalid="true"] { font-variant-numeric: tabular-nums; }
   .invalid\:mono[aria-invalid="true"] { font-family: ui-monospace, "Cascadia Code", monospace; }
   .invalid\:head[aria-invalid="true"] { font-family: var(--font-heading); }
@@ -2072,6 +2113,13 @@ tr:hover td {
   .invalid\:r1[aria-invalid="true"] { border-radius: var(--radius-1); }
   .invalid\:r2[aria-invalid="true"] { border-radius: var(--radius-2); }
   .invalid\:r3[aria-invalid="true"] { border-radius: var(--radius-3); }
+  .invalid\:track0[aria-invalid="true"] { letter-spacing: var(--track-0); }
+  .invalid\:track1[aria-invalid="true"] { letter-spacing: var(--track-1); }
+  .invalid\:track2[aria-invalid="true"] { letter-spacing: var(--track-2); }
+  .invalid\:track3[aria-invalid="true"] { letter-spacing: var(--track-3); }
+  .invalid\:track4[aria-invalid="true"] { letter-spacing: var(--track-4); }
+  .invalid\:track5[aria-invalid="true"] { letter-spacing: var(--track-5); }
+  .invalid\:track6[aria-invalid="true"] { letter-spacing: var(--track-6); }
   .invalid\:shadow0[aria-invalid="true"] { box-shadow: var(--shadow-0); }
   .invalid\:shadow1[aria-invalid="true"] { box-shadow: var(--shadow-1); }
   .invalid\:shadow2[aria-invalid="true"] { box-shadow: var(--shadow-2); }
@@ -2113,7 +2161,6 @@ tr:hover td {
   .open\:fw5[data-state="open"] { font-weight: var(--weight-5); }
   .open\:fw7[data-state="open"] { font-weight: var(--weight-7); }
   .open\:up[data-state="open"] { text-transform: uppercase; }
-  .open\:track-wide[data-state="open"] { letter-spacing: 0.08em; }
   .open\:num[data-state="open"] { font-variant-numeric: tabular-nums; }
   .open\:mono[data-state="open"] { font-family: ui-monospace, "Cascadia Code", monospace; }
   .open\:head[data-state="open"] { font-family: var(--font-heading); }
@@ -2270,6 +2317,13 @@ tr:hover td {
   .open\:r1[data-state="open"] { border-radius: var(--radius-1); }
   .open\:r2[data-state="open"] { border-radius: var(--radius-2); }
   .open\:r3[data-state="open"] { border-radius: var(--radius-3); }
+  .open\:track0[data-state="open"] { letter-spacing: var(--track-0); }
+  .open\:track1[data-state="open"] { letter-spacing: var(--track-1); }
+  .open\:track2[data-state="open"] { letter-spacing: var(--track-2); }
+  .open\:track3[data-state="open"] { letter-spacing: var(--track-3); }
+  .open\:track4[data-state="open"] { letter-spacing: var(--track-4); }
+  .open\:track5[data-state="open"] { letter-spacing: var(--track-5); }
+  .open\:track6[data-state="open"] { letter-spacing: var(--track-6); }
   .open\:shadow0[data-state="open"] { box-shadow: var(--shadow-0); }
   .open\:shadow1[data-state="open"] { box-shadow: var(--shadow-1); }
   .open\:shadow2[data-state="open"] { box-shadow: var(--shadow-2); }
@@ -2360,9 +2414,6 @@ tr:hover td {
   }
   @media (min-width: 768px) {
     .md\:up { text-transform: uppercase; }
-  }
-  @media (min-width: 768px) {
-    .md\:track-wide { letter-spacing: 0.08em; }
   }
   @media (min-width: 768px) {
     .md\:num { font-variant-numeric: tabular-nums; }
@@ -2833,6 +2884,27 @@ tr:hover td {
     .md\:r3 { border-radius: var(--radius-3); }
   }
   @media (min-width: 768px) {
+    .md\:track0 { letter-spacing: var(--track-0); }
+  }
+  @media (min-width: 768px) {
+    .md\:track1 { letter-spacing: var(--track-1); }
+  }
+  @media (min-width: 768px) {
+    .md\:track2 { letter-spacing: var(--track-2); }
+  }
+  @media (min-width: 768px) {
+    .md\:track3 { letter-spacing: var(--track-3); }
+  }
+  @media (min-width: 768px) {
+    .md\:track4 { letter-spacing: var(--track-4); }
+  }
+  @media (min-width: 768px) {
+    .md\:track5 { letter-spacing: var(--track-5); }
+  }
+  @media (min-width: 768px) {
+    .md\:track6 { letter-spacing: var(--track-6); }
+  }
+  @media (min-width: 768px) {
     .md\:shadow0 { box-shadow: var(--shadow-0); }
   }
   @media (min-width: 768px) {
@@ -2954,9 +3026,6 @@ tr:hover td {
   }
   @media (min-width: 1024px) {
     .lg\:up { text-transform: uppercase; }
-  }
-  @media (min-width: 1024px) {
-    .lg\:track-wide { letter-spacing: 0.08em; }
   }
   @media (min-width: 1024px) {
     .lg\:num { font-variant-numeric: tabular-nums; }
@@ -3427,6 +3496,27 @@ tr:hover td {
     .lg\:r3 { border-radius: var(--radius-3); }
   }
   @media (min-width: 1024px) {
+    .lg\:track0 { letter-spacing: var(--track-0); }
+  }
+  @media (min-width: 1024px) {
+    .lg\:track1 { letter-spacing: var(--track-1); }
+  }
+  @media (min-width: 1024px) {
+    .lg\:track2 { letter-spacing: var(--track-2); }
+  }
+  @media (min-width: 1024px) {
+    .lg\:track3 { letter-spacing: var(--track-3); }
+  }
+  @media (min-width: 1024px) {
+    .lg\:track4 { letter-spacing: var(--track-4); }
+  }
+  @media (min-width: 1024px) {
+    .lg\:track5 { letter-spacing: var(--track-5); }
+  }
+  @media (min-width: 1024px) {
+    .lg\:track6 { letter-spacing: var(--track-6); }
+  }
+  @media (min-width: 1024px) {
     .lg\:shadow0 { box-shadow: var(--shadow-0); }
   }
   @media (min-width: 1024px) {
@@ -3548,9 +3638,6 @@ tr:hover td {
   }
   @container (min-width: 480px) {
     .\@md\:up { text-transform: uppercase; }
-  }
-  @container (min-width: 480px) {
-    .\@md\:track-wide { letter-spacing: 0.08em; }
   }
   @container (min-width: 480px) {
     .\@md\:num { font-variant-numeric: tabular-nums; }
@@ -4019,6 +4106,27 @@ tr:hover td {
   }
   @container (min-width: 480px) {
     .\@md\:r3 { border-radius: var(--radius-3); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:track0 { letter-spacing: var(--track-0); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:track1 { letter-spacing: var(--track-1); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:track2 { letter-spacing: var(--track-2); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:track3 { letter-spacing: var(--track-3); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:track4 { letter-spacing: var(--track-4); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:track5 { letter-spacing: var(--track-5); }
+  }
+  @container (min-width: 480px) {
+    .\@md\:track6 { letter-spacing: var(--track-6); }
   }
   @container (min-width: 480px) {
     .\@md\:shadow0 { box-shadow: var(--shadow-0); }

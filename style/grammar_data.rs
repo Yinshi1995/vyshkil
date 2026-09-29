@@ -14,6 +14,12 @@ const SPACE_SCALE: &[&str] = &["0", "4px", "8px", "12px", "16px", "24px", "32px"
 /// Крок шкали радіусів: `RADIUS_SCALE[i]` = CSS-значення токена `--radius-{i}`.
 const RADIUS_SCALE: &[&str] = &["0", "4px", "8px", "999px"];
 
+/// Крок шкали letter-spacing: `TRACK_SCALE[i]` = CSS-значення токена `--track-{i}`. 7 кроків — не
+/// вигадано наперед, а зібрано з РЕАЛЬНИХ значень наявного `app/style/main.css` (Фаза 3, [[style-
+/// migration-rounds-to-scale]]): 0.03/0.04/0.05/0.08/0.1/0.2em траплялись по кілька разів кожне —
+/// генуїнна повторювана потреба, не legacy-хак під один компонент.
+const TRACK_SCALE: &[&str] = &["normal", "0.03em", "0.04em", "0.05em", "0.08em", "0.1em", "0.2em"];
+
 /// (ім'я токена без префіксу кольору, CSS-значення) — польові тони й нейтралі. Значення night-теми
 /// (єдина виміряна зі striy.pp.ua — `.claude/decisions/ui-visual-style-source.md`); day/print —
 /// перше наближення (не звірено з реальним джерелом, немає такого для нових тем), задокументовано
@@ -123,7 +129,6 @@ const KEYWORD_ATOMS: &[(&str, &str)] = &[
     ("fw5", "font-weight: var(--weight-5)"),
     ("fw7", "font-weight: var(--weight-7)"),
     ("up", "text-transform: uppercase"),
-    ("track-wide", "letter-spacing: 0.08em"),
     ("num", "font-variant-numeric: tabular-nums"),
     ("mono", "font-family: ui-monospace, \"Cascadia Code\", monospace"),
     ("head", "font-family: var(--font-heading)"),
@@ -232,6 +237,11 @@ fn is_valid_atom(base: &str) -> bool {
             return true;
         }
     }
+    for i in 0..TRACK_SCALE.len() {
+        if base == format!("track{i}") {
+            return true;
+        }
+    }
     for (name, _) in SHADOW_SCALE {
         if base == format!("shadow{name}") {
             return true;
@@ -277,6 +287,11 @@ fn atom_declaration(base: &str) -> Option<String> {
             return Some(format!("border-radius: var(--radius-{i})"));
         }
     }
+    for i in 0..TRACK_SCALE.len() {
+        if base == format!("track{i}") {
+            return Some(format!("letter-spacing: var(--track-{i})"));
+        }
+    }
     for (name, _) in SHADOW_SCALE {
         if base == format!("shadow{name}") {
             return Some(format!("box-shadow: var(--shadow-{name})"));
@@ -317,6 +332,9 @@ fn all_atom_names() -> Vec<String> {
     }
     for i in 0..RADIUS_SCALE.len() {
         out.push(format!("r{i}"));
+    }
+    for i in 0..TRACK_SCALE.len() {
+        out.push(format!("track{i}"));
     }
     for (name, _) in SHADOW_SCALE {
         out.push(format!("shadow{name}"));

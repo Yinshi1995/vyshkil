@@ -65,6 +65,13 @@ pub fn generate_atoms_md() -> String {
             .join(" ")
     ));
     out.push_str(&format!(
+        "- Letter-spacing: {}\n",
+        (0..TRACK_SCALE.len())
+            .map(|i| format!("`track{i}`"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    ));
+    out.push_str(&format!(
         "- Текст: {}\n",
         TEXT_SCALE
             .iter()
@@ -205,6 +212,9 @@ pub fn generate_css() -> String {
     }
     for (i, v) in RADIUS_SCALE.iter().enumerate() {
         out.push_str(&format!("    --radius-{i}: {v};\n"));
+    }
+    for (i, v) in TRACK_SCALE.iter().enumerate() {
+        out.push_str(&format!("    --track-{i}: {v};\n"));
     }
     for (name, v) in COLOR_TOKENS {
         out.push_str(&format!("    --{name}: {v};\n"));
