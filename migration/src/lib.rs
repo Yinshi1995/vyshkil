@@ -33,6 +33,8 @@ mod m20260928_000030_attach_audit_trigger_submission;
 mod m20260928_000031_extend_training_group_for_stage4;
 mod m20260928_000032_create_group_composition_table;
 mod m20260928_000033_attach_audit_trigger_group_composition;
+mod m20260929_000034_create_staffing_tables;
+mod m20260929_000035_attach_audit_triggers_staffing;
 
 pub struct Migrator;
 
@@ -79,6 +81,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20260928_000031_extend_training_group_for_stage4::Migration),
             Box::new(m20260928_000032_create_group_composition_table::Migration),
             Box::new(m20260928_000033_attach_audit_trigger_group_composition::Migration),
+            // Етап 5: staffing_snapshot/staffing_metric (01 §4) — потрібні КВід/ІВС, яких не було
+            // в жодному попередньому етапі.
+            Box::new(m20260929_000034_create_staffing_tables::Migration),
+            Box::new(m20260929_000035_attach_audit_triggers_staffing::Migration),
         ]
     }
 }

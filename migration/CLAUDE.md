@@ -23,3 +23,5 @@
 | `m…_000031_extend_training_group_for_stage4` | `training_group` += equipment_text/basis_doc_number/basis_doc_date/inflow_source (відкладено Етапом 3, потрібно сітці) | — |
 | `m…_000032_create_group_composition_table` | `group_composition` (розподіл за підрозділами, опційно) | `backend/repo/groups.rs` |
 | `m…_000033_attach_audit_trigger_group_composition` | audit-тригер на `group_composition` | — |
+| `m…_000034_create_staffing_tables` | `staffing_snapshot`+`staffing_metric` (01 §4, Етап 5 — КВід/ІВС) | `backend/repo/imports_kvid.rs` |
+| `m…_000035_attach_audit_triggers_staffing` | audit-тригери на обидві | — |
