@@ -809,6 +809,66 @@ tr:hover td {
   margin: 12px 0;
 }
 
+/* Чекбокс (components::Checkbox, HeroUI-референс, feedback користувача) — справжній
+   <input type="checkbox"> візуально прихований (не display:none — лишається клавіатурним),
+   .checkbox__box реагує на :checked/:focus-visible сусіда. */
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.checkbox__input {
+  position: absolute;
+  width: var(--space-4);
+  height: var(--space-4);
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.checkbox__box {
+  width: var(--space-4);
+  height: var(--space-4);
+  flex-shrink: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-1);
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-on-accent);
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
+}
+
+.checkbox__check {
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease;
+}
+
+.checkbox__input:checked + .checkbox__box {
+  background: var(--fg-accent);
+  border-color: var(--fg-accent);
+}
+
+.checkbox__input:checked + .checkbox__box .checkbox__check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.checkbox__input:focus-visible + .checkbox__box {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.checkbox__label {
+  color: var(--fg-main);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+}
+
 /* === style::generate_css() — НЕ РЕДАГУВАТИ ВРУЧНУ, cargo run -p style --bin gen === */
 @layer reset, tokens, base, components, atoms, overrides;
 

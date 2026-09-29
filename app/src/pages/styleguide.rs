@@ -6,6 +6,7 @@
 
 use leptos::prelude::*;
 
+use crate::components::Checkbox;
 use crate::hooks::use_actor::use_actor;
 use crate::types::actor::Role;
 use style_macros::cx;
@@ -30,6 +31,8 @@ pub fn StyleguidePage() -> impl IntoView {
     let current_theme = RwSignal::new("night");
     Effect::new(move |_| set_theme(current_theme.get()));
     on_cleanup(|| set_theme("night"));
+
+    let checkbox_checked = RwSignal::new(false);
 
     view! {
         <Show when=is_admin fallback=|| view! { <p>"Сторінка лише для адміністратора."</p> }>
@@ -103,6 +106,11 @@ pub fn StyleguidePage() -> impl IntoView {
                     .collect_view()}
             </div>
             <p class=cx!("fg-muted")>"(шкала показана прямими class-рядками, не cx! — цикл генерує ім'я атома в рантаймі, макро-валідація працює лише на літералах)"</p>
+
+            <div class="eyebrow">"Компоненти (HeroUI-референс, feedback користувача)"</div>
+            <div class=cx!("flex gap4 items-c")>
+                <Checkbox checked=checkbox_checked on_change=Callback::new(move |v| checkbox_checked.set(v)) label="Прийняти умови".to_string()/>
+            </div>
 
             <div class="eyebrow">{format!("Усі атоми ({})", style::all_atoms().len())}</div>
             <p class=cx!("fg-muted")>"Повний перелік — для пошуку. Групування за категоріями — style/ATOMS.md."</p>
