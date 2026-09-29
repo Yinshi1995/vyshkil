@@ -937,6 +937,11 @@ tr:hover td {
 @layer base {
   body { background: var(--surface-base); color: var(--fg-main); font-family: var(--font-body); font-size: var(--text-md-size); line-height: var(--text-md-line); }
   h1, h2, h3 { font-family: var(--font-heading); font-weight: var(--weight-7); }
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--radius-1); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
   @media (prefers-reduced-motion: reduce) {
     :root { --duration-fast: 0ms; }
     :root { --duration-base: 0ms; }

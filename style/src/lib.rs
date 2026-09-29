@@ -264,6 +264,20 @@ pub fn generate_css() -> String {
     out.push_str(
         "  h1, h2, h3 { font-family: var(--font-heading); font-weight: var(--weight-7); }\n",
     );
+    // Тонкий скролбар (WebKit + Firefox) — стандартні системні скроли не пасують до темної
+    // військової панелі (товсті, сірі, завжди "на увазі"). Спокійний у стані спокою (border,
+    // напівпрозорий тінт), переходить у border-strong (суцільне золото) при hover — той самий
+    // принцип двох border-атомів, нових токенів не додано. Глобально, не за атомом — системний
+    // чром, не клас розмітки.
+    out.push_str("  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }\n");
+    out.push_str("  ::-webkit-scrollbar { width: 6px; height: 6px; }\n");
+    out.push_str("  ::-webkit-scrollbar-track { background: transparent; }\n");
+    out.push_str(
+        "  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--radius-1); }\n",
+    );
+    out.push_str(
+        "  ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }\n",
+    );
     out.push_str("  @media (prefers-reduced-motion: reduce) {\n");
     for (name, _) in DURATION_SCALE {
         out.push_str(&format!("    :root {{ --duration-{name}: 0ms; }}\n"));
