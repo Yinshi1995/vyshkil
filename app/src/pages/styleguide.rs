@@ -56,13 +56,13 @@ pub fn StyleguidePage() -> impl IntoView {
                     .collect_view()}
             </div>
 
-            <div class="eyebrow">"Приклад (dogfooding cx!)"</div>
-            <div class=cx!("flex gap2 items-c")>
-                <button class=cx!("flex items-c gap2 p2 bg-panel fg-accent r1 hover:bg-raised focus-visible:bd-accent")>
-                    "Зафіксувати"
-                </button>
+            <div class="eyebrow">"Приклад"</div>
+            <div class=cx!("flex gap3 items-c")>
+                <button class="btn btn--primary">"Зафіксувати →"</button>
+                <button class="btn btn--outline">"Скасувати →"</button>
                 <div class=cx!("bracket p3 bg-raised fg-main")>"Кутові скоби (тактичний мотив)"</div>
             </div>
+            <p class=cx!("fg-muted")>"(кнопка — рецепт .btn/.btn--primary, не набір атомів: градієнт і 6-точковий clip-path не зводяться до однієї CSS-властивості на атом; кольори всередині — токени, форма — виміряна з striy.pp.ua)"</p>
 
             <div class="eyebrow">"Семантичні кольори"</div>
             <ul class=cx!("flex col gap1")>
@@ -110,10 +110,6 @@ pub fn StyleguidePage() -> impl IntoView {
             <div class="eyebrow">"Компоненти (HeroUI-референс, feedback користувача)"</div>
             <div class=cx!("flex gap4 items-c")>
                 <Checkbox checked=checkbox_checked on_change=Callback::new(move |v| checkbox_checked.set(v)) label="Прийняти умови".to_string()/>
-            </div>
-            <div class=cx!("flex gap3 items-c mt3")>
-                <button class="btn btn--primary">"Зафіксувати →"</button>
-                <button class="btn btn--outline">"Скасувати →"</button>
             </div>
             <div class=cx!("mt3 maxw-prose")>
                 <Accordion>
