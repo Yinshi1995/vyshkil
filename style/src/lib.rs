@@ -1,118 +1,305 @@
-//! Мікро-прототип стильової системи (Фаза 0, `docs/spec/08-style-system.md`). Без залежностей
-//! (окрім `leptos` у dev-залежностях для прототипу кнопки) — токени й граматика атомів як чисті
-//! Rust-дані, генератор CSS з них. `style_macros::cx!` валідує рядки атомів проти `ATOMS` тут.
+//! Стильова система, Фаза 1 (`docs/spec/08-style-system.md`) — повна граматика, токени, теми,
+//! генератор CSS. Без залежностей у рантаймі (компілюється нативно й у wasm32); `leptos`/
+//! `style_macros` — лише `[dev-dependencies]` для тестів/прикладів.
 //!
-//! Обсяг навмисно малий (10 токенів, 20 атомів) — Фаза 0 лише перевіряє архітектуру, повна
-//! граматика й теми — Фаза 1.
+//! Дані й комбінаторна логіка граматики — у `grammar_data.rs` (`include!`, СПІЛЬНИЙ з
+//! `style_macros`, textual include не crate-залежність — вирішує Фаза-0-обмеження "дубльована
+//! копія ATOMS", `.claude/decisions/style-system-architecture.md`).
+//!
+//! `is_valid_atom` використовується лише в `#[cfg(test)]` (генератор довіряє `all_atom_names()`,
+//! яка сама будує список правильно) — не мертвий код по суті, лише не в non-test збірці.
+#![allow(dead_code)]
 
-/// Примітивний токен: ім'я (без `--`), CSS-значення. `--space-*` — відступи, `--color-*` — палітра
-/// (виміряно зі striy.pp.ua, `.claude/decisions/ui-visual-style-source.md` — НЕ вигадано заново).
-pub struct Token {
-    pub name: &'static str,
-    pub value: &'static str,
+include!("../grammar_data.rs");
+
+mod contrast;
+
+/// Медіа-брейкпоінти для `md:`/`lg:` (min-width). `@md:` — container query, значення нижче.
+const BREAKPOINT_MD: &str = "768px";
+const BREAKPOINT_LG: &str = "1024px";
+const CONTAINER_MD: &str = "480px";
+
+/// Найближчий атом за Левенштейном — підказка для документації/довідки поза компілятором
+/// (сам `cx!` рахує підказку незалежно, у proc-macro-контексті, той самий алгоритм).
+pub fn closest_atom(unknown: &str) -> Option<String> {
+    all_atom_names()
+        .into_iter()
+        .min_by_key(|name| levenshtein(unknown, name))
 }
 
-pub const TOKENS: &[Token] = &[
-    Token { name: "space-0", value: "0" },
-    Token { name: "space-1", value: "4px" },
-    Token { name: "space-2", value: "8px" },
-    Token { name: "space-3", value: "12px" },
-    Token { name: "space-4", value: "16px" },
-    Token { name: "color-bg-darkest", value: "#0d0f0a" },
-    Token { name: "color-panel", value: "#171912" },
-    Token { name: "color-text-main", value: "#e8e4d8" },
-    Token { name: "color-text-muted", value: "#b9b4a6" },
-    Token { name: "color-accent", value: "#c9a84c" },
-    Token { name: "radius-1", value: "4px" },
-];
+/// Шпаргалка атомів (≤80 рядків, токен-економія для агента — див. другий pasted_content брифу)
+/// — будується З ТИХ САМИХ таблиць `grammar_data.rs`, тому додавання нового сімейства/ключового
+/// слова автоматично зʼявляється тут (і ламає `atoms_md_matches_committed_file`, якщо забули
+/// перегенерувати `ATOMS.md`).
+pub fn generate_atoms_md() -> String {
+    let mut out = String::new();
+    out.push_str("# ATOMS.md — шпаргалка атомів\n\n");
+    out.push_str("АВТО-ЗГЕНЕРОВАНО з `grammar_data.rs` — НЕ РЕДАГУВАТИ ВРУЧНУ, `cargo run -p style --bin gen`.\n");
+    out.push_str("Повний опис/приклади/do-don't — `docs/spec/08-style-system.md`.\n\n");
+    out.push_str("Клас = `cx!(\"атом атом ...\")` — компілятор валідує кожен, підказує typo.\n\n");
 
-/// Один атом: ім'я (те, що пишуть у `cx!(...)`) → тіло CSS-декларації (без селектора). Значення
-/// атома — ЛИШЕ через `var(--токен)`, ніколи літерал (07-code-structure §-подібне правило для
-/// цієї системи: перевіряється архітектурним тестом у Фазі 4, тут — просто дотримано вручну).
-pub struct Atom {
-    pub name: &'static str,
-    pub decl: &'static str,
-}
+    out.push_str("## Відступи (шкала 0..8 = 0/4/8/12/16/24/32/48/64px)\n\n");
+    let families: Vec<&str> = SPACING_FAMILIES.iter().map(|(p, _)| *p).collect();
+    out.push_str(&format!(
+        "`{}` — кожен як `{{префікс}}0`..`{{префікс}}8`, напр. `p2` = padding 8px\n\n",
+        families.join("` `")
+    ));
 
-pub const ATOMS: &[Atom] = &[
-    Atom { name: "p0", decl: "padding: var(--space-0)" },
-    Atom { name: "p1", decl: "padding: var(--space-1)" },
-    Atom { name: "p2", decl: "padding: var(--space-2)" },
-    Atom { name: "p3", decl: "padding: var(--space-3)" },
-    Atom { name: "p4", decl: "padding: var(--space-4)" },
-    Atom { name: "gap0", decl: "gap: var(--space-0)" },
-    Atom { name: "gap1", decl: "gap: var(--space-1)" },
-    Atom { name: "gap2", decl: "gap: var(--space-2)" },
-    Atom { name: "gap3", decl: "gap: var(--space-3)" },
-    Atom { name: "gap4", decl: "gap: var(--space-4)" },
-    Atom { name: "flex", decl: "display: flex" },
-    Atom { name: "col", decl: "flex-direction: column" },
-    Atom { name: "items-c", decl: "align-items: center" },
-    Atom { name: "justify-b", decl: "justify-content: space-between" },
-    Atom { name: "fg-main", decl: "color: var(--color-text-main)" },
-    Atom { name: "fg-muted", decl: "color: var(--color-text-muted)" },
-    Atom { name: "fg-accent", decl: "color: var(--color-accent)" },
-    Atom { name: "bg-panel", decl: "background: var(--color-panel)" },
-    Atom { name: "r0", decl: "border-radius: 0" },
-    Atom { name: "r1", decl: "border-radius: var(--radius-1)" },
-];
+    out.push_str("## Шкали без варіацій властивості\n\n");
+    out.push_str(&format!(
+        "- Радіус: {}\n",
+        (0..RADIUS_SCALE.len())
+            .map(|i| format!("`r{i}`"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    ));
+    out.push_str(&format!(
+        "- Текст: {}\n",
+        TEXT_SCALE
+            .iter()
+            .map(|(n, _, _)| format!("`t-{n}`"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    ));
+    out.push_str(&format!(
+        "- Тінь: {}\n",
+        SHADOW_SCALE
+            .iter()
+            .map(|(n, _)| format!("`shadow{n}`"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    ));
+    out.push_str(&format!(
+        "- Z-індекс: {}\n",
+        Z_SCALE
+            .iter()
+            .map(|(n, _)| format!("`z-{n}`"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    ));
+    out.push_str(&format!(
+        "- Тривалість: {}\n\n",
+        DURATION_SCALE
+            .iter()
+            .map(|(n, _)| format!("`duration-{n}`"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    ));
 
-/// Найближчий атом за Левенштейном — для підказки в помилці `cx!` (style_macros дублює свою
-/// власну копію `ATOMS`-імен для валідації в proc-macro-контексті, де `style` як залежність
-/// теж доступна, але підказку рахує так само; тут — та сама функція для генератора/тестів).
-pub fn closest_atom(unknown: &str) -> Option<&'static str> {
-    ATOMS
+    out.push_str("## Ключові слова (без шкали)\n\n");
+    let keywords: Vec<String> = KEYWORD_ATOMS
         .iter()
-        .map(|a| (a.name, levenshtein(unknown, a.name)))
-        .min_by_key(|(_, d)| *d)
-        .map(|(name, _)| name)
-}
+        .map(|(k, _)| format!("`{k}`"))
+        .collect();
+    for chunk in keywords.chunks(7) {
+        out.push_str(&chunk.join(" "));
+        out.push('\n');
+    }
+    out.push_str("`bracket` (кутові скоби, тактичний мотив)\n\n");
 
-fn levenshtein(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut row: Vec<usize> = (0..=b.len()).collect();
-    for i in 1..=a.len() {
-        let mut prev = row[0];
-        row[0] = i;
-        for j in 1..=b.len() {
-            let tmp = row[j];
-            row[j] = if a[i - 1] == b[j - 1] {
-                prev
-            } else {
-                1 + prev.min(row[j]).min(row[j - 1])
-            };
-            prev = tmp;
+    out.push_str("## Варіанти (префікс перед `:`)\n\n");
+    out.push_str(&format!(
+        "{}\n",
+        VARIANTS
+            .iter()
+            .map(|v| format!("`{v}:`"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    ));
+    out.push_str(
+        "Приклад: `hover:bg-raised`. `md:`/`lg:` — min-width медіа; `@md:` — container query.\n\n",
+    );
+
+    out.push_str("## Теми\n\n");
+    out.push_str(&format!(
+        "{} — `<html data-theme=\"...\">`, SSR виставляє атрибут (без блимання).\n\n",
+        THEMES
+            .iter()
+            .map(|t| t.name)
+            .collect::<Vec<_>>()
+            .join(" · ")
+    ));
+
+    out.push_str("## Примітивні кольори (НЕ вживати напряму — лише через `fg-`/`bg-`/`bd-`)\n\n");
+    let mut families_seen = Vec::new();
+    for (name, _) in COLOR_TOKENS {
+        let family = name
+            .trim_end_matches(|c: char| c.is_ascii_digit())
+            .trim_end_matches('-');
+        if !families_seen.contains(&family) {
+            families_seen.push(family);
         }
     }
-    row[b.len()]
-}
-
-/// Генерує повний CSS-артефакт: `@layer tokens` (custom properties в `:root`) + `@layer atoms`
-/// (один клас на атом). Прототип не має `@layer reset/base/components/overrides` — Фаза 1.
-pub fn generate_css() -> String {
-    let mut out = String::new();
-    out.push_str("@layer tokens, atoms;\n\n");
-
-    out.push_str("@layer tokens {\n  :root {\n");
-    for t in TOKENS {
-        out.push_str(&format!("    --{}: {};\n", t.name, t.value));
-    }
-    out.push_str("  }\n}\n\n");
-
-    out.push_str("@layer atoms {\n");
-    for a in ATOMS {
-        out.push_str(&format!("  .{} {{ {}; }}\n", escape_class(a.name), a.decl));
-    }
-    out.push_str("}\n");
+    out.push_str(
+        &families_seen
+            .iter()
+            .map(|f| format!("`{f}-N`"))
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+    out.push('\n');
 
     out
 }
 
-/// Екранує символи, недопустимі в голому CSS-селекторі класу (Фаза 1 матиме варіанти виду
-/// `hover:bg-panel` → клас `.hover\:bg-panel:hover` — тут ще не потрібно, атоми без варіантів).
 fn escape_class(name: &str) -> String {
-    name.replace(':', "\\:")
+    name.replace(':', "\\:").replace('@', "\\@")
+}
+
+/// Екранує селектор атома з варіант-префіксом і повертає (селектор-хвіст, обгортка). Обгортка —
+/// `None` для псевдокласів (просто дописується до селектора), `Some(media/container query)` для
+/// `md`/`lg`/`@md`.
+fn variant_wrap(variant: &str, class_selector: &str) -> (String, Option<String>) {
+    match variant {
+        "hover" => (format!("{class_selector}:hover"), None),
+        "focus-visible" => (format!("{class_selector}:focus-visible"), None),
+        "active" => (format!("{class_selector}:active"), None),
+        "disabled" => (format!("{class_selector}:disabled"), None),
+        "invalid" => (format!("{class_selector}[aria-invalid=\"true\"]"), None),
+        "open" => (format!("{class_selector}[data-state=\"open\"]"), None),
+        "md" => (
+            class_selector.to_string(),
+            Some(format!("@media (min-width: {BREAKPOINT_MD})")),
+        ),
+        "lg" => (
+            class_selector.to_string(),
+            Some(format!("@media (min-width: {BREAKPOINT_LG})")),
+        ),
+        "@md" => (
+            class_selector.to_string(),
+            Some(format!("@container (min-width: {CONTAINER_MD})")),
+        ),
+        _ => (class_selector.to_string(), None),
+    }
+}
+
+/// Генерує повний CSS-артефакт: `@layer reset, tokens, base, components, atoms, overrides;` +
+/// вміст кожного шару. `components` лишається порожнім тут (рецепти пишуть свій CSS, Фаза 3) —
+/// шар оголошений заради порядку каскаду (атоми ГАРАНТОВАНО переможуть стилі рецептів).
+pub fn generate_css() -> String {
+    let mut out = String::new();
+    out.push_str("@layer reset, tokens, base, components, atoms, overrides;\n\n");
+
+    // --- reset: мінімальний, не Pico-рівня (Фаза 3 вирішить, чи потрібно більше) ---
+    out.push_str("@layer reset {\n");
+    out.push_str("  *, *::before, *::after { box-sizing: border-box; }\n");
+    out.push_str("  body { margin: 0; }\n");
+    out.push_str("}\n\n");
+
+    // --- tokens: примітивні (незалежні від теми) + семантичні (per-тема, [data-theme]) ---
+    out.push_str("@layer tokens {\n");
+    out.push_str("  :root {\n");
+    for (i, v) in SPACE_SCALE.iter().enumerate() {
+        out.push_str(&format!("    --space-{i}: {v};\n"));
+    }
+    for (i, v) in RADIUS_SCALE.iter().enumerate() {
+        out.push_str(&format!("    --radius-{i}: {v};\n"));
+    }
+    for (name, v) in COLOR_TOKENS {
+        out.push_str(&format!("    --{name}: {v};\n"));
+    }
+    for (name, size, line) in TEXT_SCALE {
+        out.push_str(&format!("    --text-{name}-size: {size};\n"));
+        out.push_str(&format!("    --text-{name}-line: {line};\n"));
+    }
+    for (name, v) in WEIGHT_SCALE {
+        out.push_str(&format!("    --weight-{name}: {v};\n"));
+    }
+    for (name, v) in SHADOW_SCALE {
+        out.push_str(&format!("    --shadow-{name}: {v};\n"));
+    }
+    for (name, v) in Z_SCALE {
+        out.push_str(&format!("    --z-{name}: {v};\n"));
+    }
+    for (name, v) in DURATION_SCALE {
+        out.push_str(&format!("    --duration-{name}: {v};\n"));
+    }
+    out.push_str("    --font-heading: \"Oswald\", \"Arial Narrow\", sans-serif;\n");
+    out.push_str("    --font-body: \"Roboto\", \"Segoe UI\", sans-serif;\n");
+    out.push_str("  }\n\n");
+
+    for theme in THEMES {
+        // "night" — типова тема, і на :root напряму (без атрибута), і на [data-theme="night"]
+        // (SSR завжди виставляє атрибут — 08 §4 "жодного блимання" — але :root-фолбек рятує,
+        // якщо атрибут ще не встиг застосуватись до першого фарбування).
+        let selector = if theme.name == "night" {
+            ":root, :root[data-theme=\"night\"]".to_string()
+        } else {
+            format!(":root[data-theme=\"{}\"]", theme.name)
+        };
+        out.push_str(&format!("  {selector} {{\n"));
+        for (name, v) in theme.pairs {
+            out.push_str(&format!("    --{name}: {v};\n"));
+        }
+        out.push_str("  }\n\n");
+    }
+    out.push_str("}\n\n");
+
+    // --- base: типографіка за замовчуванням для голого HTML (Pico-подібний мінімум) ---
+    out.push_str("@layer base {\n");
+    out.push_str(
+        "  body { background: var(--surface-base); color: var(--fg-main); font-family: var(--font-body); font-size: var(--text-md-size); line-height: var(--text-md-line); }\n",
+    );
+    out.push_str(
+        "  h1, h2, h3 { font-family: var(--font-heading); font-weight: var(--weight-7); }\n",
+    );
+    out.push_str("  @media (prefers-reduced-motion: reduce) {\n");
+    for (name, _) in DURATION_SCALE {
+        out.push_str(&format!("    :root {{ --duration-{name}: 0ms; }}\n"));
+    }
+    out.push_str("  }\n");
+    out.push_str("}\n\n");
+
+    // --- components: порожньо тут навмисно (рецепти — Фаза 3), лише оголошено в @layer вище ---
+
+    // --- atoms: базові + варіант-префіксовані правила ---
+    out.push_str("@layer atoms {\n");
+    for name in all_atom_names() {
+        let Some(decl) = atom_declaration(&name) else {
+            continue;
+        };
+        out.push_str(&format!("  .{} {{ {decl}; }}\n", escape_class(&name)));
+        if name == "bracket" {
+            // Кутові скоби — тактичний мотив (08 §5): псевдоелементи в кутах, золота лінія.
+            out.push_str(&format!(
+                "  .{cls}::before, .{cls}::after {{ content: \"\"; position: absolute; width: 10px; height: 10px; border: 2px solid var(--border-strong); }}\n",
+                cls = escape_class(&name)
+            ));
+            out.push_str(&format!(
+                "  .{cls}::before {{ top: -1px; left: -1px; border-right: none; border-bottom: none; }}\n",
+                cls = escape_class(&name)
+            ));
+            out.push_str(&format!(
+                "  .{cls}::after {{ bottom: -1px; right: -1px; border-left: none; border-top: none; }}\n",
+                cls = escape_class(&name)
+            ));
+        }
+    }
+    for variant in VARIANTS {
+        let (mut media_rules, mut plain_rules) = (String::new(), String::new());
+        for name in all_atom_names() {
+            let Some(decl) = atom_declaration(&name) else {
+                continue;
+            };
+            let base_selector = format!(".{}\\:{}", escape_class(variant), escape_class(&name));
+            let (selector, wrapper) = variant_wrap(variant, &base_selector);
+            let rule = format!("  {selector} {{ {decl}; }}\n");
+            match wrapper {
+                Some(at_rule) => {
+                    media_rules.push_str(&format!("  {at_rule} {{\n  {rule}  }}\n"));
+                }
+                None => plain_rules.push_str(&rule),
+            }
+        }
+        out.push_str(&plain_rules);
+        out.push_str(&media_rules);
+    }
+    out.push_str("}\n\n");
+
+    // --- overrides: порожньо (свідомо останній шар каскаду для екстрених винятків) ---
+    out.push_str("@layer overrides {\n}\n");
+
+    out
 }
 
 #[cfg(test)]
@@ -120,54 +307,115 @@ mod tests {
     use super::*;
 
     #[test]
-    fn token_count_matches_prototype_scope() {
-        // 11, не рівно 10: перша версія мала "r1" з буквальним 4px (без токена) — власний тест
-        // "усе через var()" це впіймав, довелось додати radius-1. Лишаю як є, не підганяю назад
-        // до 10 — доказ, що правило справді щось ловить, цінніший за круге число.
-        assert_eq!(TOKENS.len(), 11, "Фаза 0: ~10 токенів у мікро-прототипі (11 після радіус-фіксу)");
+    fn every_keyword_atom_or_scale_atom_resolves_to_a_declaration() {
+        for name in all_atom_names() {
+            assert!(
+                atom_declaration(&name).is_some(),
+                "атом «{name}» без декларації"
+            );
+        }
     }
 
     #[test]
-    fn atom_count_matches_prototype_scope() {
-        assert_eq!(ATOMS.len(), 20, "Фаза 0: рівно 20 атомів у мікро-прототипі");
+    fn is_valid_atom_agrees_with_all_atom_names() {
+        for name in all_atom_names() {
+            assert!(
+                is_valid_atom(&name),
+                "«{name}» є в переліку, але is_valid_atom каже ні"
+            );
+        }
+        assert!(
+            !is_valid_atom("p99"),
+            "p99 поза шкалою space (0..8) не має бути валідним"
+        );
+        assert!(
+            !is_valid_atom("totally-made-up"),
+            "вигадане ім'я не має бути валідним"
+        );
     }
 
     #[test]
-    fn every_atom_decl_references_a_token_var_or_is_a_bare_keyword() {
-        // Атоми без токена (display:flex тощо) — легітимно бо не мають "значення зі шкали";
-        // "0" теж легітимний буквально (сам токен space-0 — теж "0", жодна шкала не токенізує
-        // нуль окремо); атоми, що МАЮТЬ ненульове числове/кольорове значення, йдуть через var().
-        let bare_keyword_atoms = ["flex", "col", "items-c", "justify-b", "r0"];
-        for a in ATOMS {
-            if bare_keyword_atoms.contains(&a.name) {
+    fn every_atom_decl_references_a_token_var_or_is_a_documented_bare_value() {
+        // "0" (нуль) і сирі числа для z-index — легітимні буквали (шкала сама токенізована в
+        // :root, але Z_SCALE-значення "20"/"50" тощо навмисно НЕ через var() у власному
+        // визначенні — вони ВИЗНАЧАЮТЬ токен, не споживають його). Атоми (не токени) мають
+        // споживати ЛИШЕ var(--...) або бути чистим keyword без шкали.
+        let scaleless_keywords: Vec<&str> = KEYWORD_ATOMS
+            .iter()
+            .map(|(k, _)| *k)
+            .filter(|k| !k.starts_with("fg-") && !k.starts_with("bg-") && !k.starts_with("fw"))
+            .collect();
+        for name in all_atom_names() {
+            let decl = atom_declaration(&name).unwrap();
+            if scaleless_keywords.contains(&name.as_str()) || name == "bracket" {
                 continue;
             }
             assert!(
-                a.decl.contains("var(--"),
-                "атом «{}» має нетокенізоване значення: {}",
-                a.name,
-                a.decl
+                decl.contains("var(--"),
+                "атом «{name}» має нетокенізоване значення: {decl}"
             );
         }
     }
 
     #[test]
-    fn generated_css_contains_every_token_and_atom() {
+    fn generate_css_contains_every_theme_and_a_reasonable_atom_sample() {
         let css = generate_css();
-        for t in TOKENS {
-            assert!(css.contains(&format!("--{}: {}", t.name, t.value)), "токен {} відсутній у CSS", t.name);
-        }
-        for a in ATOMS {
+        for theme in THEMES {
             assert!(
-                css.contains(&format!(".{} {{", escape_class(a.name))),
-                "атом {} відсутній у CSS",
-                a.name
+                css.contains(&format!("data-theme=\"{}\"", theme.name))
+                    || (theme.name == "night"
+                        && css.contains(":root, :root[data-theme=\"night\"]")),
+                "тема «{}» відсутня в CSS",
+                theme.name
             );
         }
+        for atom in [
+            "p4",
+            "gap2",
+            "t-lg",
+            "r1",
+            "shadow1",
+            "z-modal",
+            "duration-base",
+            "bracket",
+        ] {
+            assert!(
+                css.contains(&format!(".{atom} {{")),
+                "атом «{atom}» відсутній у generate_css()"
+            );
+        }
+        assert!(
+            css.contains(".hover\\:bg-panel:hover"),
+            "hover-варіант bg-panel відсутній"
+        );
+        assert!(
+            css.contains("@media (min-width: 768px)"),
+            "md-брейкпоінт відсутній"
+        );
     }
 
     #[test]
     fn closest_atom_suggests_p3_for_typo_p33() {
-        assert_eq!(closest_atom("p33"), Some("p3"));
+        assert_eq!(closest_atom("p33"), Some("p3".to_string()));
+    }
+
+    #[test]
+    fn atoms_md_matches_committed_file() {
+        let committed = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/ATOMS.md"))
+            .expect("style/ATOMS.md має існувати");
+        assert_eq!(
+            committed,
+            generate_atoms_md(),
+            "style/ATOMS.md застарів — перегенеруй: `cargo run -p style --bin gen`"
+        );
+    }
+
+    #[test]
+    fn atoms_md_is_at_most_80_lines() {
+        let lines = generate_atoms_md().lines().count();
+        assert!(
+            lines <= 80,
+            "ATOMS.md {lines} рядків — понад бюджет 80 (токен-економія для агента)"
+        );
     }
 }

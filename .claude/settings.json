@@ -34,7 +34,9 @@
       "Read(*.pptx)",
       "Read(*.pdf)",
       "Read(*.zip)",
-      "Read(docs/templates/**)"
+      "Read(docs/templates/**)",
+      "Read(target/site/**)",
+      "Read(preview.html)"
     ]
   }
 }

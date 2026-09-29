@@ -11,3 +11,4 @@ edition = "2021"
 [dev-dependencies]
 leptos = { workspace = true, features = ["ssr"] }
 style_macros = { path = "../style_macros" }
+flate2 = "1"
