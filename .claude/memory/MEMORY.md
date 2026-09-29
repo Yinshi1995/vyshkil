@@ -58,6 +58,55 @@ Etap-1 сценарієм 17 АК на 20.07/20.09) лишається зеле�
 для Етапу 7, не джерело для переносу — не розглядались як archive_seed), звіт переносу як окремий
 артефакт/сторінка (зараз лише статус-рядок превʼю на `/import`).
 
+## Стильова система (паралельний трек, поза нумерацією Етапів — `docs/spec/08-style-system.md`)
+
+Рішення користувача: власна атомарна CSS-система замість Tailwind (без Node/CDN), написана як
+Rust-дані + `cx!()` проц-макрос з compile-time валідацією. `.claude/decisions/
+style-system-architecture.md` — чому не Tailwind/UnoCSS.
+
+**Фаза 0 (дослідження+мікропрототип) закрита**: підтверджено технічно — `cx!()` компілюється,
+`generate_css()` через `Component().to_html()` (НЕ `leptos::ssr::render_to_string` — застарілий
+0.6-шлях), `cargo-leptos` style-крок паралельний і НЕЗАЛЕЖНИЙ від збірки Rust (`build.rs` не
+встигає), `@import` не розгортається Lightning CSS цього проєкту (`style_bundle` вимкнено) —
+постачання CSS = окремий ручний крок, не автоматика.
+
+**Фаза 1 (повний рушій) закрита**: `style/grammar_data.rs` — єдине джерело даних, `include!()`-иться
+і в `style`, і в `style_macros` (без crate-залежності, без циклу). Повна граматика (шкали
+space/radius/text/weight/shadow/z/duration, ~40 keyword-атомів, 9 варіантів), 3 теми (night/day/
+print), WCAG-контраст-тест (`style/src/contrast.rs`) зловив реальний провал day-теми (fg-accent
+2.97:1, треба 3:1 — виправлено новим відтінком золота). CSS-постачання — `cargo run -p style --bin
+gen` (`style/src/bin/gen.rs`), дописує помічений блок у `app/style/main.css`, ідемпотентно;
+шлях — через `CARGO_MANIFEST_DIR`, не CWD (перевірено, обидва запуски дають той самий результат).
+
+**Токен-економія для агента**: `style/ATOMS.md` (≤80 рядків, авто-генерується разом з CSS, тест на
+застарілість), skill `.claude/skills/styling/SKILL.md` (7-крокова процедура), короткі вказівники в
+CLAUDE.md-картах, `permissions.deny` для `target/site/**`/`preview.html`.
+
+**Фаза 2 (`/styleguide`, лише admin) закрита**: перший реальний споживач `style`/`style_macros` у
+крейті `app` (раніше — лише dev-dependencies тестів). Гейт — `policy`-конвенція `is_admin`, як і
+решта адмін-функцій (нема окремого prod/dev-розрізнення в проєкті). **Спіймано й виправлено в
+ручній Playwright-перевірці**: `Effect::new` виконується і при SSR-рендері — `document()`-виклик у
+перемикачі тем падав на сервері ("cannot access imported statics on non-wasm targets"); виправлено
+`cfg!(target_arch = "wasm32")`-охороною.
+
+**Фаза 3 (міграція наявного BEM CSS) — почата, В ПРОЦЕСІ, компонент-за-компонентом**: `app/style/
+main.css` (ручна частина) містить ТОЧНІ пікселі, виміряні зі striy.pp.ua (14px/24px асиметричний
+padding, 0.03..0.2em letter-spacing шістьма різними значеннями, 50% border-radius, 18/13/12px
+шрифти) — жодне не збігається зі шкалою токенів один-в-один. **Рішення користувача** (`.claude/
+decisions/style-migration-rounds-to-scale.md`): наближати до шкали, НЕ розширювати шкалу під
+кожен legacy-компонент (закритість шкали важливіша за пиксель-точність). Новий `track{0..6}`
+(letter-spacing) додано НЕ наперед, а зібраний з реальних повторюваних значень наявного CSS.
+Перший мігрований компонент — `.eyebrow` (gap/margin/letter-spacing збіглись зі шкалою ТОЧНО без
+округлення; font-size/weight округлено на 1px/100 — непомітно, перевірено Playwright-скріншотом
+на `/vos-lookup`). **Залишилось**: `.app-header`, `.actor-switcher`, картки, сітка/таблиця,
+кнопки (`.btn`, chamfer), бірки (`Tag::Unit`), `<kbd>` — велика кількість компонентів, свідомо НЕ
+мігровано одним махом (кожен — окремий коміт зі скріншотом до/після, `docs/spec/08-style-system.md`
+§11), продовжується поступово.
+
+**Фаза 4 (архітектурні тести-запобіжники) закрита**: `app/tests/architecture.rs` —
+`no_inline_style_attributes_in_view_markup` (жодного нового `style="..."`),
+`every_css_var_reference_in_main_css_is_defined` (typo в `var(--X)` не падає мовчки).
+
 ## Етап: 5, закрито (за `docs/spec/06-roadmap.md`)
 
 **Етап 5 — критерій вимагає ВСІ 5 файлів** (Фах/БпС/КВід/ІВС/Терміни з `source_files/Зразок/
