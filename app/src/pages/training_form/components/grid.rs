@@ -27,12 +27,17 @@ pub struct EditableRow {
     pub data: RwSignal<GroupFormRow>,
 }
 
-/// Обгортає сирі рядки (з чернетки/undo/коміту) у власні сигнали зі свіжими id.
-pub fn wrap_rows(data: Vec<GroupFormRow>, next_id: &mut u32) -> Vec<EditableRow> {
+/// Обгортає сирі рядки (з чернетки/undo/коміту) у власні сигнали зі свіжими id. `StoredValue`,
+/// не `&mut u32`: `.get_value()` повертає КОПІЮ, тож `&mut` на неї нічого не пише назад у
+/// сховище -- лічильник мовчки не рухався, і повторні виклики (напр. відновлення чернетки після
+/// початкового рендеру) видавали ті самі id, що й уже змонтовані рядки. `<For>` бачив однаковий
+/// ключ і НЕ перемонтовував рядок — DOM далі показував старий (осиротілий) сигнал, поки
+/// автозбереження/коміт читали новий (порожній) з `editable`: значення губилися мовчки.
+pub fn wrap_rows(data: Vec<GroupFormRow>, next_id: StoredValue<u32>) -> Vec<EditableRow> {
     data.into_iter()
         .map(|d| {
-            let id = *next_id;
-            *next_id += 1;
+            let id = next_id.get_value();
+            next_id.set_value(id + 1);
             EditableRow { id, data: RwSignal::new(d) }
         })
         .collect()
@@ -112,7 +117,11 @@ pub fn Grid(
                 ev.prevent_default();
                 advance(row, col, !ev.shift_key());
             }
-            "Enter" => {
+            // Без `!ev.ctrl_key()`: Ctrl+Enter (02 §2, "зберегти всі зміни") теж несе key=="Enter"
+            // -- без цієї перевірки клітинка ОДНОЧАСНО й "переходила далі" (створюючи зайвий
+            // рядок), поки глобальний слухач (mod.rs) паралельно викликав коміт із уже зіпсованим
+            // станом сітки.
+            "Enter" if !ev.ctrl_key() => {
                 ev.prevent_default();
                 advance(row, col, true);
             }

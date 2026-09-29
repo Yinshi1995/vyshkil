@@ -40,8 +40,8 @@ fn FormBody() -> impl IntoView {
     // dates` без chrono "clock", [[chrono-in-domain]] -- та сама заборона стосується й цього боку).
     let as_of_date = RwSignal::new(String::new());
 
-    let next_id = StoredValue::new(1u32);
-    let editable = RwSignal::new(wrap_rows(vec![GroupFormRow::default()], &mut next_id.get_value()));
+    let next_id = StoredValue::new(0u32);
+    let editable = RwSignal::new(wrap_rows(vec![GroupFormRow::default()], next_id));
     let active_cell = RwSignal::new((0usize, 0usize));
 
     // Undo/redo (02 §2, Ctrl+Z/Ctrl+Shift+Z) -- знімок усієї сітки перед кожною мутуючою дією
@@ -49,10 +49,7 @@ fn FormBody() -> impl IntoView {
     let undo_stack = StoredValue::new(Vec::<Vec<GroupFormRow>>::new());
     let redo_stack = StoredValue::new(Vec::<Vec<GroupFormRow>>::new());
     let replace_rows = move |data: Vec<GroupFormRow>| {
-        let mut id_ctr = next_id.get_value();
-        let wrapped = wrap_rows(data, &mut id_ctr);
-        next_id.set_value(id_ctr);
-        editable.set(wrapped);
+        editable.set(wrap_rows(data, next_id));
     };
     let snapshot = move || {
         undo_stack.update_value(|s| s.push(snapshot_rows(editable)));
@@ -104,12 +101,17 @@ fn FormBody() -> impl IntoView {
         let Ok(handle) = set_interval_with_handle(
             move || {
                 let Some(actor) = actor.get_untracked() else { return };
+                // "Станом на" -- NOT NULL у submission.as_of_date; без нього зберігати чернетку
+                // ще нема сенсу (04-01 §5), а спроба зберегти '' у date-колонку дала б 500.
+                let as_of = as_of_date.get_untracked();
+                if as_of.trim().is_empty() {
+                    return;
+                }
                 let current_rows = snapshot_rows(editable);
                 if current_rows.iter().all(|r| r.sender_org_id.is_none() && r.note.is_empty()) {
                     return;
                 }
-                let payload =
-                    DraftPayload { as_of_date: as_of_date.get_untracked(), rows: current_rows };
+                let payload = DraftPayload { as_of_date: as_of, rows: current_rows };
                 let sid = submission_id.get_untracked();
                 leptos::task::spawn_local(async move {
                     match save_draft(Some(actor), sid, payload).await {
@@ -254,8 +256,12 @@ fn CheatSheet(#[prop(into)] on_close: Callback<()>) -> impl IntoView {
     ];
 
     view! {
-        <div class="cheat-sheet__overlay" on:click=move |_| on_close.run(())>
-            <div class="cheat-sheet__panel" on:click=|ev| ev.stop_propagation()>
+        // Без "клік по фону -- закрити": фон і кнопка "Закрити" в тому самому дереві, а
+        // `Show` синхронно демонтує панель ще до завершення спливання події, тож зовнішній
+        // обробник встигав спрацювати на вже скинутому closure ("invoked after being dropped").
+        // Закриття -- лише кнопкою або `Esc` (глобальний слухач у `FormBody`).
+        <div class="cheat-sheet__overlay">
+            <div class="cheat-sheet__panel">
                 <h2>"Гарячі клавіші"</h2>
                 <table>
                     <tbody>
@@ -286,8 +292,8 @@ fn CommandPalette(
     #[prop(into)] on_new_row: Callback<()>,
 ) -> impl IntoView {
     view! {
-        <div class="cheat-sheet__overlay" on:click=move |_| on_close.run(())>
-            <div class="cheat-sheet__panel" on:click=|ev| ev.stop_propagation()>
+        <div class="cheat-sheet__overlay">
+            <div class="cheat-sheet__panel">
                 <h2>"Командна палітра"</h2>
                 <ul class="command-palette__list">
                     <li>

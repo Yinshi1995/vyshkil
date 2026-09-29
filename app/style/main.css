@@ -531,3 +531,165 @@ tr:hover td {
 .status-ok {
   color: var(--text-secondary);
 }
+
+/* Сітка введення (02) — training_form. Функціональний мінімум, не остаточний вигляд. */
+.training-form__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.training-form__as-of {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.training-form__status {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.grid {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+}
+
+.grid__header,
+.grid__row {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(110px, 1fr));
+  gap: 1px;
+  min-width: 1600px;
+}
+
+.grid__header {
+  background: var(--panel-alt);
+  color: var(--text-muted);
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.grid__header span {
+  padding: 8px 6px;
+}
+
+.grid__row {
+  border-top: 1px solid var(--border);
+}
+
+.grid__row:focus-within {
+  background: var(--accent-dim);
+}
+
+.cell {
+  position: relative;
+}
+
+.cell__input {
+  width: 100%;
+  height: 100%;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.cell__input:focus {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+  position: relative;
+  z-index: 1;
+}
+
+.cell__dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 260px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--panel-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px var(--shadow);
+}
+
+.cell__dropdown-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.cell__dropdown-item--active,
+.cell__dropdown-item:hover {
+  background: var(--accent-dim);
+}
+
+.cell__dropdown-empty {
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.cell__dropdown-matched,
+.cell__dropdown-why {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cell__dropdown-kind {
+  color: var(--accent);
+  font-size: 11px;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.grid__add-row {
+  margin: 8px;
+}
+
+.cheat-sheet__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.cheat-sheet__panel {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 20px 24px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.cheat-sheet__key {
+  font-family: var(--font-heading);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.command-palette__list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}

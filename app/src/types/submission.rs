@@ -40,6 +40,10 @@ pub struct GroupFormRow {
     pub arrived_count: i64,
     pub in_training_count: i64,
 
+    // #[serde(default)]: form-урленкодед серіалізація сервер-функцій (Leptos) не передає ключ
+    // для порожнього Vec узагалі -- без default десеріалізація падає "missing field" щоразу,
+    // коли підрозділи не заповнені (типовий випадок, 02 §1: "опційно").
+    #[serde(default)]
     pub composition: Vec<CompositionRow>,
 
     pub organizer_org_id: Option<i32>,
@@ -55,6 +59,7 @@ pub struct GroupFormRow {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DraftPayload {
     pub as_of_date: String,
+    #[serde(default)]
     pub rows: Vec<GroupFormRow>,
 }
 

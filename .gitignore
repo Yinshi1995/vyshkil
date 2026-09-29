@@ -16,3 +16,7 @@ node_modules
 
 # Скріншоти/снапшоти Playwright MCP — сесійні артефакти, не для git.
 /.playwright-mcp
+
+# Артефакти запуску e2e-тестів (Етап 4) — репорти/трейси, не результати самих тестів.
+/e2e/test-results
+/e2e/playwright-report
