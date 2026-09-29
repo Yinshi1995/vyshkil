@@ -88,7 +88,7 @@ pub fn StyleguidePage() -> impl IntoView {
             </div>
 
             <div class="eyebrow">"Відступи (шкала 0..8)"</div>
-            <div style="display: flex; gap: 8px; align-items: flex-end;">
+            <div class=cx!("flex gap2 items-e")>
                 {(0..=8)
                     .map(|i| {
                         view! {
@@ -106,10 +106,10 @@ pub fn StyleguidePage() -> impl IntoView {
 
             <div class="eyebrow">{format!("Усі атоми ({})", style::all_atoms().len())}</div>
             <p class=cx!("fg-muted")>"Повний перелік — для пошуку. Групування за категоріями — style/ATOMS.md."</p>
-            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+            <div class=cx!("flex wrap gap1")>
                 {style::all_atoms()
                     .into_iter()
-                    .map(|name| view! { <code style="font-size: 11px;">{name}</code> })
+                    .map(|name| view! { <code class=cx!("t-xs mono")>{name}</code> })
                     .collect_view()}
             </div>
         </Show>

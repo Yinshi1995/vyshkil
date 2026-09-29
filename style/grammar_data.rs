@@ -101,6 +101,7 @@ const KEYWORD_ATOMS: &[(&str, &str)] = &[
     ("flex", "display: flex"),
     ("col", "flex-direction: column"),
     ("row", "flex-direction: row"),
+    ("wrap", "flex-wrap: wrap"),
     ("grid", "display: grid"),
     ("cols-1", "grid-template-columns: repeat(1, minmax(0, 1fr))"),
     ("cols-2", "grid-template-columns: repeat(2, minmax(0, 1fr))"),
