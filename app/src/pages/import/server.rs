@@ -36,6 +36,36 @@ pub async fn parse_fah_file(
         .map_err(|e| ServerFnError::new(e.to_string()))
 }
 
+/// Розбір файлу "БпС" — та сама ідея, інша структура джерела (`backend/import/CLAUDE.md`):
+/// дворівневий заголовок, funnel-воронка ("Завершилась": Викликали→Прибуло до НЦ→Успішно
+/// завершило; "Навчаються": Викликали→Проходять) замість однієї "Кількість".
+#[server(ParseBpsFile, "/api")]
+pub async fn parse_bps_file(
+    actor: Option<Actor>,
+    bytes: Vec<u8>,
+) -> Result<Vec<GroupFormRow>, ServerFnError> {
+    use crate::backend::{import, policy, repo};
+
+    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    if actor.role == policy::Role::Viewer {
+        return Err(ServerFnError::new("перегляд не імпортує дані"));
+    }
+
+    let raw_rows =
+        import::bps::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
+    if raw_rows.is_empty() {
+        return Err(ServerFnError::new(
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «БпС» \
+             (аркуші «Завершилась»/«Навчаються», заголовок Тип БпАК/ВОС/Військова частина/…)",
+        ));
+    }
+
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    repo::imports_bps::resolve_rows(&db, raw_rows)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
 /// Чернетка превʼю імпорту, якщо є (та сама логіка автозбереження, що й форма, 02 §6).
 #[server(GetImportDraft, "/api")]
 pub async fn get_draft(actor: Option<Actor>) -> Result<Option<DraftState>, ServerFnError> {

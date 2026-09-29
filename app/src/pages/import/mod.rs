@@ -11,19 +11,33 @@ use crate::hooks::use_actor::use_actor;
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
 use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use crate::widgets::ActorNotice;
-use server::{commit_grid, get_draft, parse_fah_file, save_draft};
+use server::{commit_grid, get_draft, parse_bps_file, parse_fah_file, save_draft};
 
-/// Превʼю імпорту "Фах" (03, критерій готовності Етапу 5): файл → структурний розбір →
-/// резолюція → та сама сітка, що й ручне введення (02) → фіксація. Поки лише один тип файлу
-/// (`backend::import::fah`) — інші 4 з критерію йдуть окремими кроками, не одним "універсальним
-/// детектором" (рішення користувача, `pages/training_form/CLAUDE.md`-аналог тут не заведений
-/// навмисно: цю сторінку буде суттєво переписано, коли додасться другий тип файлу).
+/// Тип файлу, що імпортуємо (03, критерій готовності Етапу 5 вимагає всі 5 — тут поки два,
+/// решта окремими кроками, `backend/import/CLAUDE.md` пояснює чому не один детектор).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileKind {
+    Fah,
+    Bps,
+}
+
+impl FileKind {
+    fn label(self) -> &'static str {
+        match self {
+            FileKind::Fah => "Фах (Пройшли/Проходять)",
+            FileKind::Bps => "БпС (Завершилась/Навчаються)",
+        }
+    }
+}
+
+/// Превʼю імпорту (03): файл → структурний розбір → резолюція → та сама сітка, що й ручне
+/// введення (02) → фіксація.
 #[component]
 pub fn ImportPage() -> impl IntoView {
     let actor = use_actor();
 
     view! {
-        <h1>"Імпорт: Фах"</h1>
+        <h1>"Імпорт"</h1>
         {move || {
             if actor.get().is_none() {
                 view! { <ActorNotice/> }.into_any()
@@ -58,6 +72,7 @@ fn ImportBody() -> impl IntoView {
 
     let submission_id = RwSignal::new(None::<i32>);
     let as_of_date = RwSignal::new(String::new());
+    let file_kind = RwSignal::new(FileKind::Fah);
     let next_id = StoredValue::new(0u32);
     let editable = RwSignal::new(Vec::<EditableRow>::new());
     let active_cell = RwSignal::new((0usize, 0usize));
@@ -111,10 +126,15 @@ fn ImportBody() -> impl IntoView {
     let on_file_change = move |ev: leptos::ev::Event| {
         parsing.set(true);
         status.set("розбираю файл…".to_string());
+        let kind = file_kind.get_untracked();
         read_file_bytes(ev, move |bytes| {
             let actor_val = actor.get_untracked();
             leptos::task::spawn_local(async move {
-                match parse_fah_file(actor_val, bytes).await {
+                let result = match kind {
+                    FileKind::Fah => parse_fah_file(actor_val, bytes).await,
+                    FileKind::Bps => parse_bps_file(actor_val, bytes).await,
+                };
+                match result {
                     Ok(rows) => {
                         let n = rows.len();
                         snapshot();
@@ -202,12 +222,24 @@ fn ImportBody() -> impl IntoView {
     view! {
         <div class="training-form">
             <p>
-                "Аркуші «Пройшли»/«Проходять» (заголовок Підрозділ/Місце проведення/Посада/ВОС/ОВТ/"
-                "Термін з/Термін по/Кількість). Розпізнані рядки з'являться в тій самій сітці, що й "
-                "ручне введення — перевірте нерозпізнані клітинки (без вибраної частини/ВОС/місця) "
-                "перед фіксацією."
+                "Оберіть тип файлу й завантажте xlsx. Розпізнані рядки з'являться в тій самій "
+                "сітці, що й ручне введення — перевірте нерозпізнані клітинки (без вибраної "
+                "частини/ВОС/місця) перед фіксацією."
             </p>
             <div class="training-form__header">
+                <select
+                    on:change=move |ev| {
+                        let v = event_target_value(&ev);
+                        file_kind.set(if v == "bps" { FileKind::Bps } else { FileKind::Fah });
+                    }
+                >
+                    <option value="fah" selected=move || file_kind.get() == FileKind::Fah>
+                        {FileKind::Fah.label()}
+                    </option>
+                    <option value="bps" selected=move || file_kind.get() == FileKind::Bps>
+                        {FileKind::Bps.label()}
+                    </option>
+                </select>
                 <label class="training-form__as-of">
                     "Станом на "
                     <input
