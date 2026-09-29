@@ -8,17 +8,24 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 use crate::hooks::use_actor::use_actor;
+use crate::types::staffing::StaffingRow;
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
 use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use crate::widgets::ActorNotice;
-use server::{commit_grid, get_draft, parse_bps_file, parse_fah_file, save_draft};
+use server::{
+    commit_grid, commit_staffing, get_draft, parse_bps_file, parse_fah_file, parse_kvid_file,
+    save_draft,
+};
 
-/// Тип файлу, що імпортуємо (03, критерій готовності Етапу 5 вимагає всі 5 — тут поки два,
-/// решта окремими кроками, `backend/import/CLAUDE.md` пояснює чому не один детектор).
+/// Тип файлу, що імпортуємо (03, критерій готовності Етапу 5 вимагає всі 5 — тут поки три,
+/// решта окремими кроками, `backend/import/CLAUDE.md` пояснює чому не один детектор). Fah/Bps —
+/// group-подібні дані (та сама `widgets::group_grid::Grid`, що й форма); Kvid — укомплектованість
+/// (01 §4), зовсім інша форма даних (`StaffingRow`), своя проста таблиця нижче.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileKind {
     Fah,
     Bps,
+    Kvid,
 }
 
 impl FileKind {
@@ -26,7 +33,12 @@ impl FileKind {
         match self {
             FileKind::Fah => "Фах (Пройшли/Проходять)",
             FileKind::Bps => "БпС (Завершилась/Навчаються)",
+            FileKind::Kvid => "КВід (укомплектованість)",
         }
+    }
+
+    fn is_staffing(self) -> bool {
+        matches!(self, FileKind::Kvid)
     }
 }
 
@@ -80,6 +92,9 @@ fn ImportBody() -> impl IntoView {
     let parsing = RwSignal::new(false);
     let commit_error = RwSignal::new(None::<(usize, String, String)>);
     let cheat_sheet_open = RwSignal::new(false);
+    // Kvid-гілка: інша форма даних (01 §4), не `GroupFormRow` -- окремий сигнал, без undo/draft-
+    // автозбереження (задокументоване спрощення, `pages/import/CLAUDE.md`).
+    let staffing_rows = RwSignal::new(Vec::<StaffingRow>::new());
 
     let undo_stack = StoredValue::new(Vec::<Vec<GroupFormRow>>::new());
     let redo_stack = StoredValue::new(Vec::<Vec<GroupFormRow>>::new());
@@ -130,9 +145,23 @@ fn ImportBody() -> impl IntoView {
         read_file_bytes(ev, move |bytes| {
             let actor_val = actor.get_untracked();
             leptos::task::spawn_local(async move {
+                if kind.is_staffing() {
+                    match parse_kvid_file(actor_val, bytes).await {
+                        Ok(rows) => {
+                            let n = rows.len();
+                            staffing_rows.set(rows);
+                            status.set(format!("розібрано {n} рядків — перевірте перед фіксацією"));
+                        }
+                        Err(e) => status.set(format!("не вдалось розібрати: {e}")),
+                    }
+                    parsing.set(false);
+                    return;
+                }
+                // Kvid уже повернувся вище (is_staffing) -- сюди доходять лише Fah/Bps.
                 let result = match kind {
                     FileKind::Fah => parse_fah_file(actor_val, bytes).await,
                     FileKind::Bps => parse_bps_file(actor_val, bytes).await,
+                    FileKind::Kvid => unreachable!("is_staffing() повертає раніше"),
                 };
                 match result {
                     Ok(rows) => {
@@ -179,10 +208,24 @@ fn ImportBody() -> impl IntoView {
 
     let do_commit = move || {
         let Some(actor) = actor.get_untracked() else { return };
+        commit_error.set(None);
+        if file_kind.get_untracked().is_staffing() {
+            let rows = staffing_rows.get_untracked();
+            let as_of = as_of_date.get_untracked();
+            leptos::task::spawn_local(async move {
+                match commit_staffing(Some(actor), as_of, rows).await {
+                    Ok(n) => {
+                        status.set(format!("зафіксовано: {n} рядків укомплектованості"));
+                        staffing_rows.set(Vec::new());
+                    }
+                    Err(e) => status.set(format!("не вдалось зберегти: {e}")),
+                }
+            });
+            return;
+        }
         let payload =
             DraftPayload { as_of_date: as_of_date.get_untracked(), rows: snapshot_rows(editable) };
         let sid = submission_id.get_untracked();
-        commit_error.set(None);
         leptos::task::spawn_local(async move {
             match commit_grid(Some(actor), sid, payload).await {
                 Ok(CommitOutcome::Committed { group_ids }) => {
@@ -230,7 +273,11 @@ fn ImportBody() -> impl IntoView {
                 <select
                     on:change=move |ev| {
                         let v = event_target_value(&ev);
-                        file_kind.set(if v == "bps" { FileKind::Bps } else { FileKind::Fah });
+                        file_kind.set(match v.as_str() {
+                            "bps" => FileKind::Bps,
+                            "kvid" => FileKind::Kvid,
+                            _ => FileKind::Fah,
+                        });
                     }
                 >
                     <option value="fah" selected=move || file_kind.get() == FileKind::Fah>
@@ -238,6 +285,9 @@ fn ImportBody() -> impl IntoView {
                     </option>
                     <option value="bps" selected=move || file_kind.get() == FileKind::Bps>
                         {FileKind::Bps.label()}
+                    </option>
+                    <option value="kvid" selected=move || file_kind.get() == FileKind::Kvid>
+                        {FileKind::Kvid.label()}
                     </option>
                 </select>
                 <label class="training-form__as-of">
@@ -267,8 +317,11 @@ fn ImportBody() -> impl IntoView {
                     })
             }}
 
-            <Show when=move || !editable.get().is_empty()>
+            <Show when=move || !file_kind.get().is_staffing() && !editable.get().is_empty()>
                 <Grid editable=editable next_id=next_id active_cell=active_cell before_mutate=snapshot/>
+            </Show>
+            <Show when=move || file_kind.get().is_staffing() && !staffing_rows.get().is_empty()>
+                <StaffingTable rows=staffing_rows/>
             </Show>
 
             <Show when=move || cheat_sheet_open.get()>
@@ -283,5 +336,116 @@ fn ImportBody() -> impl IntoView {
                 </div>
             </Show>
         </div>
+    }
+}
+
+/// Превʼю укомплектованості (01 §4) — проста редагована таблиця, НЕ `widgets::group_grid::Grid`
+/// (інша форма даних: організація + сім чисел, без ВОС/дат/воронки). Нерозпізнана організація
+/// (`org_id = None`) показується текстом як є — рядок блокує фіксацію на сервері (та сама логіка
+/// "не розпізнано" в помилках, 03 §5), клієнт лише підсвічує колір.
+#[derive(Debug, Clone, Copy)]
+enum StaffingField {
+    ByTos,
+    ByList,
+    Present,
+    TrainedSergeant,
+    InTraining,
+    PlannedNextMonth,
+    NeedTraining,
+}
+
+impl StaffingField {
+    fn get(self, row: &StaffingRow) -> i64 {
+        match self {
+            StaffingField::ByTos => row.by_tos,
+            StaffingField::ByList => row.by_list,
+            StaffingField::Present => row.present,
+            StaffingField::TrainedSergeant => row.trained_sergeant,
+            StaffingField::InTraining => row.in_training,
+            StaffingField::PlannedNextMonth => row.planned_next_month,
+            StaffingField::NeedTraining => row.need_training,
+        }
+    }
+
+    fn set(self, row: &mut StaffingRow, v: i64) {
+        match self {
+            StaffingField::ByTos => row.by_tos = v,
+            StaffingField::ByList => row.by_list = v,
+            StaffingField::Present => row.present = v,
+            StaffingField::TrainedSergeant => row.trained_sergeant = v,
+            StaffingField::InTraining => row.in_training = v,
+            StaffingField::PlannedNextMonth => row.planned_next_month = v,
+            StaffingField::NeedTraining => row.need_training = v,
+        }
+    }
+}
+
+#[component]
+fn StaffingTable(rows: RwSignal<Vec<StaffingRow>>) -> impl IntoView {
+    view! {
+        <table>
+            <thead>
+                <tr>
+                    <th>"Підрозділ"</th>
+                    <th>"За штатом"</th>
+                    <th>"За списком"</th>
+                    <th>"В наявності"</th>
+                    <th>"Мають підготовку"</th>
+                    <th>"Проходять підготовку"</th>
+                    <th>"Заплановано наст. місяць"</th>
+                    <th>"Потребують підготовку"</th>
+                </tr>
+            </thead>
+            <tbody>
+                <For
+                    each=move || {
+                        rows.get().into_iter().enumerate().collect::<Vec<_>>()
+                    }
+                    key=|(i, _)| *i
+                    let:item
+                >
+                    <StaffingTableRow index=item.0 row=item.1 rows=rows/>
+                </For>
+            </tbody>
+        </table>
+    }
+}
+
+#[component]
+fn StaffingTableRow(index: usize, row: StaffingRow, rows: RwSignal<Vec<StaffingRow>>) -> impl IntoView {
+    let unresolved = row.org_id.is_none();
+    let org_label = row.org_label.clone();
+
+    let field_input = move |field: StaffingField, value: i64| {
+        view! {
+            <td>
+                <input
+                    type="number"
+                    min="0"
+                    prop:value=value.to_string()
+                    on:input=move |ev| {
+                        let Ok(n) = event_target_value(&ev).parse::<i64>() else { return };
+                        rows.update(|rs| {
+                            if let Some(r) = rs.get_mut(index) {
+                                field.set(r, n);
+                            }
+                        });
+                    }
+                />
+            </td>
+        }
+    };
+
+    view! {
+        <tr>
+            <td class=move || if unresolved { "status-error" } else { "" }>{org_label}</td>
+            {field_input(StaffingField::ByTos, StaffingField::ByTos.get(&row))}
+            {field_input(StaffingField::ByList, StaffingField::ByList.get(&row))}
+            {field_input(StaffingField::Present, StaffingField::Present.get(&row))}
+            {field_input(StaffingField::TrainedSergeant, StaffingField::TrainedSergeant.get(&row))}
+            {field_input(StaffingField::InTraining, StaffingField::InTraining.get(&row))}
+            {field_input(StaffingField::PlannedNextMonth, StaffingField::PlannedNextMonth.get(&row))}
+            {field_input(StaffingField::NeedTraining, StaffingField::NeedTraining.get(&row))}
+        </tr>
     }
 }

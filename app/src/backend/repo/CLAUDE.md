@@ -14,3 +14,5 @@
 | `submissions.rs` | `latest_draft_for_org`/`save_draft`/`mark_committed` — чернетки (`submission`, 02 §6), `source_type` параметром (`'form'`/`'table'`) | `services/submission_grid.rs` |
 | `imports_fah.rs` | `resolve_rows` — `RawFahRow` → `GroupFormRow`, резолюція org/vos/посада/місце через довідники (Етап 5) | `pages/import/server.rs` |
 | `imports_bps.rs` | `resolve_rows` — `RawBpsRow` → `GroupFormRow`, org/site через `org.number` (точніше за фах-текст) | `pages/import/server.rs` |
+| `imports_kvid.rs` | `resolve_rows` — `RawKvidRow` → `StaffingRow`, лише org резолюція | `pages/import/server.rs` |
+| `staffing.rs` | `insert_snapshot` — `staffing_snapshot`+`staffing_metric` (01 §4) | `pages/import/server.rs` |

@@ -13,3 +13,4 @@
 |---|---|---|
 | `fah.rs` | `extract`/`RawFahRow` — аркуші "Пройшли"/"Проходять" (03 §2-3) | `repo::imports_fah`, `app/tests/import_fah.rs` |
 | `bps.rs` | `extract`/`RawBpsRow` — аркуші "Завершилась"/"Навчаються", дворівневий заголовок, funnel-воронка | `repo::imports_bps`, `app/tests/import_bps.rs` |
+| `kvid.rs` | `extract`/`RawKvidRow` — укомплектованість (01 §4), не group-подібні дані | `repo::imports_kvid`, `app/tests/import_kvid.rs` |
