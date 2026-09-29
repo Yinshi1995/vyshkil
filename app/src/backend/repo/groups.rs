@@ -194,6 +194,48 @@ pub struct ValidatedRow {
     pub basis_doc_date: Option<NaiveDate>,
 }
 
+/// Майданчик навчання для org_id без нас. пункту (locality=NULL) — знайти або створити (Етап 5:
+/// імпорт резолвить "місце" як організацію, локальність поки не розбираємо окремо, задокументоване
+/// спрощення). Унікальний частковий індекс на `(org_id) WHERE locality IS NULL` (01 §1) гарантує
+/// не більше одного такого рядка на org — знайти-або-створити безпечний навіть під конкурентним
+/// імпортом (ON CONFLICT DO NOTHING + повторний SELECT).
+pub async fn find_or_create_training_site(
+    db: &impl ConnectionTrait,
+    org_id: i32,
+) -> Result<i32, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+    }
+    if let Some(row) = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT id FROM training_site WHERE org_id = $1 AND locality IS NULL",
+        [org_id.into()],
+    ))
+    .one(db)
+    .await?
+    {
+        return Ok(row.id);
+    }
+
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "INSERT INTO training_site (org_id, locality) VALUES ($1, NULL) ON CONFLICT DO NOTHING",
+        [org_id.into()],
+    ))
+    .await?;
+
+    let row = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT id FROM training_site WHERE org_id = $1 AND locality IS NULL",
+        [org_id.into()],
+    ))
+    .one(db)
+    .await?
+    .ok_or_else(|| DbErr::Custom("find_or_create_training_site: рядок не з'явився".into()))?;
+    Ok(row.id)
+}
+
 /// Одна помилка валідації рядка сітки: (назва поля, текст) — для `CommitOutcome::ValidationFailed`
 /// (02 §5). Перевіряє тільки те, що `domain` вміє без БД (дати, порядок воронки, обов'язкові поля);
 /// биту зовнішню посилальну цілісність (неіснуючий vos_id тощо) ловить FK-обмеження при INSERT.

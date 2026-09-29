@@ -8,7 +8,7 @@ use leptos_router::{
 };
 
 use crate::pages::{
-    dictionaries::DictionariesPage, home::HomePage, org_detail::OrgDetailPage,
+    dictionaries::DictionariesPage, home::HomePage, import::ImportPage, org_detail::OrgDetailPage,
     training_form::TrainingFormPage, vos_lookup::VosLookupPage,
 };
 
@@ -21,6 +21,7 @@ pub fn AppRoutes() -> impl IntoView {
             <Route path=StaticSegment("vos-lookup") view=VosLookupPage/>
             <Route path=StaticSegment("dictionaries") view=DictionariesPage/>
             <Route path=StaticSegment("training-form") view=TrainingFormPage/>
+            <Route path=StaticSegment("import") view=ImportPage/>
         </Routes>
     }
 }

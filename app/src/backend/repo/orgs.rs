@@ -112,6 +112,13 @@ pub async fn search_orgs(
         .collect())
 }
 
+/// Найкращий кандидат для сирого тексту (Етап 5, 03 §4: "номер у тексті має пріоритет над назвою"
+/// — уже забезпечено ранжуванням `search_orgs`, тут просто беремо перший). `None` — "частина не
+/// розпізнана" (03 §5, помилка блокує фіксацію рядка).
+pub async fn resolve_org(db: &DatabaseConnection, raw: &str) -> Result<Option<OrgSearchResult>, DbErr> {
+    Ok(search_orgs(db, raw).await?.into_iter().next())
+}
+
 /// Дерево підпорядкування на дату (06-roadmap.md, Етап 1): перемикач осі штатне/оперативне.
 /// Гарячий запит — через `subordination_closure` (`depth = 1`, матеріалізоване замикання),
 /// **не** рекурсивний CTE (server/CLAUDE.md).

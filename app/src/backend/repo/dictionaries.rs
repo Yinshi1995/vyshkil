@@ -205,3 +205,78 @@ pub async fn reject_learned_alias(db: &impl ConnectionTrait, alias_id: i32) -> R
     .await?;
     Ok(())
 }
+
+/// ВОС за кодом точно (Етап 5, 03 §4/§5): джерела зберігають ВОС як код, не вільний текст --
+/// нечіткий пошук тут зайвий. `None` — "ВОС не з довідника" (03 §5, помилка).
+pub async fn resolve_vos_by_code(
+    db: &DatabaseConnection,
+    code: &str,
+) -> Result<Option<(i32, String)>, DbErr> {
+    let code = code.trim();
+    if code.is_empty() {
+        return Ok(None);
+    }
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+        code: String,
+        title: String,
+    }
+    let row = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT id, code, title FROM vos WHERE code = $1 AND deleted_at IS NULL",
+        [code.into()],
+    ))
+    .one(db)
+    .await?;
+    Ok(row.map(|r| (r.id, format!("{} — {}", r.code, r.title))))
+}
+
+/// Посада нечітким пошуком по `alias` (Етап 5) — той самий патерн, що й `repo::orgs::search_orgs`,
+/// беремо лише найкращий збіг.
+pub async fn resolve_position(
+    db: &DatabaseConnection,
+    raw: &str,
+) -> Result<Option<(i32, String)>, DbErr> {
+    let norm_query = normalize(raw);
+    if norm_query.is_empty() {
+        return Ok(None);
+    }
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+        name: String,
+    }
+    let row = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        SELECT p.id, p.name
+        FROM alias a
+        JOIN "position" p ON p.id = a.target_id AND a.target_type = 'position'
+        WHERE a.norm = $1 OR a.norm % $1
+        ORDER BY (a.norm = $1) DESC, a.uses_count DESC, similarity(a.norm, $1) DESC
+        LIMIT 1
+        "#,
+        [norm_query.into()],
+    ))
+    .one(db)
+    .await?;
+    Ok(row.map(|r| (r.id, r.name)))
+}
+
+/// `training_kind.id` за фіксованим кодом (Етап 5) — файли одного типу завжди одного виду
+/// підготовки ("Фах" → `code='special'`), не потребує пошуку.
+pub async fn training_kind_id_by_code(db: &DatabaseConnection, code: &str) -> Result<Option<i32>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+    }
+    let row = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT id FROM training_kind WHERE code = $1 AND deleted_at IS NULL",
+        [code.into()],
+    ))
+    .one(db)
+    .await?;
+    Ok(row.map(|r| r.id))
+}

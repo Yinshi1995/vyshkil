@@ -285,6 +285,7 @@ fn sanity_the_tree_walk_actually_found_pages() {
     let pages = BTreeSet::from([
         "dictionaries".to_string(),
         "home".to_string(),
+        "import".to_string(),
         "org_detail".to_string(),
         "training_form".to_string(),
         "vos_lookup".to_string(),
