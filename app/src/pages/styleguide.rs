@@ -6,7 +6,7 @@
 
 use leptos::prelude::*;
 
-use crate::components::Checkbox;
+use crate::components::{Accordion, AccordionItem, Checkbox};
 use crate::hooks::use_actor::use_actor;
 use crate::types::actor::Role;
 use style_macros::cx;
@@ -110,6 +110,20 @@ pub fn StyleguidePage() -> impl IntoView {
             <div class="eyebrow">"Компоненти (HeroUI-референс, feedback користувача)"</div>
             <div class=cx!("flex gap4 items-c")>
                 <Checkbox checked=checkbox_checked on_change=Callback::new(move |v| checkbox_checked.set(v)) label="Прийняти умови".to_string()/>
+            </div>
+            <div class=cx!("flex gap3 items-c mt3")>
+                <button class="btn btn--primary">"Зафіксувати →"</button>
+                <button class="btn btn--outline">"Скасувати →"</button>
+            </div>
+            <div class=cx!("mt3 maxw-prose")>
+                <Accordion>
+                    <AccordionItem title="Як додати новий атом?".to_string()>
+                        <p class=cx!("fg-muted")>"Рядок у таблиці граматики style/grammar_data.rs — style/ATOMS.md."</p>
+                    </AccordionItem>
+                    <AccordionItem title="Чому власна система, не Tailwind?".to_string()>
+                        <p class=cx!("fg-muted")>".claude/decisions/style-system-architecture.md — без Node/CDN, compile-time валідація."</p>
+                    </AccordionItem>
+                </Accordion>
             </div>
 
             <div class="eyebrow">{format!("Усі атоми ({})", style::all_atoms().len())}</div>

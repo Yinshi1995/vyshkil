@@ -9,5 +9,6 @@
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
+| `accordion.rs` | `Accordion`/`AccordionItem` — розгортання розміткою, CSS grid-rows-анімація | — |
 | `checkbox.rs` | `Checkbox` — стилізований чекбокс (справжній `<input>`, приховано лише візуально) | — |
 | `select.rs` | `Select`/`SelectOption` — стилізована випадайка (клавіатура: стрілки/Enter/Escape/друк-до-літери, клік поза — закриває), заміна нативного `<select>` | `layout::ActorSwitcher` |

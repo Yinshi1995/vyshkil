@@ -36,8 +36,25 @@ date: 2026-09-27
 - Секція: маленький eyebrow-лейбл ("РОЗДІЛ 01") з тонкими лініями обабіч, під ним великий
   центрований заголовок, під ним центрований підзаголовок.
 - Кнопки: скошений правий край (`clip-path` паралелограм) — суцільна золота (primary) і
-  контурна (secondary).
+  контурна (secondary). **Перевимірено 2026-09-29** (feedback користувача: перша версія була
+  композиційним здогадом, не виміряним значенням) — див. таблицю нижче.
 - Навігація: uppercase, letter-spacing, активний пункт підкреслений золотим.
+
+### Кнопки, перевимірено `getComputedStyle(.btn-primary/.btn-secondary)` (2026-09-29)
+
+| Властивість | `.btn-primary` | `.btn-secondary` |
+|---|---|---|
+| `clip-path` | `polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px))` — зріз ДВОХ протилежних кутів (верх-право + низ-ліво), НЕ один кут навскіс | той самий |
+| `background` | `linear-gradient(135deg, #c9a84c, #e8c96a)` | `transparent`, hover → `rgba(201,168,76,0.1)` |
+| `color` | `#0d0f0a` (ink-0, темний текст на золотому) | `#e8e4d8` (ink-4) |
+| `border` | немає | `1px solid rgba(201,168,76,0.4)`, hover → суцільний `#c9a84c` |
+| `padding` | `14px 36px` | те саме |
+| `font` | Oswald 13px, **weight 400** (не 700!), uppercase | те саме |
+| `letter-spacing` | `3px` (~0.23em при 13px — НЕ 0.08em, як здогадувалось) | те саме |
+| hover | `translateY(-3px)`, `box-shadow: 0 10px 40px rgba(201,168,76,0.3)`, `transition: 0.4s` | `translateY(-3px)`, без glow-тіні |
+
+Впроваджено в `style::grammar_data` (атом `chamfer` виправлено на реальну форму, новий
+примітив `gold-4 = #e8c96a`) і `app/style/main.css` (`.btn`/`.btn--primary`/`.btn--outline`).
 
 ## Рішення
 

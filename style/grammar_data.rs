@@ -37,6 +37,9 @@ const COLOR_TOKENS: &[(&str, &str)] = &[
     ("gold-1", "#8a7030"),
     ("gold-2", "#c9a84c"),
     ("gold-3", "#ddb95a"),
+    // Світлий кінець градієнта primary-кнопки — виміряно з живого striy.pp.ua
+    // (`getComputedStyle(.btn-primary).backgroundImage`), не вигадано.
+    ("gold-4", "#e8c96a"),
     // олива (ok)
     ("olive-1", "#4a5a2e"),
     ("olive-2", "#6b8043"),
@@ -150,7 +153,10 @@ const KEYWORD_ATOMS: &[(&str, &str)] = &[
     ("bg-accent-dim", "background: var(--accent-dim)"),
     ("bd", "border: 1px solid var(--border)"),
     ("bd-accent", "border: 1px solid var(--border-strong)"),
-    ("chamfer", "clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%)"),
+    // Виміряно з живого striy.pp.ua (getComputedStyle(.btn).clipPath) — симетричний зріз ДВОХ
+    // протилежних кутів (верхній правий + нижній лівий) на 15px, не один кут навскіс, як
+    // припускав Фаза-0/1 здогад (14px, один кут) — виправлено феідбеком користувача (Фаза 3).
+    ("chamfer", "clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px))"),
 ];
 
 /// Дозволені префікси-варіанти (`hover:bg-panel` тощо) — атом застосовується лише в цьому стані/

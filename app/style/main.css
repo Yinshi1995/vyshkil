@@ -396,46 +396,51 @@ a:hover {
   margin-top: var(--space-2);
 }
 
-/* Кнопка зі скошеним краєм (clip-path) — той самий мотив, що на striy.pp.ua. `clip-path`
-   лишається літералом (той самий вираз, що атом `chamfer` — немає var() для форм); решта —
-   токени найближчого кроку шкали (Фаза 3). Округлення padding звело асиметричну 1px-різницю
-   між .btn/.btn--outline (10 vs 11px, компенсація за товщину бордера outline-варіанта) до
-   однакового значення — непомітно (≤1px), але задокументовано, щоб не виглядало забутим. */
+/* Кнопка зі скошеним краєм — ПЕРЕВИМІРЯНО з живого striy.pp.ua (feedback користувача: перша
+   версія була здогадом композиційного патерну, не виміряним значенням — getComputedStyle на
+   .btn-primary/.btn-secondary дав інші цифри майже по кожній властивості).
+   `clip-path` — той самий вираз, що атом `chamfer` (симетричний зріз ДВОХ протилежних кутів на
+   15px, не один кут навскіс), градієнт/glow-тінь — теж літерали-форми (не на шкалі відступів за
+   змістом), кольори всередині них — токени. */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   font-family: var(--font-heading);
-  font-weight: var(--weight-7);
+  font-weight: var(--weight-4);
   font-size: var(--text-sm-size);
   line-height: var(--text-sm-line);
   text-transform: uppercase;
-  letter-spacing: var(--track-4);
-  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
+  letter-spacing: var(--track-6);
+  padding: var(--space-4) var(--space-6);
   border: none;
   cursor: pointer;
-  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
   text-decoration: none;
+  transition: transform var(--duration-slow) ease, box-shadow var(--duration-slow) ease, background var(--duration-slow) ease, border-color var(--duration-slow) ease;
 }
 
 .btn--primary {
-  background: var(--fg-accent);
+  background: linear-gradient(135deg, var(--fg-accent), var(--gold-4));
   color: var(--fg-on-accent);
 }
 
 .btn--primary:hover {
-  background: var(--gold-3);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 40px color-mix(in srgb, var(--fg-accent) 30%, transparent);
   text-decoration: none;
 }
 
 .btn--outline {
   background: transparent;
   color: var(--fg-main);
-  border: 1px solid var(--border-strong);
-  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--fg-accent) 40%, transparent);
+  padding: calc(var(--space-4) - 1px) calc(var(--space-6) - 1px);
 }
 
 .btn--outline:hover {
+  transform: translateY(-3px);
+  border-color: var(--fg-accent);
   background: var(--accent-dim);
   text-decoration: none;
 }
@@ -869,6 +874,55 @@ tr:hover td {
   line-height: var(--text-md-line);
 }
 
+/* Акордеон (components::Accordion, HeroUI-референс, feedback користувача) — плавне розгортання
+   через CSS grid-template-rows 0fr→1fr (не max-height з магічним лімітом, не JS-вимір висоти). */
+.accordion-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.accordion-item__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: transparent;
+  border: none;
+  color: var(--fg-main);
+  font-family: var(--font-body);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+  text-align: left;
+  cursor: pointer;
+}
+
+.accordion-item__chevron {
+  color: var(--fg-accent);
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) ease;
+}
+
+.accordion-item__trigger[aria-expanded="true"] .accordion-item__chevron {
+  transform: rotate(180deg);
+}
+
+.accordion-item__panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-base) ease;
+}
+
+.accordion-item__panel--open {
+  grid-template-rows: 1fr;
+}
+
+.accordion-item__panel-inner {
+  overflow: hidden;
+  color: var(--fg-muted);
+  padding-bottom: var(--space-3);
+}
+
 /* === style::generate_css() — НЕ РЕДАГУВАТИ ВРУЧНУ, cargo run -p style --bin gen === */
 @layer reset, tokens, base, components, atoms, overrides;
 
@@ -907,6 +961,7 @@ tr:hover td {
     --gold-1: #8a7030;
     --gold-2: #c9a84c;
     --gold-3: #ddb95a;
+    --gold-4: #e8c96a;
     --olive-1: #4a5a2e;
     --olive-2: #6b8043;
     --olive-3: #8fa565;
@@ -1067,7 +1122,7 @@ tr:hover td {
   .bg-accent-dim { background: var(--accent-dim); }
   .bd { border: 1px solid var(--border); }
   .bd-accent { border: 1px solid var(--border-strong); }
-  .chamfer { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+  .chamfer { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   .bracket { position: relative; }
   .bracket::before, .bracket::after { content: ""; position: absolute; width: 10px; height: 10px; border: 2px solid var(--border-strong); }
   .bracket::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
@@ -1278,7 +1333,7 @@ tr:hover td {
   .hover\:bg-accent-dim:hover { background: var(--accent-dim); }
   .hover\:bd:hover { border: 1px solid var(--border); }
   .hover\:bd-accent:hover { border: 1px solid var(--border-strong); }
-  .hover\:chamfer:hover { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+  .hover\:chamfer:hover { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   .hover\:bracket:hover { position: relative; }
   .hover\:p0:hover { padding: var(--space-0); }
   .hover\:p1:hover { padding: var(--space-1); }
@@ -1486,7 +1541,7 @@ tr:hover td {
   .focus-visible\:bg-accent-dim:focus-visible { background: var(--accent-dim); }
   .focus-visible\:bd:focus-visible { border: 1px solid var(--border); }
   .focus-visible\:bd-accent:focus-visible { border: 1px solid var(--border-strong); }
-  .focus-visible\:chamfer:focus-visible { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+  .focus-visible\:chamfer:focus-visible { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   .focus-visible\:bracket:focus-visible { position: relative; }
   .focus-visible\:p0:focus-visible { padding: var(--space-0); }
   .focus-visible\:p1:focus-visible { padding: var(--space-1); }
@@ -1694,7 +1749,7 @@ tr:hover td {
   .active\:bg-accent-dim:active { background: var(--accent-dim); }
   .active\:bd:active { border: 1px solid var(--border); }
   .active\:bd-accent:active { border: 1px solid var(--border-strong); }
-  .active\:chamfer:active { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+  .active\:chamfer:active { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   .active\:bracket:active { position: relative; }
   .active\:p0:active { padding: var(--space-0); }
   .active\:p1:active { padding: var(--space-1); }
@@ -1902,7 +1957,7 @@ tr:hover td {
   .disabled\:bg-accent-dim:disabled { background: var(--accent-dim); }
   .disabled\:bd:disabled { border: 1px solid var(--border); }
   .disabled\:bd-accent:disabled { border: 1px solid var(--border-strong); }
-  .disabled\:chamfer:disabled { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+  .disabled\:chamfer:disabled { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   .disabled\:bracket:disabled { position: relative; }
   .disabled\:p0:disabled { padding: var(--space-0); }
   .disabled\:p1:disabled { padding: var(--space-1); }
@@ -2110,7 +2165,7 @@ tr:hover td {
   .invalid\:bg-accent-dim[aria-invalid="true"] { background: var(--accent-dim); }
   .invalid\:bd[aria-invalid="true"] { border: 1px solid var(--border); }
   .invalid\:bd-accent[aria-invalid="true"] { border: 1px solid var(--border-strong); }
-  .invalid\:chamfer[aria-invalid="true"] { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+  .invalid\:chamfer[aria-invalid="true"] { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   .invalid\:bracket[aria-invalid="true"] { position: relative; }
   .invalid\:p0[aria-invalid="true"] { padding: var(--space-0); }
   .invalid\:p1[aria-invalid="true"] { padding: var(--space-1); }
@@ -2318,7 +2373,7 @@ tr:hover td {
   .open\:bg-accent-dim[data-state="open"] { background: var(--accent-dim); }
   .open\:bd[data-state="open"] { border: 1px solid var(--border); }
   .open\:bd-accent[data-state="open"] { border: 1px solid var(--border-strong); }
-  .open\:chamfer[data-state="open"] { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+  .open\:chamfer[data-state="open"] { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   .open\:bracket[data-state="open"] { position: relative; }
   .open\:p0[data-state="open"] { padding: var(--space-0); }
   .open\:p1[data-state="open"] { padding: var(--space-1); }
@@ -2615,7 +2670,7 @@ tr:hover td {
     .md\:bd-accent { border: 1px solid var(--border-strong); }
   }
   @media (min-width: 768px) {
-    .md\:chamfer { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+    .md\:chamfer { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   }
   @media (min-width: 768px) {
     .md\:bracket { position: relative; }
@@ -3239,7 +3294,7 @@ tr:hover td {
     .lg\:bd-accent { border: 1px solid var(--border-strong); }
   }
   @media (min-width: 1024px) {
-    .lg\:chamfer { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+    .lg\:chamfer { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   }
   @media (min-width: 1024px) {
     .lg\:bracket { position: relative; }
@@ -3863,7 +3918,7 @@ tr:hover td {
     .\@md\:bd-accent { border: 1px solid var(--border-strong); }
   }
   @container (min-width: 480px) {
-    .\@md\:chamfer { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+    .\@md\:chamfer { clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px)); }
   }
   @container (min-width: 480px) {
     .\@md\:bracket { position: relative; }
