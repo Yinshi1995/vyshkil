@@ -27,8 +27,8 @@ pub fn AppRoutes() -> impl IntoView {
             <Route path=StaticSegment("documents") view=DocumentsPage/>
             <Route path=StaticSegment("discrepancies") view=DiscrepanciesPage/>
             <Route path=StaticSegment("styleguide") view=StyleguidePage/>
-            <Route path=StaticSegment("admin/whatsapp") view=AdminWhatsappPage/>
-            <Route path=StaticSegment("admin/queues") view=AdminQueuesPage/>
+            <Route path=(StaticSegment("admin"), StaticSegment("whatsapp")) view=AdminWhatsappPage/>
+            <Route path=(StaticSegment("admin"), StaticSegment("queues")) view=AdminQueuesPage/>
         </Routes>
     }
 }
