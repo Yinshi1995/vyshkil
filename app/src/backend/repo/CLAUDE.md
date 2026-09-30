@@ -20,3 +20,4 @@
 | `imports_vch_archive.rs` | `resolve_rows` — Етап 6, `RawVchArchiveRow` → `GroupFormRow`, `training_kind='special'`, "Місце проведення" — вільний географічний текст (часто нерозпізнане) | `pages/import/server.rs` |
 | `staffing.rs` | `insert_snapshot`/`insert_instructor_snapshot` — `staffing_snapshot`+`staffing_metric` (01 §4, різні набори метрик КВід/ІВС) | `pages/import/server.rs` |
 | `documents.rs` | `daily_training_rollup` — правило групування (01 §1) + БЗВП/Фахова/Адаптація rollup по органу/дню; `top_level_orgs`/`root_org_id` (Етап 7, D2 — корпуси без хардкоду назв); `org_label`/`insert_generated_document` | `pages/documents/server.rs` |
+| `reconciliation.rs` | `refresh_horizontal` (перерахунок `discrepancy` після фіксації, 04 §3-4), `list_discrepancies` (Етап 8 зріз 1) | `repo::groups::commit_group_rows`, `services/reconciliation.rs` |

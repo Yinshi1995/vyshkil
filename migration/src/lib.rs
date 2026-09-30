@@ -38,6 +38,9 @@ mod m20260929_000035_attach_audit_triggers_staffing;
 mod m20260929_000036_refine_subordination_dates_from_kontrolka;
 mod m20260929_000037_create_generated_document_table;
 mod m20260930_000038_widen_generated_document_kind;
+mod m20260930_000039_create_reported_group_table;
+mod m20260930_000040_create_discrepancy_table;
+mod m20260930_000041_attach_audit_trigger_discrepancy;
 
 pub struct Migrator;
 
@@ -95,6 +98,11 @@ impl MigratorTrait for Migrator {
             Box::new(m20260929_000037_create_generated_document_table::Migration),
             // Етап 7, D2: розширити kind на 'd2'.
             Box::new(m20260930_000038_widen_generated_document_kind::Migration),
+            // Етап 8, зріз 1 (04): reported_group (незмінний знімок подання) + discrepancy
+            // (горизонтальна звірка) — .claude/decisions/etap8-horizontal-reconciliation-first-slice.md.
+            Box::new(m20260930_000039_create_reported_group_table::Migration),
+            Box::new(m20260930_000040_create_discrepancy_table::Migration),
+            Box::new(m20260930_000041_attach_audit_trigger_discrepancy::Migration),
         ]
     }
 }

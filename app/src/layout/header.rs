@@ -14,6 +14,7 @@ pub fn Header() -> impl IntoView {
                 <a href="/">"Головна"</a>
                 <a href="/vos-lookup">"ВОС за ОВТ"</a>
                 <a href="/dictionaries">"Довідники"</a>
+                <a href="/discrepancies">"Розбіжності"</a>
             </nav>
             <ActorSwitcher/>
         </header>

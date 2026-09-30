@@ -3,6 +3,7 @@
 //! (02 §5 — уся сітка зберігається одним усе-або-нічого записом).
 //! Сама арифметика воронки — в `domain::counting` (чиста, без БД); тут лише SQL і перетворення типів.
 
+use super::reconciliation::refresh_horizontal;
 use crate::domain::counting::{EventType, GroupEventRecord};
 use crate::domain::dates::{parse_date, parse_end_date, parse_maybe_range, validate_period, DateError};
 use crate::domain::normalize::normalize;
@@ -12,6 +13,7 @@ use crate::types::submission::{
 };
 use chrono::NaiveDate;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
+use std::collections::BTreeSet;
 
 /// Усі події групи, найстаріша перша — досить для будь-якої функції `domain::counting`
 /// (`in_training`/`events_on`/`finishing_on` самі фільтрують за датою/`known_at`).
@@ -288,11 +290,119 @@ pub fn validate_row(row: &GroupFormRow, as_of: NaiveDate) -> Result<ValidatedRow
     Ok(ValidatedRow { start, end, basis_doc_date })
 }
 
+/// Допуск зіставлення за датою початку (04 §2: "±3 дні (допуск налаштовуваний)") — константа
+/// зараз, майбутній адмін-налаштований поріг (Етап 8, наступний зріз) не зачепить виклики.
+const MATCH_DATE_TOLERANCE_DAYS: i64 = 3;
+
+/// Шукає ІСНУЮЧУ канонічну `training_group` за ключем зіставлення (04 §2): відправник + вид +
+/// (ВОС|посада|курс|програма БЗВП — `IS NOT DISTINCT FROM`, бо для БЗВП/курсів частина цих полів
+/// NULL) + місце + `planned_start` ±`MATCH_DATE_TOLERANCE_DAYS`. РІВНО один кандидат → Some
+/// (перевикористати); 0 або 2+ → None (нова група) — 2+ навмисно, не "перший-ліпший"
+/// (`.claude/decisions/etap8-horizontal-reconciliation-first-slice.md`: неоднозначність
+/// відкладена на UI-крок дизамбігуації, безпечний дефолт зараз — той самий, що сьогоднішня
+/// поведінка без зіставлення взагалі).
+async fn find_matching_group(
+    db: &impl ConnectionTrait,
+    row: &GroupFormRow,
+    start: NaiveDate,
+) -> Result<Option<i32>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+    }
+
+    let lo = (start - chrono::Duration::days(MATCH_DATE_TOLERANCE_DAYS)).format("%Y-%m-%d").to_string();
+    let hi = (start + chrono::Duration::days(MATCH_DATE_TOLERANCE_DAYS)).format("%Y-%m-%d").to_string();
+
+    // sender_org_id/training_kind_id/site_id гарантовано Some -- `validate_row` це перевіряє
+    // ДО того, як рядок узагалі потрапляє сюди (той самий інваріант, що вже спирається
+    // решта цієї функції, напр. INSERT нижче теж бере ці поля напряму).
+    let candidates = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT id FROM training_group \
+         WHERE sender_org_id = $1 AND training_kind_id = $2 AND site_id = $3 \
+           AND vos_id IS NOT DISTINCT FROM $4 \
+           AND position_id IS NOT DISTINCT FROM $5 \
+           AND course_id IS NOT DISTINCT FROM $6 \
+           AND bzvp_program_id IS NOT DISTINCT FROM $7 \
+           AND planned_start BETWEEN $8::date AND $9::date",
+        [
+            row.sender_org_id.expect("validate_row гарантує Some").into(),
+            row.training_kind_id.expect("validate_row гарантує Some").into(),
+            row.site_id.expect("validate_row гарантує Some").into(),
+            row.vos_id.into(),
+            row.position_id.into(),
+            row.course_id.into(),
+            row.bzvp_program_id.into(),
+            lo.into(),
+            hi.into(),
+        ],
+    ))
+    .all(db)
+    .await?;
+
+    Ok(match candidates.len() {
+        1 => Some(candidates[0].id),
+        _ => None,
+    })
+}
+
+async fn insert_reported_group(
+    db: &impl ConnectionTrait,
+    row: &GroupFormRow,
+    dates: &ValidatedRow,
+    submission_id: i32,
+    matched_group_id: i32,
+) -> Result<(), DbErr> {
+    let basis_doc_date = dates.basis_doc_date.map(|d| d.format("%Y-%m-%d").to_string());
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "INSERT INTO reported_group \
+            (submission_id, sender_org_id, training_kind_id, bzvp_program_id, vos_id, \
+             position_id, course_id, site_id, organizer_org_id, planned_start, planned_end, \
+             equipment_text, basis_doc_number, basis_doc_date, note, \
+             planned_count, arrived_count, in_training_count, matched_group_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13, $14::date, \
+                 $15, $16, $17, $18, $19)",
+        [
+            submission_id.into(),
+            row.sender_org_id.into(),
+            row.training_kind_id.into(),
+            row.bzvp_program_id.into(),
+            row.vos_id.into(),
+            row.position_id.into(),
+            row.course_id.into(),
+            row.site_id.into(),
+            row.organizer_org_id.into(),
+            dates.start.format("%Y-%m-%d").to_string().into(),
+            dates.end.format("%Y-%m-%d").to_string().into(),
+            non_empty(&row.equipment_text).into(),
+            non_empty(&row.basis_doc_number).into(),
+            basis_doc_date.into(),
+            non_empty(&row.note).into(),
+            (row.planned_count as i32).into(),
+            (row.arrived_count as i32).into(),
+            (row.in_training_count as i32).into(),
+            matched_group_id.into(),
+        ],
+    ))
+    .await?;
+    Ok(())
+}
+
 /// Фіксація сітки (02 §5, `Ctrl+Enter`) — усе-або-нічого: викликач обгортає одну транзакцію,
 /// валідує (`validate_row`) заздалегідь усі рядки, і лише тоді викликає цю функцію.
 /// Події воронки для щойно внесеної групи спрощено записуються на дату початку (`planned_start`):
 /// форма не збирає окремих дат "викликали"/"прибули"/"розпочали" (02 §1 колонка 7: "для нової
 /// групи часто рівні").
+///
+/// **Етап 8, зріз 1** (04 §2-4, `.claude/decisions/etap8-horizontal-reconciliation-first-slice.md`):
+/// кожен рядок спершу ЗІСТАВЛЯЄТЬСЯ з існуючою канонічною групою (`find_matching_group`) — при
+/// збігу перевикористовує її `id` (події пишуться на той самий group_id, що й раніше — та сама
+/// логіка `insert_event`, лише вже не завжди на щойно вставлений рядок), інакше створює нову, як
+/// і раніше. Кожен рядок ТАКОЖ незмінно зберігається в `reported_group` (04 §2 — "що саме
+/// подала ця сесія"), а після коміту всіх рядків — для кожної зачепленої канонічної групи
+/// перераховується горизонтальна звірка (`repo::reconciliation::refresh_horizontal`).
 pub async fn commit_group_rows(
     db: &impl ConnectionTrait,
     rows: &[(GroupFormRow, ValidatedRow)],
@@ -304,55 +414,65 @@ pub async fn commit_group_rows(
     }
 
     let mut group_ids = Vec::with_capacity(rows.len());
+    let mut affected_groups = BTreeSet::new();
 
     for (row, dates) in rows {
-        let basis_doc_date =
-            dates.basis_doc_date.map(|d| d.format("%Y-%m-%d").to_string());
+        let matched = find_matching_group(db, row, dates.start).await?;
 
-        let group = NewId::find_by_statement(Statement::from_sql_and_values(
-            db.get_database_backend(),
-            "INSERT INTO training_group \
-                (sender_org_id, training_kind_id, bzvp_program_id, vos_id, position_id, course_id, \
-                 equipment_text, site_id, organizer_org_id, planned_start, planned_end, \
-                 basis_doc_number, basis_doc_date, note) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13::date, $14) \
-             RETURNING id",
-            [
-                row.sender_org_id.into(),
-                row.training_kind_id.into(),
-                row.bzvp_program_id.into(),
-                row.vos_id.into(),
-                row.position_id.into(),
-                row.course_id.into(),
-                non_empty(&row.equipment_text).into(),
-                row.site_id.into(),
-                row.organizer_org_id.into(),
-                dates.start.format("%Y-%m-%d").to_string().into(),
-                dates.end.format("%Y-%m-%d").to_string().into(),
-                non_empty(&row.basis_doc_number).into(),
-                basis_doc_date.into(),
-                non_empty(&row.note).into(),
-            ],
-        ))
-        .one(db)
-        .await?
-        .ok_or_else(|| DbErr::Custom("INSERT training_group не повернув id".into()))?;
+        let group_id = match matched {
+            Some(existing_id) => existing_id,
+            None => {
+                let basis_doc_date = dates.basis_doc_date.map(|d| d.format("%Y-%m-%d").to_string());
+                let group = NewId::find_by_statement(Statement::from_sql_and_values(
+                    db.get_database_backend(),
+                    "INSERT INTO training_group \
+                        (sender_org_id, training_kind_id, bzvp_program_id, vos_id, position_id, \
+                         course_id, equipment_text, site_id, organizer_org_id, planned_start, \
+                         planned_end, basis_doc_number, basis_doc_date, note) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, \
+                             $13::date, $14) \
+                     RETURNING id",
+                    [
+                        row.sender_org_id.into(),
+                        row.training_kind_id.into(),
+                        row.bzvp_program_id.into(),
+                        row.vos_id.into(),
+                        row.position_id.into(),
+                        row.course_id.into(),
+                        non_empty(&row.equipment_text).into(),
+                        row.site_id.into(),
+                        row.organizer_org_id.into(),
+                        dates.start.format("%Y-%m-%d").to_string().into(),
+                        dates.end.format("%Y-%m-%d").to_string().into(),
+                        non_empty(&row.basis_doc_number).into(),
+                        basis_doc_date.into(),
+                        non_empty(&row.note).into(),
+                    ],
+                ))
+                .one(db)
+                .await?
+                .ok_or_else(|| DbErr::Custom("INSERT training_group не повернув id".into()))?;
+                group.id
+            }
+        };
+
+        insert_reported_group(db, row, dates, submission_id, group_id).await?;
 
         for composition in &row.composition {
-            insert_composition(db, group.id, composition).await?;
+            insert_composition(db, group_id, composition).await?;
         }
 
         let start_str = dates.start.format("%Y-%m-%d").to_string();
-        insert_event(db, group.id, "planned", row.planned_count as i32, &start_str, submission_id)
+        insert_event(db, group_id, "planned", row.planned_count as i32, &start_str, submission_id)
             .await?;
         if row.arrived_count > 0 {
-            insert_event(db, group.id, "arrived", row.arrived_count as i32, &start_str, submission_id)
+            insert_event(db, group_id, "arrived", row.arrived_count as i32, &start_str, submission_id)
                 .await?;
         }
         if row.in_training_count > 0 {
             insert_event(
                 db,
-                group.id,
+                group_id,
                 "started",
                 row.in_training_count as i32,
                 &start_str,
@@ -361,7 +481,12 @@ pub async fn commit_group_rows(
             .await?;
         }
 
-        group_ids.push(group.id);
+        group_ids.push(group_id);
+        affected_groups.insert(group_id);
+    }
+
+    for group_id in affected_groups {
+        refresh_horizontal(db, group_id).await?;
     }
 
     Ok(group_ids)
