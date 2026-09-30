@@ -68,9 +68,12 @@ created_at, updated_at`.
 
 ## 5. Сповіщення
 
-- Канал №1 — **WhatsApp**; архітектура — черга `notification_outbox` (`recipient_org_id, channel,
-  template, payload, status, attempts, sent_at, error`) + воркер доставки з повторами. Канали —
-  трейт `NotificationChannel`, щоб додати інші (Signal, e-mail, внутрішні) без зміни логіки.
+- Канал №1 — **WhatsApp**; транспорт — брокер NATS+JetStream, `docs/spec/09-messaging.md`
+  (`.claude/decisions/broker-nats-jetstream.md` — замінює простіший однопроцесний варіант із
+  `[[depersonalized-notification-outbox]]`): `app` пише в `outbox` тією ж транзакцією, що доменну
+  дію → JetStream → окремий сервіс `notifier` (**власна** БД/схема, не бачить таблиць
+  застосунку) доставляє. Канали — трейт `Channel` у `notifier` (WhatsApp перший, далі Signal/
+  e-mail без зміни логіки app/брокера).
 - **Жодних службових даних у повідомленні.** Текст шаблонний і знеособлений:
   "Виявлено розбіжності у ваших даних щодо підготовки. Увійдіть у систему та перевірте розділ
   «Розбіжності»." Без назв частин, номерів, кількостей, ВОС, місць. Шаблон повідомлення перевіряється

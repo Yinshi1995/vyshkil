@@ -83,6 +83,17 @@ date: 2026-09-27
   `set_session_actor` (для `audit_log.actor`). Викликається з `pages/home/server.rs` (search,
   tree) і `pages/org_detail/server.rs` (детальна картка) — перша реальна перевірка прав у проєкті.
 
+## `contracts` (Rust) → `services/notifier` (TypeScript) — межа брокера
+
+09-messaging.md, `.claude/decisions/broker-nats-jetstream.md` + `notifier-ts-whatsapp-web-js.md`.
+`contracts` — джерело істини для форми повідомлень (`Envelope<T>`, `NotifySend`/`NotifyResult`,
+subjects), не дублюється вручну на TS-боці: `schemars` генерує `contracts/schema/*.json` з тих
+самих Rust-типів, `json-schema-to-typescript` (у `services/notifier`) генерує TS-типи з цих
+JSON Schema-файлів. Зміна поля в `contracts` = перегенерувати схему = TS-типи самі підуть за
+нею (тест на розсинхрон, а не ручне редагування TS-інтерфейсу). Вхідна межа (нотифікатор читає
+з NATS) — додатково перевіряється `zod`-схемою в рантаймі (JSON Schema сама не рантайм-перевірка
+в TS, лише форма типу) — невалідне повідомлення одразу в DLQ, не в retry-цикл.
+
 ## Плановані модулі (Етап 1+, docs/spec) — доповнювати сюди в міру появи коду
 
 - `app::validation` — правила валідації з `docs/spec/03-import-validation.md` §5, спільні для форми

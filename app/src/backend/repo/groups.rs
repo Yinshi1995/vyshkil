@@ -68,7 +68,7 @@ pub async fn search_vos_position_course(
 ) -> Result<Vec<VosPositionCourseHint>, DbErr> {
     let norm_query = normalize(query);
     if norm_query.is_empty() {
-        return Ok(Vec::new());
+        return default_vos_position_course_listing(db).await;
     }
 
     #[derive(FromQueryResult)]
@@ -156,6 +156,50 @@ pub async fn search_vos_position_course(
                 matched_raw: r.matched_raw,
                 is_exact: r.is_exact,
                 why: r.why,
+            })
+        })
+        .collect())
+}
+
+/// "Весь довідник" для порожнього запиту (grid-interaction.md §2, той самий принцип, що
+/// `orgs::default_org_listing`) — прості "перші N за кодом/назвою" з кожного з трьох довідників,
+/// не спроба глобальної "найчастіші"-статистики (свідоме спрощення).
+async fn default_vos_position_course_listing(
+    db: &DatabaseConnection,
+) -> Result<Vec<VosPositionCourseHint>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        kind: String,
+        id: i32,
+        label: String,
+    }
+    let stmt = Statement::from_string(
+        db.get_database_backend(),
+        r#"
+        (SELECT 'vos' AS kind, id, code || ' — ' || title AS label FROM vos ORDER BY code LIMIT 15)
+        UNION ALL
+        (SELECT 'position' AS kind, id, name AS label FROM "position" ORDER BY name LIMIT 10)
+        UNION ALL
+        (SELECT 'course' AS kind, id, name AS label FROM course ORDER BY name LIMIT 10)
+        "#,
+    );
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| {
+            let kind = match r.kind.as_str() {
+                "vos" => VosPositionCourseKind::Vos,
+                "position" => VosPositionCourseKind::Position,
+                "course" => VosPositionCourseKind::Course,
+                _ => return None,
+            };
+            Some(VosPositionCourseHint {
+                kind,
+                id: r.id,
+                label: r.label,
+                matched_raw: String::new(),
+                is_exact: false,
+                why: None,
             })
         })
         .collect())

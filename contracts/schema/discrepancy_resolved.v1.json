@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EnvelopeDiscrepancyResolvedV1",
+  "type": "object",
+  "properties": {
+    "causation_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "$ref": "#/$defs/DiscrepancyResolved"
+    },
+    "producer": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0
+    }
+  },
+  "required": [
+    "id",
+    "type",
+    "version",
+    "occurred_at",
+    "producer",
+    "correlation_id",
+    "payload"
+  ],
+  "$defs": {
+    "DiscrepancyMetric": {
+      "type": "string",
+      "enum": [
+        "planned_count",
+        "arrived_count",
+        "in_training_count",
+        "planned_start",
+        "planned_end",
+        "site_id"
+      ]
+    },
+    "DiscrepancyResolved": {
+      "type": "object",
+      "properties": {
+        "discrepancy_id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "group_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "metric": {
+          "$ref": "#/$defs/DiscrepancyMetric"
+        },
+        "org_id": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "required": [
+        "discrepancy_id",
+        "org_id",
+        "metric"
+      ]
+    }
+  }
+}

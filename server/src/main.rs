@@ -1,6 +1,8 @@
-mod config;
-mod db;
-mod state;
+// Дефолт 128 не вистачає компілятору, коли цей бінарник компілюється в test-cfg (`cargo test -p
+// server` — глибоко вкладені типи `tachys`-view-дерева з `app::app::{shell, App}` штовхають
+// query-глибину за межу саме в test-режимі, не в звичайному `cargo build`, який завжди проходив
+// без цього атрибута; знайдено при додаванні першого тесту в цьому крейті, `tests/relay.rs`).
+#![recursion_limit = "256"]
 
 use axum::{
     body::Body,
@@ -17,7 +19,7 @@ use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
 use app::app::{shell, App};
-use state::AppState;
+use server::{admin_sse, config, db, relay, state::AppState};
 
 // mimalloc фрагментує купу помітно менше за glibc malloc на довгоживучих процесах
 // і активно повертає вільну пам'ять ОС — на сервері з обмеженим RAM це відчутно знижує RSS.
@@ -51,7 +53,7 @@ fn init_tracing(log_level: &str) {
 async fn run(config: config::Config) {
     let db = db::connect(&config)
         .await
-        .expect("failed to connect to the database");
+        .expect("failed to connect to the database\n {e}");
 
     // Міграції прогонюються при старті сервера, щоб схема БД завжди відповідала коду, який щойно задеплоїли,
     // без окремого ручного кроку `sea-orm-cli migrate up` на кожному релізі.
@@ -65,7 +67,14 @@ async fn run(config: config::Config) {
     let leptos_options = conf.leptos_options;
     let addr = leptos_options.site_addr;
 
-    let app_state = AppState { leptos_options, db };
+    let shared_nats: bus::SharedNatsClient = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let app_state = AppState { leptos_options, db, nats: shared_nats.clone() };
+
+    // Перша фонова задача в цьому проєкті (09-messaging.md §3.1, Фаза 1) -- `tokio::spawn`, не
+    // блокує запуск: NATS недоступний при старті — relay сам ретраїть, сервер піднімається як
+    // завжди. `shared_nats` — той самий клон, що адмін-сторінка `/admin/whatsapp` читає через
+    // контекст (09 §4) — relay єдиний володіє з'єднанням.
+    tokio::spawn(relay::run(app_state.db.clone(), config.nats_url.clone(), shared_nats));
 
     let routes = generate_route_list(App);
 
@@ -75,13 +84,18 @@ async fn run(config: config::Config) {
             routes,
             {
                 let db = app_state.db.clone();
-                move || provide_context(db.clone())
+                let nats = app_state.nats.clone();
+                move || {
+                    provide_context(db.clone());
+                    provide_context(nats.clone());
+                }
             },
             {
                 let leptos_options = app_state.leptos_options.clone();
                 move || shell(leptos_options.clone())
             },
         )
+        .route("/api/admin/whatsapp/events", axum::routing::get(admin_sse::whatsapp_status_stream))
         .fallback(file_and_error_handler)
         .with_state(app_state);
 
@@ -106,8 +120,12 @@ async fn file_and_error_handler(uri: Uri, State(state): State<AppState>, req: Re
         Ok(res) if res.status() == StatusCode::OK => res,
         _ => {
             let db = state.db.clone();
+            let nats = state.nats.clone();
             leptos_axum::render_app_to_stream_with_context(
-                move || provide_context(db.clone()),
+                move || {
+                    provide_context(db.clone());
+                    provide_context(nats.clone());
+                },
                 move || shell(state.leptos_options.clone()),
             )(req)
             .await

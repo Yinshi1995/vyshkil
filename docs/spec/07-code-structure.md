@@ -57,9 +57,20 @@ app/src/
 ~300 рядків (§2 правило 5) або з'явиться підтримка `@import`/pre-style хука в `cargo-leptos`.
 
 Інші крейти:
-- `server/` — тонкий: `main.rs`, `config.rs`, `db.rs` (пул), `state.rs`; пізніше — `jobs/`
-  (запуск фонових задач). Доменної логіки й прав тут нема.
+- `server/` — тонкий: `main.rs`, `config.rs`, `db.rs` (пул), `state.rs`; += фонова задача relay
+  (`outbox` → NATS, 09-messaging.md §3.1, Фаза 1). Доменної логіки й прав тут нема.
 - `migration/` — як є.
+- `contracts/` — типи повідомлень брокера (`Envelope<T>`, subjects, `NotifySend`/`NotifyResult`/
+  доменні події), без tokio/sea-orm — компілюється і в wasm (09 §4).
+- `bus/` — тонка обгортка над `async-nats` (publish з дедуплікацією, pull-consumer, контракт
+  ідемпотентності) — не знає про Postgres/`outbox`/`inbox` конкретно (09 §4).
+- `services/notifier/` — **єдиний НЕ-Rust код репозиторію**: TypeScript, Node 22 LTS, окремий
+  Docker-образ, НЕ Cargo workspace member (`.claude/decisions/notifier-ts-whatsapp-web-js.md`) —
+  власна БД/схема (контакти, журнал доставки), споживає `NOTIFY_CMD`, канал WhatsApp
+  (`whatsapp-web.js`) — 09 §3.7, §4. Правила для нього: типи — згенеровані з `contracts/
+  schema/*.json` (`schemars` → `json-schema-to-typescript`), не ручні дублікати; вхідна
+  валідація — `zod`; без ORM (3 таблиці, `postgres`-клієнт напряму); своя карта `CLAUDE.md` за
+  тим самим форматом, що й Rust-теки.
 - Майбутні важкі движки (Етап 5 — імпорт, Етап 7 — генерація документів) — **окремі крейти
   воркспейсу** (`import/`, `docgen/`) без Leptos: швидша інкрементальна збірка, менше контексту
   для агента. Ті самі правила карт.

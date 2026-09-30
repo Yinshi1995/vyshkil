@@ -41,6 +41,7 @@ mod m20260930_000038_widen_generated_document_kind;
 mod m20260930_000039_create_reported_group_table;
 mod m20260930_000040_create_discrepancy_table;
 mod m20260930_000041_attach_audit_trigger_discrepancy;
+mod m20260930_000042_create_outbox_table;
 
 pub struct Migrator;
 
@@ -103,6 +104,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260930_000039_create_reported_group_table::Migration),
             Box::new(m20260930_000040_create_discrepancy_table::Migration),
             Box::new(m20260930_000041_attach_audit_trigger_discrepancy::Migration),
+            // Брокер (09-messaging.md, Фаза 1): транзакційний outbox — .claude/decisions/
+            // broker-nats-jetstream.md.
+            Box::new(m20260930_000042_create_outbox_table::Migration),
         ]
     }
 }

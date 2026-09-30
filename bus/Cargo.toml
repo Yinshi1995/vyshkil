@@ -1,0 +1,22 @@
+[package]
+name = "bus"
+version = "0.1.0"
+edition = "2021"
+
+# Тонка обгортка над async-nats: publish з дедуплікаційним заголовком, будівельник durable
+# pull-consumer'а, трейт ідемпотентності споживача (09-messaging.md §3.1-3.2). Логіка тут не
+# знає про Postgres/`outbox`/`inbox`-таблиці конкретно — ті лишаються в `app`/`services/notifier`,
+# `bus` лише транспорт.
+[dependencies]
+contracts = { path = "../contracts" }
+async-nats = "0.38"
+async-trait = "0.1"
+serde = { workspace = true }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }
+futures = "0.3"
+uuid = { version = "1", features = ["v7"] }

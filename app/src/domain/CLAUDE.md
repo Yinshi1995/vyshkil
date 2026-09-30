@@ -8,6 +8,7 @@
 |---|---|---|
 | `normalize.rs` | `normalize(&str) -> String` — єдина функція нормалізації синонімів (лапки/дужки/дефіс/"в-с", Latin→Cyrillic) | `backend/repo/orgs.rs` (пошук) |
 | `counting.rs` | Воронка групи з подій: `in_training`/`events_on`/`finishing_on`, бітемпоральний `known_at` | `backend/repo/groups.rs` |
-| `dates.rs` | `parse_date`/`parse_maybe_range`/`parse_end_date`/`validate_period` (02 §4, 03 §4) | `pages/training_form` (Етап 4) |
+| `dates.rs` | `parse_date`/`parse_maybe_range`/`parse_end_date`/`validate_period`/`format_date_mask` (02 §4, 03 §4, grid-interaction.md §3 — живе форматування дд.мм.рррр під час набору) | `pages/training_form` (Етап 4), `widgets/group_grid/date_range_cell` |
+| `friendly_error.rs` | `humanize_import_error` — переклад технічних серверних помилок імпорту в людські (дефект 7, 2026-09-30) | `pages/training_form`, `pages/import` |
 | `validation.rs` | `validate_count`/`validate_funnel_order`/`looks_like_personal_name` (03 §5) | `pages/training_form` (Етап 4) |
 | `reconciliation.rs` | `detect_horizontal` — горизонтальна звірка (04 §3, Етап 8 зріз 1): та сама канонічна група, незгодний метрик між поданнями | `backend/repo/reconciliation.rs` |

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EnvelopeNotifyResultV1",
+  "type": "object",
+  "properties": {
+    "causation_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "$ref": "#/$defs/NotifyResult"
+    },
+    "producer": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint16",
+      "maximum": 65535,
+      "minimum": 0
+    }
+  },
+  "required": [
+    "id",
+    "type",
+    "version",
+    "occurred_at",
+    "producer",
+    "correlation_id",
+    "payload"
+  ],
+  "$defs": {
+    "NotifyResult": {
+      "type": "object",
+      "properties": {
+        "dedupe_key": {
+          "type": "string"
+        },
+        "recipient_org_id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "status": {
+          "$ref": "#/$defs/NotifyStatus"
+        }
+      },
+      "required": [
+        "recipient_org_id",
+        "status",
+        "dedupe_key"
+      ]
+    },
+    "NotifyStatus": {
+      "type": "string",
+      "enum": [
+        "delivered",
+        "failed",
+        "suppressed"
+      ]
+    }
+  }
+}

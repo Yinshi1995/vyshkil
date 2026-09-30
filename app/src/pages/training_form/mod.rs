@@ -6,11 +6,19 @@ use leptos::ev;
 use leptos::leptos_dom::helpers::{set_interval_with_handle, window_event_listener};
 use leptos::prelude::*;
 
-use crate::components::{read_file_bytes, DatePicker, FileDropzone, Select, SelectOption};
+use crate::components::{
+    read_file_bytes, ComboboxVariant, DatePicker, FileDropzone, FileDropzoneVariant, FileStage,
+    Select, SelectOption,
+};
+use crate::domain::friendly_error::humanize_import_error;
 use crate::hooks::use_actor::use_actor;
 use crate::layout::{ContentWidth, PageContent, PageHeader, Toolbar};
+use crate::services::orgs::list_orgs;
+use crate::types::actor::Role;
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
-use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
+use crate::widgets::group_grid::{
+    snapshot_rows, use_columns, wrap_rows, ColumnsToggle, EditableRow, Grid, OrgAutocomplete,
+};
 use crate::widgets::ActorNotice;
 use server::{commit_grid, get_draft, parse_bps_file, parse_fah_file, parse_terminy_file, save_draft};
 
@@ -51,6 +59,12 @@ impl FileKind {
             _ => FileKind::Fah,
         }
     }
+}
+
+/// Рядок ще нічим не заповнений — `sender_org_id` більше НЕ показник (тулбар проставляє його в
+/// КОЖЕН рядок одразу, дефект 1), перевіряємо реально введені поля.
+fn row_is_blank(r: &GroupFormRow) -> bool {
+    r.training_kind_id.is_none() && r.vos_position_course_label.is_empty() && r.note.is_empty()
 }
 
 /// Сітка введення (02): весь рядок вноситься без миші, автозбереження чернетки, `Ctrl+Enter`
@@ -118,6 +132,45 @@ fn FormBody() -> impl IntoView {
     let commit_error = RwSignal::new(None::<(usize, String, String)>);
     let file_kind = RwSignal::new(FileKind::Fah);
     let parsing = RwSignal::new(false);
+    let file_stage = RwSignal::new(FileStage::Idle);
+    // Технічні деталі серверної помилки (дефект 7) — окремо від людського повідомлення, видимі
+    // лише адміну, за розкривним "Деталі" (не в основному потоці, не поруч з іншим повідомленням).
+    let last_error_detail = RwSignal::new(None::<String>);
+    let columns = use_columns();
+
+    // Частина-відправник — ОДИН раз на все подання (дефект 1, `.claude/decisions/
+    // sender-org-once-per-submission.md`): тулбар, не колонка рядка. За замовчуванням — своя
+    // організація актора; чернетка (нижче) може перезаписати, якщо там уже було збережено інакше.
+    let sender_org_id = RwSignal::new(None::<i32>);
+    let sender_org_label = RwSignal::new(String::new());
+    Effect::new(move |_| {
+        let Some(a) = actor.get() else { return };
+        if sender_org_id.get_untracked().is_some() {
+            return;
+        }
+        leptos::task::spawn_local(async move {
+            if let Ok(orgs) = list_orgs().await {
+                if let Some((_, label)) = orgs.iter().find(|(id, _)| *id == a.org_id) {
+                    sender_org_label.set(label.clone());
+                    sender_org_id.set(Some(a.org_id));
+                }
+            }
+        });
+    });
+    // Кожен рядок (новий, відновлений із чернетки, після коміту) отримує ТОЙ САМИЙ sender_org —
+    // сітка більше не дає редагувати це поле per-рядок (`grid.rs`, Частина прибрана з колонок).
+    Effect::new(move |_| {
+        let id = sender_org_id.get();
+        let label = sender_org_label.get();
+        for row in editable.get() {
+            row.data.update(|d| {
+                if d.sender_org_id != id || d.sender_org_label != label {
+                    d.sender_org_id = id;
+                    d.sender_org_label = label.clone();
+                }
+            });
+        }
+    });
 
     // Відновлення чернетки при відкритті форми (02 §6).
     let draft_loaded = RwSignal::new(false);
@@ -131,6 +184,12 @@ fn FormBody() -> impl IntoView {
             if let Ok(Some(state)) = get_draft(Some(actor)).await {
                 submission_id.set(Some(state.submission_id));
                 as_of_date.set(state.payload.as_of_date);
+                if let Some(first) = state.payload.rows.first() {
+                    if let Some(id) = first.sender_org_id {
+                        sender_org_id.set(Some(id));
+                        sender_org_label.set(first.sender_org_label.clone());
+                    }
+                }
                 if !state.payload.rows.is_empty() {
                     replace_rows(state.payload.rows);
                 }
@@ -152,7 +211,7 @@ fn FormBody() -> impl IntoView {
                     return;
                 }
                 let current_rows = snapshot_rows(editable);
-                if current_rows.iter().all(|r| r.sender_org_id.is_none() && r.note.is_empty()) {
+                if current_rows.iter().all(row_is_blank) {
                     return;
                 }
                 let payload = DraftPayload { as_of_date: as_of, rows: current_rows };
@@ -204,38 +263,57 @@ fn FormBody() -> impl IntoView {
     // замінюються, щоб не лишати зайвий порожній рядок зверху.
     let on_file_selected = move |file: web_sys::File| {
         parsing.set(true);
+        file_stage.set(FileStage::Reading);
         save_status.set("розбираю файл…".to_string());
         let kind = file_kind.get_untracked();
-        read_file_bytes(file, move |bytes| {
-            let actor_val = actor.get_untracked();
-            leptos::task::spawn_local(async move {
-                let result = match kind {
-                    FileKind::Fah => parse_fah_file(actor_val, bytes).await,
-                    FileKind::Bps => parse_bps_file(actor_val, bytes).await,
-                    FileKind::Terminy => parse_terminy_file(actor_val, bytes).await,
-                };
-                match result {
-                    Ok(rows) => {
-                        let n = rows.len();
-                        let existing = snapshot_rows(editable);
-                        let is_blank = existing
-                            .iter()
-                            .all(|r| r.sender_org_id.is_none() && r.note.is_empty());
-                        snapshot();
-                        if is_blank {
-                            replace_rows(rows);
-                        } else {
-                            let mut merged = existing;
-                            merged.extend(rows);
-                            replace_rows(merged);
+        read_file_bytes(
+            file,
+            move |bytes| {
+                file_stage.set(FileStage::Parsing);
+                let actor_val = actor.get_untracked();
+                leptos::task::spawn_local(async move {
+                    let result = match kind {
+                        FileKind::Fah => parse_fah_file(actor_val, bytes).await,
+                        FileKind::Bps => parse_bps_file(actor_val, bytes).await,
+                        FileKind::Terminy => parse_terminy_file(actor_val, bytes).await,
+                    };
+                    match result {
+                        Ok(rows) => {
+                            let n = rows.len();
+                            let existing = snapshot_rows(editable);
+                            let is_blank = existing.iter().all(row_is_blank);
+                            snapshot();
+                            if is_blank {
+                                replace_rows(rows);
+                            } else {
+                                let mut merged = existing;
+                                merged.extend(rows);
+                                replace_rows(merged);
+                            }
+                            save_status
+                                .set(format!("розібрано {n} рядків — перевірте перед збереженням"));
+                            file_stage.set(FileStage::Ready);
+                            last_error_detail.set(None);
                         }
-                        save_status.set(format!("розібрано {n} рядків — перевірте перед збереженням"));
+                        Err(e) => {
+                            let raw = e.to_string();
+                            let human = humanize_import_error(&raw);
+                            save_status.set(format!("не вдалось розібрати: {human}"));
+                            file_stage.set(FileStage::Error(human));
+                            last_error_detail.set(Some(raw));
+                        }
                     }
-                    Err(e) => save_status.set(format!("не вдалось розібрати: {e}")),
-                }
+                    parsing.set(false);
+                });
+            },
+            move |e| {
+                let human = humanize_import_error(&e);
+                save_status.set(format!("не вдалось прочитати файл: {human}"));
+                file_stage.set(FileStage::Error(human));
+                last_error_detail.set(Some(e));
                 parsing.set(false);
-            });
-        });
+            },
+        );
     };
 
     // Глобальні гарячі клавіші, що не залежать від конкретної клітинки (02 §2).
@@ -269,8 +347,24 @@ fn FormBody() -> impl IntoView {
 
     view! {
         <PageContent width=ContentWidth::Data>
+            // Один тулбар в одну лінію (дефект 8): ліворуч Частина · Станом на · Тип подання;
+            // праворуч Імпорт · Колонки · Шпаргалка · Зберегти (primary, останнім).
             <Toolbar>
                 <div class="toolbar__left">
+                    <OrgAutocomplete
+                        id="toolbar-sender-org".to_string()
+                        label=Signal::derive(move || sender_org_label.get())
+                        on_select=move |id: i32, label: String| {
+                            sender_org_id.set(Some(id));
+                            sender_org_label.set(label);
+                        }
+                        on_label_input=Callback::new(move |v: String| {
+                            sender_org_label.set(v);
+                            sender_org_id.set(None);
+                        })
+                        on_keydown=Callback::new(|_: web_sys::KeyboardEvent| {})
+                        variant=ComboboxVariant::Field
+                    />
                     <label class="training-form__as-of">
                         "Станом на "
                         <DatePicker
@@ -297,16 +391,32 @@ fn FormBody() -> impl IntoView {
                         accept=".xlsx".to_string()
                         disabled=Signal::derive(move || parsing.get())
                         on_file=Callback::new(on_file_selected)
+                        variant=FileDropzoneVariant::Compact
+                        label="Імпорт".to_string()
+                        stage=Signal::derive(move || file_stage.get())
+                        on_clear=Callback::new(move |_| file_stage.set(FileStage::Idle))
                     />
-                    <span class="training-form__status">{move || save_status.get()}</span>
-                    <button class="btn btn--primary" on:click=move |_| do_commit()>
-                        "Зберегти все (Ctrl+Enter)"
-                    </button>
+                    <ColumnsToggle columns=columns/>
                     <button class="btn btn--ghost" on:click=move |_| cheat_sheet_open.update(|v| *v = !*v)>
                         "? Шпаргалка"
                     </button>
+                    <button class="btn btn--primary" on:click=move |_| do_commit()>
+                        "Зберегти все (Ctrl+Enter)"
+                    </button>
                 </div>
             </Toolbar>
+            <p class="training-form__status t-xs fg-muted">{move || save_status.get()}</p>
+            // Технічні деталі помилки — лише адміну, розкривним "Деталі" (дефект 7), не завжди
+            // видимі й не поруч з людським повідомленням.
+            <Show when=move || {
+                last_error_detail.get().is_some()
+                    && actor.get().map(|a| a.role == Role::Admin).unwrap_or(false)
+            }>
+                <details class="t-xs fg-subtle">
+                    <summary>"Деталі (для адміна)"</summary>
+                    <p>{move || last_error_detail.get().unwrap_or_default()}</p>
+                </details>
+            </Show>
 
             {move || {
                 commit_error
@@ -329,6 +439,7 @@ fn FormBody() -> impl IntoView {
                     chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d")
                         .unwrap_or_else(|_| chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
                 })
+                columns=columns
             />
 
             <Show when=move || cheat_sheet_open.get()>

@@ -1,8 +1,23 @@
 # Компоуз лише для локальної розробки: піднімає Postgres поруч із застосунком,
 # щоб не ставити СУБД на хост окремо — прод-деплой цей файл не використовує.
+#
+# Дві мережі (09-messaging.md §5: "вихід в інтернет — тільки notifier, і лише на домени
+# WhatsApp"): `internal` (без шлюзу в інтернет — db/nats/app сидять лише тут, не можуть вийти
+# назовні) і `egress` (звичайний bridge, має NAT в інтернет) — лише `notifier` в обох, тому
+# лише він взагалі МОЖЕ вийти в мережу. Це дає "так/ні" на рівні Docker безкоштовно; фактичний
+# allowlist КОНКРЕТНИХ доменів WhatsApp (не "увесь інтернет") — proxy/firewall на боці реального
+# хоста розгортання, поза цим dev-файлом (сам файл і так не для прод) — задокументовано як
+# залишковий крок у MEMORY.md, не мовчки вважається зробленим.
+networks:
+  internal:
+    internal: true
+  egress:
+    driver: bridge
+
 services:
   db:
     image: postgres:16-alpine
+    networks: [internal]
     environment:
       POSTGRES_USER: taktoblik
       POSTGRES_PASSWORD: taktoblik
@@ -11,26 +26,79 @@ services:
       - "5432:5432"
     volumes:
       - taktoblik_pgdata:/var/lib/postgresql/data
+      # Лише при ПЕРШІЙ ініціалізації тому (09 §3.7: окрема роль/БД для notifier).
+      - ./docker/init-notifier-db.sql:/docker-entrypoint-initdb.d/init-notifier-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U taktoblik"]
       interval: 2s
       timeout: 3s
       retries: 15
 
+  # Брокер (09-messaging.md) — client-порт 4222 НЕ проброшений на хост навмисно (§3.6: "NATS
+  # слухає лише внутрішню docker-мережу"), лише через DNS-ім'я compose-сервісу "nats" для
+  # app/notifier. 8222 (моніторинг, read-only HTTP) — на хості лише для розробника, теж не
+  # для контейнерів між собою.
+  nats:
+    image: nats:2-alpine
+    # Auth (09 §3.6, Фаза 3, .claude/decisions/broker-nats-jetstream.md): конфіг-файл замість
+    # голих `-js -sd`-прапорців -- права per-user за таблицею §3.6, перевірено проти реального
+    # серверу (дозволені дії проходять, заборонені -- Permissions Violation, невірний пароль --
+    # Authorization Violation при конекті).
+    command: ["-c", "/etc/nats/nats-server.conf"]
+    mem_limit: 256m
+    networks: [internal]
+    volumes:
+      - taktoblik_natsdata:/data
+      - ./docker/nats-server.conf:/etc/nats/nats-server.conf:ro
+    ports:
+      - "127.0.0.1:8222:8222"
+
   app:
     build: .
+    networks: [internal]
     depends_on:
       db:
         condition: service_healthy
+      nats:
+        condition: service_started
     environment:
-      # Ім'я хоста "db" — це DNS-ім'я сервісу compose, а не localhost, бо сервер живе в іншому контейнері.
+      # Ім'я хоста "db"/"nats" — DNS-імена сервісів compose, а не localhost, бо сервер живе в іншому контейнері.
       DATABASE_URL: postgres://taktoblik:taktoblik@db:5432/taktoblik
       DATABASE_MAX_CONNECTIONS: "5"
       SERVER_WORKER_THREADS: "2"
       LEPTOS_SITE_ADDR: 0.0.0.0:3000
+      NATS_URL: nats://app:app-dev-password@nats:4222
       RUST_LOG: info,sqlx=warn
     ports:
       - "3000:3000"
 
+  notifier:
+    build: ./services/notifier
+    networks: [internal, egress]
+    mem_limit: 1g
+    shm_size: 512m
+    # Дозволяє Chromium власний user-namespace sandbox БЕЗ `--no-sandbox` (§3: "не вимикай
+    # sandbox мовчки") -- перевірено: без цього Chromium не стартує в контейнері взагалі
+    # ("No usable sandbox!"), з цим -- стартує, доходить до реального QR. Вужче, ніж
+    # `--privileged`, конкретна можливість, яку Chromium власне й потребує.
+    cap_add:
+      - SYS_ADMIN
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    environment:
+      NOTIFIER_DATABASE_URL: postgres://notifier:notifier@db:5432/notifier
+      NATS_URL: nats://notifier:notifier-dev-password@nats:4222
+      WA_SESSION_PATH: /app/wa-session
+      # Вимкнено за замовчуванням (§4: "логи можуть збиратися") -- увімкнути лише для дебагу.
+      WA_PRINT_QR_TO_LOGS: "0"
+    volumes:
+      - taktoblik_wa_session:/app/wa-session
+
 volumes:
   taktoblik_pgdata:
+  taktoblik_natsdata:
+  taktoblik_wa_session:

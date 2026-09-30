@@ -6,12 +6,18 @@ use leptos::ev;
 use leptos::leptos_dom::helpers::{set_interval_with_handle, window_event_listener};
 use leptos::prelude::*;
 
-use crate::components::{read_file_bytes, DatePicker, FileDropzone, Select, SelectOption};
+use crate::components::{
+    read_file_bytes, DatePicker, FileDropzone, FileDropzoneVariant, FileStage, Select, SelectOption,
+};
+use crate::domain::friendly_error::humanize_import_error;
+use crate::types::actor::Role;
 use crate::hooks::use_actor::use_actor;
 use crate::layout::{ContentWidth, PageContent, PageHeader, Toolbar};
 use crate::types::staffing::{InstructorStaffingRow, StaffingRow};
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
-use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
+use crate::widgets::group_grid::{
+    snapshot_rows, use_columns, wrap_rows, ColumnsToggle, EditableRow, Grid,
+};
 use crate::widgets::ActorNotice;
 use server::{
     commit_archive_grid, commit_grid, commit_instructor_staffing, commit_staffing, get_draft,
@@ -107,8 +113,11 @@ fn ImportBody() -> impl IntoView {
     let active_cell = RwSignal::new((0usize, 0usize));
     let status = RwSignal::new(String::new());
     let parsing = RwSignal::new(false);
+    let file_stage = RwSignal::new(FileStage::Idle);
     let commit_error = RwSignal::new(None::<(usize, String, String)>);
     let cheat_sheet_open = RwSignal::new(false);
+    let last_error_detail = RwSignal::new(None::<String>);
+    let columns = use_columns();
     // Kvid-гілка: інша форма даних (01 §4), не `GroupFormRow` -- окремий сигнал, без undo/draft-
     // автозбереження (задокументоване спрощення, `pages/import/CLAUDE.md`).
     let staffing_rows = RwSignal::new(Vec::<StaffingRow>::new());
@@ -160,64 +169,100 @@ fn ImportBody() -> impl IntoView {
 
     let on_file_selected = move |file: web_sys::File| {
         parsing.set(true);
+        file_stage.set(FileStage::Reading);
         status.set("розбираю файл…".to_string());
         let kind = file_kind.get_untracked();
-        read_file_bytes(file, move |bytes| {
-            let actor_val = actor.get_untracked();
-            leptos::task::spawn_local(async move {
-                if kind == FileKind::Ivs {
-                    match parse_ivs_file(actor_val, bytes).await {
-                        Ok((staffing, groups)) => {
-                            let (n_staffing, n_groups) = (staffing.len(), groups.len());
-                            instructor_staffing_rows.set(staffing);
-                            snapshot();
-                            replace_rows(groups);
-                            submission_id.set(None);
-                            status.set(format!(
-                                "розібрано {n_staffing} рядків укомплектованості + \
-                                 {n_groups} груп (стажування/курси) — перевірте перед фіксацією"
-                            ));
+        read_file_bytes(
+            file,
+            move |bytes| {
+                file_stage.set(FileStage::Parsing);
+                let actor_val = actor.get_untracked();
+                leptos::task::spawn_local(async move {
+                    if kind == FileKind::Ivs {
+                        match parse_ivs_file(actor_val, bytes).await {
+                            Ok((staffing, groups)) => {
+                                let (n_staffing, n_groups) = (staffing.len(), groups.len());
+                                instructor_staffing_rows.set(staffing);
+                                snapshot();
+                                replace_rows(groups);
+                                submission_id.set(None);
+                                status.set(format!(
+                                    "розібрано {n_staffing} рядків укомплектованості + \
+                                     {n_groups} груп (стажування/курси) — перевірте перед фіксацією"
+                                ));
+                                file_stage.set(FileStage::Ready);
+                                last_error_detail.set(None);
+                            }
+                            Err(e) => {
+                                let raw = e.to_string();
+                                let human = humanize_import_error(&raw);
+                                status.set(format!("не вдалось розібрати: {human}"));
+                                file_stage.set(FileStage::Error(human));
+                                last_error_detail.set(Some(raw));
+                            }
                         }
-                        Err(e) => status.set(format!("не вдалось розібрати: {e}")),
+                        parsing.set(false);
+                        return;
                     }
-                    parsing.set(false);
-                    return;
-                }
-                if kind.is_staffing() {
-                    match parse_kvid_file(actor_val, bytes).await {
+                    if kind.is_staffing() {
+                        match parse_kvid_file(actor_val, bytes).await {
+                            Ok(rows) => {
+                                let n = rows.len();
+                                staffing_rows.set(rows);
+                                status.set(format!("розібрано {n} рядків — перевірте перед фіксацією"));
+                                file_stage.set(FileStage::Ready);
+                                last_error_detail.set(None);
+                            }
+                            Err(e) => {
+                                let raw = e.to_string();
+                                let human = humanize_import_error(&raw);
+                                status.set(format!("не вдалось розібрати: {human}"));
+                                file_stage.set(FileStage::Error(human));
+                                last_error_detail.set(Some(raw));
+                            }
+                        }
+                        parsing.set(false);
+                        return;
+                    }
+                    // Ivs/Kvid уже повернулись вище -- сюди доходить лише VchArchive.
+                    match parse_vch_archive_file(actor_val, bytes).await {
                         Ok(rows) => {
                             let n = rows.len();
-                            staffing_rows.set(rows);
-                            status.set(format!("розібрано {n} рядків — перевірте перед фіксацією"));
+                            // Звіт переносу (Етап 6, роадмап: "скільки рядків, скільки відхилено") --
+                            // непізнана частина заздалегідь підказує обсяг ручної роботи ДО спроби
+                            // фіксації (сама фіксація все одно все-або-нічого).
+                            let unresolved = rows.iter().filter(|r| r.sender_org_id.is_none()).count();
+                            snapshot();
+                            replace_rows(rows);
+                            submission_id.set(None);
+                            status.set(match unresolved {
+                                0 => format!("розібрано {n} рядків — перевірте перед фіксацією"),
+                                u => format!(
+                                    "розібрано {n} рядків, {u} з нерозпізнаною частиною — перевірте перед фіксацією"
+                                ),
+                            });
+                            file_stage.set(FileStage::Ready);
+                            last_error_detail.set(None);
                         }
-                        Err(e) => status.set(format!("не вдалось розібрати: {e}")),
+                        Err(e) => {
+                            let raw = e.to_string();
+                            let human = humanize_import_error(&raw);
+                            status.set(format!("не вдалось розібрати: {human}"));
+                            file_stage.set(FileStage::Error(human));
+                            last_error_detail.set(Some(raw));
+                        }
                     }
                     parsing.set(false);
-                    return;
-                }
-                // Ivs/Kvid уже повернулись вище -- сюди доходить лише VchArchive.
-                match parse_vch_archive_file(actor_val, bytes).await {
-                    Ok(rows) => {
-                        let n = rows.len();
-                        // Звіт переносу (Етап 6, роадмап: "скільки рядків, скільки відхилено") --
-                        // непізнана частина заздалегідь підказує обсяг ручної роботи ДО спроби
-                        // фіксації (сама фіксація все одно все-або-нічого).
-                        let unresolved = rows.iter().filter(|r| r.sender_org_id.is_none()).count();
-                        snapshot();
-                        replace_rows(rows);
-                        submission_id.set(None);
-                        status.set(match unresolved {
-                            0 => format!("розібрано {n} рядків — перевірте перед фіксацією"),
-                            u => format!(
-                                "розібрано {n} рядків, {u} з нерозпізнаною частиною — перевірте перед фіксацією"
-                            ),
-                        });
-                    }
-                    Err(e) => status.set(format!("не вдалось розібрати: {e}")),
-                }
+                });
+            },
+            move |e| {
+                let human = humanize_import_error(&e);
+                status.set(format!("не вдалось прочитати файл: {human}"));
+                file_stage.set(FileStage::Error(human));
+                last_error_detail.set(Some(e));
                 parsing.set(false);
-            });
-        });
+            },
+        );
     };
 
     // Автозбереження чернетки превʼю кожні 5с (02 §6) — та сама логіка, що й training_form.
@@ -373,6 +418,16 @@ fn ImportBody() -> impl IntoView {
                 "сітці, що й ручне введення — перевірте нерозпізнані клітинки (без вибраної "
                 "частини/ВОС/місця) перед фіксацією."
             </p>
+            // Файл тут -- головна дія сторінки (на відміну від /training-form, де це доповнення
+            // до ручного вводу) -- велика "zone"-зона перед тулбаром, не компакт-кнопка всередині.
+            <FileDropzone
+                accept=".xlsx".to_string()
+                disabled=Signal::derive(move || parsing.get())
+                on_file=Callback::new(on_file_selected)
+                variant=FileDropzoneVariant::Zone
+                stage=Signal::derive(move || file_stage.get())
+                on_clear=Callback::new(move |_| file_stage.set(FileStage::Idle))
+            />
             <Toolbar>
                 <div class="toolbar__left">
                     <Select
@@ -397,17 +452,22 @@ fn ImportBody() -> impl IntoView {
                     </label>
                 </div>
                 <div class="toolbar__right">
-                    <FileDropzone
-                        accept=".xlsx".to_string()
-                        disabled=Signal::derive(move || parsing.get())
-                        on_file=Callback::new(on_file_selected)
-                    />
-                    <span class="training-form__status">{move || status.get()}</span>
+                    <ColumnsToggle columns=columns/>
                     <button class="btn btn--primary" on:click=move |_| do_commit()>
                         "Зафіксувати все (Ctrl+Enter)"
                     </button>
                 </div>
             </Toolbar>
+            <p class="training-form__status t-xs fg-muted">{move || status.get()}</p>
+            <Show when=move || {
+                last_error_detail.get().is_some()
+                    && actor.get().map(|a| a.role == Role::Admin).unwrap_or(false)
+            }>
+                <details class="t-xs fg-subtle">
+                    <summary>"Деталі (для адміна)"</summary>
+                    <p>{move || last_error_detail.get().unwrap_or_default()}</p>
+                </details>
+            </Show>
 
             {move || {
                 commit_error
@@ -431,6 +491,7 @@ fn ImportBody() -> impl IntoView {
                         chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d")
                             .unwrap_or_else(|_| chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
                     })
+                    columns=columns
                 />
             </Show>
             <Show when=move || file_kind.get().is_staffing() && !staffing_rows.get().is_empty()>

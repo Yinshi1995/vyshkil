@@ -8,6 +8,7 @@ pub mod imports_kvid;
 pub mod imports_terminy;
 pub mod imports_vch_archive;
 pub mod orgs;
+pub mod outbox;
 pub mod reconciliation;
 pub mod staffing;
 pub mod submissions;

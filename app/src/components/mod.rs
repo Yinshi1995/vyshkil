@@ -14,6 +14,6 @@ pub use combobox::{Combobox, ComboboxItem, ComboboxMode, ComboboxVariant};
 pub use date_picker::DatePicker;
 pub use download::download_bytes;
 pub use drawer::Drawer;
-pub use file_dropzone::{read_file_bytes, FileDropzone};
+pub use file_dropzone::{read_file_bytes, FileDropzone, FileDropzoneVariant, FileStage};
 pub use modal::{Dialog, Modal};
 pub use select::{Select, SelectOption};

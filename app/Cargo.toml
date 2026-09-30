@@ -13,8 +13,10 @@ leptos = { workspace = true }
 leptos_meta = { workspace = true }
 leptos_router = { workspace = true }
 serde = { workspace = true }
-# Лише сервер: (де)серіалізація submission.draft_payload (jsonb) — ssr-gated разом із sea-orm.
-serde_json = { version = "1", optional = true }
+# Раніше лише сервер ((де)серіалізація submission.draft_payload jsonb) -- тепер завжди
+# (не optional): pages/admin_whatsapp/mod.rs парсить SSE-повідомлення на клієнті (wasm), сам
+# serde_json компілюється під wasm32 так само, як chrono вище -- обмеження було штучним.
+serde_json = "1"
 # Парсинг/арифметика дат у domain/dates.rs (02 §4, 03 §4) -- чиста дата-математика, без "clock"
 # (не читаємо системний час) і без "wasmbind" (не чіпаємо JS Date) -- компілюється в WASM так само,
 # як і на сервері (рішення: [[chrono-in-domain]]).
@@ -34,7 +36,7 @@ sea-orm = { version = "1", default-features = false, features = [
 # типи компілюються на будь-якому таргеті (структурні визначення wasm-bindgen), функціонують лише
 # в WASM. leptos і так тягне обидва крейти транзитивно завжди -- тут лише називаємо типи явно.
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["HtmlElement", "KeyboardEvent", "File", "FileList", "DragEvent", "DataTransfer", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement", "Window", "DomRect", "FocusOptions", "Storage"] }
+web-sys = { version = "0.3", features = ["HtmlElement", "KeyboardEvent", "File", "FileList", "DragEvent", "DataTransfer", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement", "Window", "DomRect", "FocusOptions", "Storage", "EventSource", "EventSourceInit", "MessageEvent"] }
 # Читання байтів обраного файлу (Етап 5, `pages/import`) -- `File::array_buffer()` повертає
 # JS Promise, потрібен `wasm_bindgen_futures::JsFuture` щоб await-нути його з Rust; `js_sys` --
 # для Uint8Array/зняття байтів із ArrayBuffer. Той самий принцип, що й wasm-bindgen/web-sys вище
@@ -46,6 +48,15 @@ calamine = { version = "0.36", features = ["chrono"], optional = true }
 # xlsx-генератор документів (Етап 7, 05 §D1/D2) -- лише сервер: формули/об'єднання/freeze panes
 # (рекомендація самої 05-спеки); WASM ніколи не генерує документи.
 rust_xlsxwriter = { version = "0.79", optional = true }
+# Брокер (09-messaging.md, Фаза 1) -- типи повідомлень (`contracts`, wasm-безпечний сам по собі)
+# і генерація `outbox.id`/`Envelope.id` (`uuid` v7) потрібні лише в `backend::repo` (ssr):
+# домен пише подію в ТІЙ САМІЙ транзакції, що дані, WASM ніколи не публікує напряму.
+contracts = { path = "../contracts", optional = true }
+uuid = { version = "1", features = ["v7"], optional = true }
+# Адмін-сторінка /admin/whatsapp (09 §4) -- request-reply команди до notifier'а через NATS.
+bus = { path = "../bus", optional = true }
+# Адмін-сторінка /admin/queues (09 §5, Фаза 4) -- (де)кодування payload DLQ-записів.
+base64 = { version = "0.23", optional = true }
 # Стильова система (Фаза 2, docs/spec/08-style-system.md) -- style без рантайм-залежностей
 # (компілюється в wasm так само, як на сервері); style_macros -- proc-macro, компілюється
 # для host незалежно від таргету консюмера.
@@ -69,7 +80,10 @@ ssr = [
     "leptos_meta/ssr",
     "leptos_router/ssr",
     "dep:sea-orm",
-    "dep:serde_json",
     "dep:calamine",
     "dep:rust_xlsxwriter",
+    "dep:contracts",
+    "dep:uuid",
+    "dep:bus",
+    "dep:base64",
 ]

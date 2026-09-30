@@ -1,0 +1,32 @@
+[package]
+name = "contracts"
+version = "0.1.0"
+edition = "2021"
+
+# Без tokio/sea-orm/web-специфічних залежностей навмисно: ці типи їздять і в `app` (wasm-збірка
+# клієнта), і в `server`/`bus`/`services/notifier` (09-messaging.md §4 — "без tokio, збирається
+# й у wasm"). Додавання будь-якої залежності сюди — перевір спершу, чи вона сама компілюється
+# під wasm32-unknown-unknown.
+[dependencies]
+serde = { workspace = true }
+uuid = { version = "1", features = ["v7", "serde"] }
+# "clock" (Utc::now()) — на відміну від app::domain::dates (там свідомо БЕЗ clock, дата рахується
+# від переданого as_of, WASM ніколи не читає системний час) конверти складає лише сервер/notifier
+# (ssr/нативний бінарник), тому реальний виклик Utc::now() ніколи не станеться в WASM-збірці, хоча
+# сам крейт і компілюється під wasm32 структурно.
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+# Генерація JSON Schema для TS-боку (`services/notifier`, 09-messaging.md §3.7) — optional:
+# споживачі контракту (app/bus/server), яким схема не потрібна, не тягнуть її в збірку.
+schemars = { version = "1", optional = true, features = ["chrono04", "uuid1"] }
+serde_json = { version = "1", optional = true }
+
+[features]
+schema-gen = ["dep:schemars", "dep:serde_json"]
+
+[[bin]]
+name = "gen_schema"
+path = "src/bin/gen_schema.rs"
+required-features = ["schema-gen"]
+
+[dev-dependencies]
+serde_json = "1"

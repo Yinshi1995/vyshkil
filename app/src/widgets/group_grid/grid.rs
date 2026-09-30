@@ -20,7 +20,7 @@ use chrono::NaiveDate;
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
-use super::autocomplete::{OrgAutocomplete, VosPositionCourseAutocomplete};
+use super::autocomplete::VosPositionCourseAutocomplete;
 use super::columns::{self, ColumnsState, DATA_COLUMNS};
 use super::date_range_cell::DateRangeCell;
 use super::row_editor::RowEditor;
@@ -32,7 +32,9 @@ use crate::domain::validation::validate_funnel_order;
 use crate::services::groups::get_training_sites;
 use crate::types::submission::{GroupFormRow, VosPositionCourseHint, VosPositionCourseKind};
 
-pub const N_COLS: usize = 10;
+/// Частина-відправник більше НЕ колонка рядка (дефект 1) — 9 живих колонок (було 10): Вид
+/// підготовки/ВОС/ОВТ/Місце/З/По/План/Прибуло/Навчаються.
+pub const N_COLS: usize = 9;
 const INITIAL_VISIBLE: usize = 30;
 const GROW_STEP: usize = 30;
 
@@ -84,6 +86,10 @@ pub fn Grid(
     active_cell: RwSignal<(usize, usize)>,
     #[prop(into)] before_mutate: Callback<()>,
     #[prop(into)] as_of: Signal<NaiveDate>,
+    /// Піднято до виклика (`FormBody`) — тулбар сторінки сам показує "Колонки"
+    /// (`columns::ColumnsToggle`) в ОДНІЙ лінії з рештою кнопок (дефект 8), а не в окремому
+    /// `.grid-toolbar` усередині `Grid`.
+    columns: ColumnsState,
 ) -> impl IntoView {
     let visible_count = RwSignal::new(INITIAL_VISIBLE);
     // "Розгорнути рядок" (feedback користувача — "як Notion") — один спільний Drawer на всю
@@ -93,8 +99,6 @@ pub fn Grid(
     // Видалення — завжди через підтвердження (02 §2 "Ctrl+Delete — з підтвердженням"), і з
     // гарячої клавіші, і з пункту меню рядка (§3 спеки) — той самий `Dialog`, той самий рядок.
     let pending_delete = RwSignal::new(None::<usize>);
-    let columns = columns::use_columns();
-    let columns_menu_open = RwSignal::new(false);
 
     // Тіні країв (§6) — видимі, лише поки лишається горизонтальний скрол; перерахунок і на
     // `scroll`, і щоразу, як міняється розкладка колонок (ширина/видимість), бо контент може
@@ -245,38 +249,6 @@ pub fn Grid(
     };
 
     view! {
-        <div class="grid-toolbar">
-            <div class="grid-toolbar__columns">
-                <button
-                    type="button"
-                    class="btn btn--outline"
-                    on:click=move |_| columns_menu_open.update(|o| *o = !*o)
-                >
-                    "Колонки"
-                </button>
-                <Show when=move || columns_menu_open.get()>
-                    <div class="grid-toolbar__columns-panel">
-                        {DATA_COLUMNS
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, c)| c.toggleable)
-                            .map(|(i, c)| {
-                                view! {
-                                    <label class="grid-toolbar__columns-item">
-                                        <input
-                                            type="checkbox"
-                                            checked=move || columns.is_visible(i)
-                                            on:change=move |_| columns.toggle_visible(i)
-                                        />
-                                        {c.label}
-                                    </label>
-                                }
-                            })
-                            .collect_view()}
-                    </div>
-                </Show>
-            </div>
-        </div>
         <div
             class="grid"
             role="table"
@@ -348,14 +320,15 @@ pub fn Grid(
         </div>
         <button
             type="button"
-            class="btn btn--outline grid__add-row"
+            class="btn btn--ghost grid__add-row"
+            title="Новий рядок (Tab в останній клітинці робить те саме)"
             on:click=move |_| {
                 before_mutate.run(());
                 let len = editable.get_untracked().len();
                 ensure_row(len);
             }
         >
-            "+ рядок "<kbd>"Tab"</kbd>" в останній клітинці"
+            "+ Новий рядок"
         </button>
         <Drawer
             open=Signal::derive(move || editing_row.get().is_some())
@@ -386,29 +359,25 @@ pub fn Grid(
 fn copy_column(dst: &mut GroupFormRow, src: &GroupFormRow, col: usize) {
     match col {
         0 => {
-            dst.sender_org_id = src.sender_org_id;
-            dst.sender_org_label = src.sender_org_label.clone();
-        }
-        1 => {
             dst.training_kind_id = src.training_kind_id;
             dst.training_kind_label = src.training_kind_label.clone();
         }
-        2 => {
+        1 => {
             dst.vos_id = src.vos_id;
             dst.position_id = src.position_id;
             dst.course_id = src.course_id;
             dst.vos_position_course_label = src.vos_position_course_label.clone();
         }
-        3 => dst.equipment_text = src.equipment_text.clone(),
-        4 => {
+        2 => dst.equipment_text = src.equipment_text.clone(),
+        3 => {
             dst.site_id = src.site_id;
             dst.site_label = src.site_label.clone();
         }
-        5 => dst.planned_start_raw = src.planned_start_raw.clone(),
-        6 => dst.planned_end_raw = src.planned_end_raw.clone(),
-        7 => dst.planned_count = src.planned_count,
-        8 => dst.arrived_count = src.arrived_count,
-        9 => dst.in_training_count = src.in_training_count,
+        4 => dst.planned_start_raw = src.planned_start_raw.clone(),
+        5 => dst.planned_end_raw = src.planned_end_raw.clone(),
+        6 => dst.planned_count = src.planned_count,
+        7 => dst.arrived_count = src.arrived_count,
+        8 => dst.in_training_count = src.in_training_count,
         _ => {}
     }
 }
@@ -462,11 +431,38 @@ fn Row(
     #[prop(into)] on_duplicate: Callback<()>,
     #[prop(into)] on_delete_requested: Callback<()>,
 ) -> impl IntoView {
+    // `sender_org_id` більше не колонка рядка (дефект 1) -- на /training-form тулбар завжди
+    // проставляє його в кожен рядок (нижче ніколи не спрацює); на /import (Ivs/VchArchive,
+    // резолюція з файлу) нерозпізнана частина й досі можлива на рядок -- той самий червоний
+    // індикатор у жолобі тепер сигналізує і про це (людина відкриває рядок, Ctrl+E, і бачить/
+    // виправляє поле "Військова частина" в `RowEditor`, яке лишається).
     let has_error = Signal::derive(move || {
         let row = data.get();
-        funnel_violated(&row) || date_range_invalid(&row, as_of.get())
+        row.sender_org_id.is_none()
+            || funnel_violated(&row)
+            || date_range_invalid(&row, as_of.get())
     });
     let has_info = Signal::derive(move || !has_error.get() && has_secondary_fields(&data.get()));
+
+    // Пропозиція "План → Прибуло/Навчаються" (grid-interaction.md §4): на виході з "План", якщо
+    // сусідні поля ще порожні, підставляємо ТЕ САМЕ значення приглушеним кольором -- Tab далі
+    // просто приймає його (значення вже реальне), ручний ввід перезаписує й знімає позначку.
+    let arrived_suggested = RwSignal::new(false);
+    let in_training_suggested = RwSignal::new(false);
+    let on_plan_blur = move || {
+        let row = data.get_untracked();
+        if row.planned_count == 0 {
+            return;
+        }
+        if row.arrived_count == 0 {
+            data.update(|d| d.arrived_count = row.planned_count);
+            arrived_suggested.set(true);
+        }
+        if row.in_training_count == 0 {
+            data.update(|d| d.in_training_count = row.planned_count);
+            in_training_suggested.set(true);
+        }
+    };
 
     view! {
         <div
@@ -497,32 +493,11 @@ fn Row(
                 <RowMenu on_duplicate=on_duplicate on_delete_requested=on_delete_requested/>
             </div>
             <Show when=move || columns.is_visible(0)>
-                <OrgAutocomplete
-                    id=cell_id(row_index, 0)
-                    label=Signal::derive(move || data.get().sender_org_label)
-                    on_select=move |id: i32, label: String| {
-                        data.update(|d| {
-                            d.sender_org_id = Some(id);
-                            d.sender_org_label = label;
-                            d.site_id = None;
-                            d.site_label.clear();
-                        });
-                    }
-                    on_label_input=Callback::new(move |v: String| {
-                        data.update(|d| {
-                            d.sender_org_label = v;
-                            d.sender_org_id = None;
-                        });
-                    })
-                    on_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((0, ev)))
-                />
-            </Show>
-            <Show when=move || columns.is_visible(1)>
                 <TrainingKindCell row_index=row_index data=data on_keydown=on_keydown/>
             </Show>
-            <Show when=move || columns.is_visible(2)>
+            <Show when=move || columns.is_visible(1)>
                 <VosPositionCourseAutocomplete
-                    id=cell_id(row_index, 2)
+                    id=cell_id(row_index, 1)
                     label=Signal::derive(move || data.get().vos_position_course_label)
                     on_select=Callback::new(move |hint: VosPositionCourseHint| {
                         data.update(|d| {
@@ -540,61 +515,71 @@ fn Row(
                     on_label_input=Callback::new(move |v: String| {
                         data.update(|d| d.vos_position_course_label = v);
                     })
-                    on_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((2, ev)))
+                    on_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((1, ev)))
                 />
             </Show>
-            <Show when=move || columns.is_visible(3)>
+            <Show when=move || columns.is_visible(2)>
                 <input
                     type="text"
-                    id=cell_id(row_index, 3)
+                    id=cell_id(row_index, 2)
                     class="cell__input"
                     title=move || data.get().equipment_text
                     prop:value=move || data.get().equipment_text
                     on:input=move |ev| data.update(|d| d.equipment_text = event_target_value(&ev))
-                    on:keydown=move |ev| on_keydown.run((3, ev))
+                    on:keydown=move |ev| on_keydown.run((2, ev))
                 />
             </Show>
-            <Show when=move || columns.is_visible(4)>
+            <Show when=move || columns.is_visible(3)>
                 <SiteCell row_index=row_index data=data on_keydown=on_keydown/>
             </Show>
-            <Show when=move || columns.is_visible(5) || columns.is_visible(6)>
+            <Show when=move || columns.is_visible(4) || columns.is_visible(5)>
                 <DateRangeCell
-                    start_id=cell_id(row_index, 5)
-                    end_id=cell_id(row_index, 6)
+                    start_id=cell_id(row_index, 4)
+                    end_id=cell_id(row_index, 5)
                     start_raw=Signal::derive(move || data.get().planned_start_raw)
                     end_raw=Signal::derive(move || data.get().planned_end_raw)
                     as_of=as_of
                     on_start_change=Callback::new(move |v: String| data.update(|d| d.planned_start_raw = v))
                     on_end_change=Callback::new(move |v: String| data.update(|d| d.planned_end_raw = v))
-                    on_start_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((5, ev)))
-                    on_end_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((6, ev)))
+                    on_start_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((4, ev)))
+                    on_end_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((5, ev)))
+                />
+            </Show>
+            <Show when=move || columns.is_visible(6)>
+                <NumberCell
+                    id=cell_id(row_index, 6)
+                    value=Signal::derive(move || data.get().planned_count)
+                    on_change=Callback::new(move |v: i64| data.update(|d| d.planned_count = v))
+                    on_blur=Callback::new(move |_| on_plan_blur())
+                    on_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((6, ev)))
+                    invalid=Signal::derive(|| false)
+                    suggested=Signal::derive(|| false)
                 />
             </Show>
             <Show when=move || columns.is_visible(7)>
                 <NumberCell
                     id=cell_id(row_index, 7)
-                    value=Signal::derive(move || data.get().planned_count)
-                    on_change=Callback::new(move |v: i64| data.update(|d| d.planned_count = v))
+                    value=Signal::derive(move || data.get().arrived_count)
+                    on_change=Callback::new(move |v: i64| {
+                        arrived_suggested.set(false);
+                        data.update(|d| d.arrived_count = v);
+                    })
                     on_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((7, ev)))
-                    invalid=Signal::derive(|| false)
+                    invalid=Signal::derive(move || funnel_violated(&data.get()))
+                    suggested=Signal::derive(move || arrived_suggested.get())
                 />
             </Show>
             <Show when=move || columns.is_visible(8)>
                 <NumberCell
                     id=cell_id(row_index, 8)
-                    value=Signal::derive(move || data.get().arrived_count)
-                    on_change=Callback::new(move |v: i64| data.update(|d| d.arrived_count = v))
+                    value=Signal::derive(move || data.get().in_training_count)
+                    on_change=Callback::new(move |v: i64| {
+                        in_training_suggested.set(false);
+                        data.update(|d| d.in_training_count = v);
+                    })
                     on_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((8, ev)))
                     invalid=Signal::derive(move || funnel_violated(&data.get()))
-                />
-            </Show>
-            <Show when=move || columns.is_visible(9)>
-                <NumberCell
-                    id=cell_id(row_index, 9)
-                    value=Signal::derive(move || data.get().in_training_count)
-                    on_change=Callback::new(move |v: i64| data.update(|d| d.in_training_count = v))
-                    on_keydown=Callback::new(move |ev: web_sys::KeyboardEvent| on_keydown.run((9, ev)))
-                    invalid=Signal::derive(move || funnel_violated(&data.get()))
+                    suggested=Signal::derive(move || in_training_suggested.get())
                 />
             </Show>
         </div>
@@ -604,7 +589,8 @@ fn Row(
 /// Число (План/Прибуло/Навчаються) — права юстиція + tabular-nums (`.cell__input--number`,
 /// новий рецепт `main.css`), порожньо (0) показує `placeholder="—"` замість цифри "0" (02 §5:
 /// "порожньо = порожньо") — не змінює тип поля на `Option<i64>` (03/04 модель лишається
-/// незмінною), лише як `0` подається в UI.
+/// незмінною), лише як `0` подається в UI. `suggested` — значення прийшло з підказки "План → ..."
+/// (grid-interaction.md §4), не ручного вводу — показуємо приглушеним, доки людина сама не введе.
 #[component]
 fn NumberCell(
     id: String,
@@ -612,6 +598,8 @@ fn NumberCell(
     #[prop(into)] on_change: Callback<i64>,
     #[prop(into)] on_keydown: Callback<web_sys::KeyboardEvent>,
     #[prop(into)] invalid: Signal<bool>,
+    #[prop(into)] suggested: Signal<bool>,
+    #[prop(optional, into)] on_blur: Option<Callback<()>>,
 ) -> impl IntoView {
     view! {
         <input
@@ -620,6 +608,7 @@ fn NumberCell(
             id=id
             class="cell__input cell__input--number"
             class:cell__input--invalid=move || invalid.get()
+            class:cell__input--suggested=move || suggested.get()
             placeholder="—"
             prop:value=move || {
                 let v = value.get();
@@ -629,6 +618,11 @@ fn NumberCell(
                 let text = event_target_value(&ev);
                 let v: i64 = if text.trim().is_empty() { 0 } else { text.parse().unwrap_or(0) };
                 on_change.run(v);
+            }
+            on:blur=move |_| {
+                if let Some(cb) = on_blur {
+                    cb.run(());
+                }
             }
             on:keydown=move |ev| on_keydown.run(ev)
         />
@@ -655,15 +649,14 @@ fn TrainingKindCell(
 
     view! {
         <Combobox
-            id=cell_id(row_index, 1)
+            id=cell_id(row_index, 0)
             variant=ComboboxVariant::InCell
             value=Signal::derive(move || data.get().training_kind_id.map(|id| id.to_string()).unwrap_or_default())
             items=items
-            placeholder="—"
             on_change=Callback::new(move |v: String| {
                 data.update(|d| d.training_kind_id = v.parse().ok());
             })
-            on_keydown=Callback::new(move |ev| on_keydown.run((1, ev)))
+            on_keydown=Callback::new(move |ev| on_keydown.run((0, ev)))
         />
     }
 }
@@ -696,11 +689,10 @@ fn SiteCell(
 
     view! {
         <Combobox
-            id=cell_id(row_index, 4)
+            id=cell_id(row_index, 3)
             variant=ComboboxVariant::InCell
             value=Signal::derive(move || data.get().site_id.map(|id| id.to_string()).unwrap_or_default())
             items=items
-            placeholder="—"
             on_change=Callback::new(move |v: String| {
                 let id: Option<i32> = v.parse().ok();
                 let sites_now = sites.get_untracked().and_then(|r| r.ok()).unwrap_or_default();
@@ -710,7 +702,7 @@ fn SiteCell(
                     d.site_label = label.unwrap_or_default();
                 });
             })
-            on_keydown=Callback::new(move |ev| on_keydown.run((4, ev)))
+            on_keydown=Callback::new(move |ev| on_keydown.run((3, ev)))
         />
     }
 }

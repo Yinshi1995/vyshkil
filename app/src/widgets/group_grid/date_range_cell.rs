@@ -3,11 +3,14 @@
 //! року, діапазон в одне поле, висновок року) — це `domain::dates`, а `components/` домену не
 //! знає. `components::DatePicker` лишається незмінним для "Станом на" (суворий формат).
 //!
-//! **"Маска дд.мм.рррр"** з брифу користувача тут — ПЛЕЙСХОЛДЕР-підказка, не посимвольна
-//! трансформація вводу (як у `DatePicker`): поле мусить лишатись вільним текстом, бо приймає і
-//! "18.08" (без року), і "18.08-09.10" (діапазон в одну клітинку) — жорсткий 8-цифровий мask
-//! (`DatePicker`) робить обидва неможливими. Валідація — реальний час через `domain::dates`
-//! (03 §5), не посимвольне блокування вводу.
+//! **Жива маска дд.мм.рррр** (grid-interaction.md §3, дефект 5) — автокрапки й посимвольна
+//! валідація, АЛЕ лише коли людина набирає ГОЛІ ЦИФРИ (`InputEvent.data()` — саме вставлений
+//! символ, не весь вміст поля): перевірка через `web_sys::InputEvent`, не жорсткий 8-цифровий
+//! `digits_only`-mask, як у `DatePicker` — той не підтримав би ні рік-less дату, ні діапазон в
+//! одну клітинку. Якщо вставлений символ НЕ цифра (людина сама надрукувала крапку/тире, вставила
+//! з буфера, "18.08-09.10" одним рухом) — пропускаємо форматування, лишаємо як є: `domain::dates::
+//! {split_range, parse_maybe_range}` і так розбирають довільний текст (03 §5), посимвольна маска
+//! в цьому разі лише заважала б (боролась би з уже проставленими людиною крапками).
 //!
 //! Спрощення позиціонування: ОБИДВА поля ("З" і "По") ділять ОДИН календар-поповер, який завжди
 //! прив'язаний до обгортки поля "З" (не до того, з якого відкрито) — уникає необхідності
@@ -20,7 +23,9 @@ use leptos::leptos_dom::helpers::window_event_listener;
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
-use crate::domain::dates::{parse_date, parse_maybe_range, split_range, split_token, validate_period};
+use crate::domain::dates::{
+    format_date_mask, parse_date, parse_maybe_range, split_range, split_token, validate_period,
+};
 
 /// Легка перевірка "чи це взагалі реальна дата" для ВІЗУАЛЬНОЇ валідності поля — БЕЗ правила
 /// "явний рік = рік `as_of`" (`parse_date` це правило має, і правильно: воно проти друкарських
@@ -51,6 +56,39 @@ fn month_grid(view_month: NaiveDate) -> Vec<NaiveDate> {
 
 fn fmt_date(d: NaiveDate) -> String {
     format!("{:02}.{:02}.{}", d.day(), d.month(), d.year())
+}
+
+/// Лишає тільки цифри, максимум 8 (ддммрррр) — той самий підхід, що `components::DatePicker`,
+/// відфільтровує решту (крапки, тире діапазону вже розібране окремо вище по стеку виклику).
+fn digits_only(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_digit()).take(8).collect()
+}
+
+/// Чи щойно вставлений символ (не весь вміст поля!) — ГОЛА цифра. `InputEvent.data()` дає САМЕ
+/// те, що людина набрала цим натисканням (`None` для видалення/composition-подій); порожній рядок
+/// (е.g. drop) теж НЕ рахуємо цифрою. Розрізняє "людина друкує підряд цифри" (жива маска
+/// застосовується) від "людина сама набрала крапку/тире, або вставила готовий текст" (маска НЕ
+/// втручається — лишає як написано).
+fn is_plain_digit_insertion(ev: &web_sys::Event) -> bool {
+    ev.dyn_ref::<web_sys::InputEvent>()
+        .and_then(|e| e.data())
+        .is_some_and(|d| !d.is_empty() && d.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// Backspace на дд.мм.рррр-масці має стирати цифру РАЗОМ із зайвою автопроставленою крапкою
+/// (grid-interaction.md §3) — звичайний Backspace прибрав би лише саму крапку (символ перед
+/// курсором), переформатування одразу відновило б її назад, і людині здавалось би, що Backspace
+/// узагалі нічого не робить. `value`/`cursor` — ASCII (цифри+крапки), байтові індекси = символьні.
+fn backspace_skip_dot(value: &str, cursor: usize) -> Option<String> {
+    if cursor == 0 || cursor > value.len() {
+        return None;
+    }
+    let before = &value[..cursor];
+    if !before.ends_with('.') {
+        return None;
+    }
+    let remove_from = cursor.saturating_sub(2);
+    Some(format!("{}{}", &value[..remove_from], &value[cursor..]))
 }
 
 /// `chrono` без feature "clock" (`[[chrono-in-domain]]`) — день "сьогодні" лише клієнт, через
@@ -86,25 +124,30 @@ pub fn DateRangeCell(
     let active_field = RwSignal::new(ActiveField::Start);
     let root: NodeRef<leptos::html::Div> = NodeRef::new();
     let calendar_root: NodeRef<leptos::html::Div> = NodeRef::new();
+    let start_input_ref: NodeRef<leptos::html::Input> = NodeRef::new();
+    let end_input_ref: NodeRef<leptos::html::Input> = NodeRef::new();
     let position = use_popover_position(root, open.into());
     let view_month = RwSignal::new(today());
     let focused_day = RwSignal::new(today());
 
     // Реальний час (03 §5) — не посимвольне блокування, лише візуальний стан помилки; лінива
-    // перевірка (не `parse_date`/`parse_end_date` напряму) — див. `lenient_parse`.
+    // перевірка (не `parse_date`/`parse_end_date` напряму) — див. `lenient_parse`. Використовується
+    // для календаря (якір/підсвітка діапазону) — `format_date_mask` (нижче) не знає про ІНШЕ поле,
+    // тому перевірку "по" не раніше "з" лишає тут.
     let parsed_start = Signal::derive(move || lenient_parse(&start_raw.get(), as_of.get()));
     let parsed_end = Signal::derive(move || lenient_parse(&end_raw.get(), as_of.get()));
-    let start_invalid = Signal::derive(move || {
-        !start_raw.get().trim().is_empty() && parsed_start.get().is_none()
-    });
+    // Живе форматування (grid-interaction.md §3) саме встановлює ці помилки на кожен keystroke --
+    // точніше за `lenient_parse` для НЕЗАВЕРШЕНОГО вводу (ловить "31.04" одразу, без року).
+    let start_mask_error = RwSignal::new(None::<String>);
+    let end_mask_error = RwSignal::new(None::<String>);
+    let start_invalid = Signal::derive(move || start_mask_error.get().is_some());
     let end_invalid = Signal::derive(move || {
-        let end = end_raw.get();
-        if end.trim().is_empty() {
-            return false;
+        if end_mask_error.get().is_some() {
+            return true;
         }
         match (parsed_start.get(), parsed_end.get()) {
             (Some(s), Some(e)) => validate_period(s, e).is_err(),
-            _ => parsed_end.get().is_none(),
+            _ => false,
         }
     });
 
@@ -202,22 +245,76 @@ pub fn DateRangeCell(
                 class="cell__input"
                 class:cell__input--invalid=move || start_invalid.get()
                 placeholder="дд.мм.рррр"
+                node_ref=start_input_ref
                 prop:value=move || start_raw.get()
                 on:input=move |ev| {
                     let typed = event_target_value(&ev);
-                    // Розкладає ЛИШЕ на дві клітинки — "З" лишається як набрано (без року, якщо
-                    // без року й набрано), не переписується повністю розв'язаною датою: інакше
-                    // явний рік (щойно сам виведений) не пройшов би повторно `parse_date`'s
-                    // власну перевірку "явний рік = рік `as_of`" (`YearMismatch`).
-                    match (split_range(&typed), parse_maybe_range(&typed, as_of.get_untracked())) {
-                        (Some((start_part, _)), Ok((_, Some(end)))) => {
-                            on_start_change.run(start_part.to_string());
-                            on_end_change.run(fmt_date(end));
+                    // Жива маска -- ЛИШЕ коли щойно вставлений символ сам є голою цифрою
+                    // (`is_plain_digit_insertion`): людина сама надрукувала крапку/тире
+                    // (діапазон "18.08-09.10" одним рухом) чи вставила текст -- тоді формат вже
+                    // її власний, маска (яка рахує ЦИФРИ з УСЬОГО поля) лише зіпсувала б його,
+                    // зливши цифри обох половин діапазону в одну (напр. "18.08-09" прочиталось б
+                    // як день"18"місяць"08"рік"09"→2009). Немаскований шлях — той самий, що був
+                    // до живої маски: `split_range`/`parse_maybe_range` розбирають довільний текст.
+                    if !is_plain_digit_insertion(&ev) {
+                        match (split_range(&typed), parse_maybe_range(&typed, as_of.get_untracked())) {
+                            (Some((start_part, _)), Ok((_, Some(end)))) => {
+                                on_start_change.run(start_part.to_string());
+                                on_end_change.run(fmt_date(end));
+                            }
+                            _ => on_start_change.run(typed),
                         }
-                        _ => on_start_change.run(typed),
+                        return;
+                    }
+                    match split_range(&typed) {
+                        Some(_) => {
+                            match parse_maybe_range(&typed, as_of.get_untracked()) {
+                                Ok((_, Some(end))) => {
+                                    let (start_part, _) = split_range(&typed).unwrap();
+                                    let masked = format_date_mask(&digits_only(start_part));
+                                    start_mask_error.set(masked.error);
+                                    end_mask_error.set(None);
+                                    on_start_change.run(masked.display);
+                                    on_end_change.run(fmt_date(end));
+                                }
+                                // Тире вже є, але "по"-частина ще не дописана до повної дати --
+                                // не форматувати нічого, лишити як набрано.
+                                _ => on_start_change.run(typed),
+                            }
+                        }
+                        None => {
+                            let masked = format_date_mask(&digits_only(&typed));
+                            start_mask_error.set(masked.error);
+                            on_start_change.run(masked.display);
+                        }
                     }
                 }
-                on:keydown=move |ev| on_start_keydown.run(ev)
+                on:keydown=move |ev| {
+                    if ev.key() == "ArrowDown" && ev.alt_key() {
+                        ev.prevent_default();
+                        open_for(ActiveField::Start);
+                        return;
+                    }
+                    if ev.key() == "Backspace" && !ev.shift_key() && !ev.ctrl_key() && !ev.alt_key() {
+                        if let Some(input) = start_input_ref.get_untracked() {
+                            let value = input.value();
+                            let cursor = input
+                                .selection_start()
+                                .ok()
+                                .flatten()
+                                .map(|n| n as usize)
+                                .unwrap_or(value.len());
+                            if let Some(new_value) = backspace_skip_dot(&value, cursor) {
+                                ev.prevent_default();
+                                let masked = format_date_mask(&digits_only(&new_value));
+                                start_mask_error.set(masked.error);
+                                on_start_change.run(masked.display);
+                                return;
+                            }
+                        }
+                    }
+                    on_start_keydown.run(ev);
+                }
             />
             <button
                 type="button"
@@ -326,9 +423,45 @@ pub fn DateRangeCell(
                 class="cell__input"
                 class:cell__input--invalid=move || end_invalid.get()
                 placeholder="дд.мм.рррр"
+                node_ref=end_input_ref
                 prop:value=move || end_raw.get()
-                on:input=move |ev| on_end_change.run(event_target_value(&ev))
-                on:keydown=move |ev| on_end_keydown.run(ev)
+                on:input=move |ev| {
+                    let typed = event_target_value(&ev);
+                    if !is_plain_digit_insertion(&ev) {
+                        end_mask_error.set(None);
+                        on_end_change.run(typed);
+                        return;
+                    }
+                    let masked = format_date_mask(&digits_only(&typed));
+                    end_mask_error.set(masked.error);
+                    on_end_change.run(masked.display);
+                }
+                on:keydown=move |ev| {
+                    if ev.key() == "ArrowDown" && ev.alt_key() {
+                        ev.prevent_default();
+                        open_for(ActiveField::End);
+                        return;
+                    }
+                    if ev.key() == "Backspace" && !ev.shift_key() && !ev.ctrl_key() && !ev.alt_key() {
+                        if let Some(input) = end_input_ref.get_untracked() {
+                            let value = input.value();
+                            let cursor = input
+                                .selection_start()
+                                .ok()
+                                .flatten()
+                                .map(|n| n as usize)
+                                .unwrap_or(value.len());
+                            if let Some(new_value) = backspace_skip_dot(&value, cursor) {
+                                ev.prevent_default();
+                                let masked = format_date_mask(&digits_only(&new_value));
+                                end_mask_error.set(masked.error);
+                                on_end_change.run(masked.display);
+                                return;
+                            }
+                        }
+                    }
+                    on_end_keydown.run(ev);
+                }
             />
             <button
                 type="button"

@@ -349,6 +349,8 @@ fn every_css_var_reference_in_main_css_is_defined() {
 #[test]
 fn sanity_the_tree_walk_actually_found_pages() {
     let pages = BTreeSet::from([
+        "admin_queues".to_string(),
+        "admin_whatsapp".to_string(),
         "dictionaries".to_string(),
         "discrepancies".to_string(),
         "documents".to_string(),

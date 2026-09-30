@@ -1,4 +1,5 @@
 use axum::extract::FromRef;
+use bus::SharedNatsClient;
 use leptos::prelude::LeptosOptions;
 use sea_orm::DatabaseConnection;
 
@@ -8,4 +9,8 @@ use sea_orm::DatabaseConnection;
 pub struct AppState {
     pub leptos_options: LeptosOptions,
     pub db: DatabaseConnection,
+    // Адмін-сторінка `/admin/whatsapp` (09 §4) читає готовий клієнт звідси -- підключення й
+    // перепідключення веде `relay` (`bus::SharedNatsClient`, той самий клон, що передається
+    // йому в `tokio::spawn`).
+    pub nats: SharedNatsClient,
 }

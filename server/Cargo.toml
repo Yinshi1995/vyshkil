@@ -3,6 +3,10 @@ name = "server"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "server"
 path = "src/main.rs"
@@ -10,6 +14,15 @@ path = "src/main.rs"
 [dependencies]
 app = { path = "../app", features = ["ssr"] }
 migration = { path = "../migration" }
+# Relay (09-messaging.md §3.1, Фаза 1) -- publish непублікованих рядків outbox у NATS.
+bus = { path = "../bus" }
+contracts = { path = "../contracts" }
+# admin_sse.rs -- /admin/whatsapp SSE (09 §4), не Leptos #[server] fn (ті не стрімлять).
+futures = "0.3"
+# Рендер QR у SVG на сервері (не client-side JS з CDN -- CLAUDE.md: "жодних мережевих викликів
+# ... локально", той самий принцип, що self-hosted шрифти).
+qrcode = "0.14"
+serde_json = "1"
 # "macros" вмикає #[derive(FromRef)] для AppState (axum::extract::FromRef інакше є лише трейтом, без derive).
 axum = { version = "0.7", features = ["macros"] }
 leptos = { workspace = true, features = ["ssr"] }
@@ -32,3 +45,13 @@ serde = { workspace = true }
 # default-features = false: вимикаємо статистику використання секцій mimalloc, яка на віддалених
 # ОС не завжди коректно білдиться і нам тут не потрібна — лишаємо тільки сам аллокатор.
 mimalloc = { version = "0.1", default-features = false }
+
+[dev-dependencies]
+# tests/relay.rs: TEST_DATABASE_URL/TEST_NATS_URL-гейтований інтеграційний тест (09 §6).
+uuid = { version = "1", features = ["v7"] }
+contracts = { path = "../contracts" }
+async-nats = "0.38"
+futures = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util"] }
+serde = { workspace = true }
+serde_json = "1"

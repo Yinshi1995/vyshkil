@@ -9,6 +9,8 @@
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
+| `admin_queues/` | outbox-відставання, стан стрімів, DLQ з повторною відправкою, лише `admin` (09 §5, Фаза 4, своя карта) | `routes.rs` (`/admin/queues`) |
+| `admin_whatsapp/` | прив'язка WhatsApp-сесії нотифікатора — QR/pairing-код через SSE, лише `admin` (09 §4, своя карта) | `routes.rs` (`/admin/whatsapp`) |
 | `dictionaries/` | довідники Етапу 2 + черга learned-синонімів (своя карта) | `routes.rs` (`/dictionaries`) |
 | `discrepancies/` | екран розбіжностей — горизонтальна звірка, лише перегляд (04, Етап 8 зріз 1, своя карта) | `routes.rs` (`/discrepancies`) |
 | `documents/` | генерація документів — D1 (05, Етап 7, своя карта) | `routes.rs` (`/documents`) |

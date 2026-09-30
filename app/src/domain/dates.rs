@@ -265,6 +265,110 @@ pub fn parse_maybe_range(
     }
 }
 
+/// Результат живого форматування ОДНОГО поля дати під час набору (клавіатурний контракт сітки,
+/// `docs/spec/components/grid-interaction.md` §3) — `display` завжди показується (навіть
+/// незакінчений ввід), `error` — лише коли вже досить цифр, щоб напевно сказати "така дата не
+/// існує" (не для незакінченого вводу).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveDateMask {
+    pub display: String,
+    pub error: Option<String>,
+}
+
+/// Автоматичні крапки день.місяць.рік у міру набору цифр — рік НЕОБОВ'ЯЗКОВИЙ (02 §4: дата без
+/// року лишається легальною), перша цифра дня/місяця, що виключає другу цифру (день `>3`, місяць
+/// `>1`), одразу автодоповнюється нулем (набрати "9" в день одразу дає "09", бо жоден день
+/// 40-99 неможливий). `digits` — вже відфільтровані цифри (викликач сам вирізає нецифрові
+/// символи з сирого вводу поля, той самий підхід, що `components::DatePicker::digits_only`) —
+/// ця функція лише про ФОРМУ дд.мм.рррр, не про DOM/події.
+pub fn format_date_mask(digits: &str) -> LiveDateMask {
+    let digits: Vec<char> = digits.chars().filter(|c| c.is_ascii_digit()).take(8).collect();
+    if digits.is_empty() {
+        return LiveDateMask { display: String::new(), error: None };
+    }
+
+    let mut idx = 0;
+    let day_str = {
+        let d0 = digits[idx];
+        if d0 > '3' {
+            idx += 1;
+            format!("0{d0}")
+        } else if idx + 1 < digits.len() {
+            let s = format!("{}{}", digits[idx], digits[idx + 1]);
+            idx += 2;
+            s
+        } else {
+            // Одна цифра дня, ще не завершено -- показати як є, без помилки.
+            return LiveDateMask { display: digits[idx].to_string(), error: None };
+        }
+    };
+    if idx >= digits.len() {
+        return LiveDateMask { display: day_str, error: None };
+    }
+
+    let month_str = {
+        let m0 = digits[idx];
+        if m0 > '1' {
+            idx += 1;
+            format!("0{m0}")
+        } else if idx + 1 < digits.len() {
+            let s = format!("{}{}", digits[idx], digits[idx + 1]);
+            idx += 2;
+            s
+        } else {
+            return LiveDateMask { display: format!("{day_str}.{}", digits[idx]), error: None };
+        }
+    };
+
+    let year_digits: String = digits[idx..].iter().collect();
+    let display = if year_digits.is_empty() {
+        format!("{day_str}.{month_str}.")
+    } else if year_digits.len() == 2 {
+        format!("{day_str}.{month_str}.20{year_digits}")
+    } else {
+        format!("{day_str}.{month_str}.{year_digits}")
+    };
+
+    let month_num: u32 = month_str.parse().unwrap_or(0);
+    if !(1..=12).contains(&month_num) {
+        return LiveDateMask {
+            display,
+            error: Some(format!("місяць «{month_str}» неможливий (01–12)")),
+        };
+    }
+    let day_num: u32 = day_str.parse().unwrap_or(0);
+    // Толерантно до року (лютий до 29) — точна високосність перевіряється нижче, щойно рік відомий.
+    let max_day_before_year = match month_num {
+        4 | 6 | 9 | 11 => 30,
+        2 => 29,
+        _ => 31,
+    };
+    if day_num == 0 || day_num > max_day_before_year {
+        return LiveDateMask {
+            display,
+            error: Some(format!(
+                "«{day_str}.{month_str}» — {} {} не існує",
+                day_num,
+                month_name(month_num)
+            )),
+        };
+    }
+    let year = match year_digits.len() {
+        4 => year_digits.parse::<i32>().ok(),
+        2 => year_digits.parse::<i32>().ok().map(|y| 2000 + y),
+        _ => None,
+    };
+    if let Some(year) = year {
+        if NaiveDate::from_ymd_opt(year, month_num, day_num).is_none() {
+            return LiveDateMask {
+                display,
+                error: Some(format!("«{day_str}.{month_str}.{year}» — такої дати не існує")),
+            };
+        }
+    }
+    LiveDateMask { display, error: None }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,5 +526,79 @@ mod tests {
             "«по» (05.08.2026) раніше «з» (18.08.2026) — дати переплутані місцями, або в одній з \
              них помилка в місяці/році"
         );
+    }
+
+    // format_date_mask — живе форматування (grid-interaction.md §3), сценарії з брифу користувача.
+
+    #[test]
+    fn mask_single_digit_day_waits_for_second() {
+        assert_eq!(format_date_mask("1"), LiveDateMask { display: "1".to_string(), error: None });
+    }
+
+    #[test]
+    fn mask_day_gt3_first_digit_auto_pads() {
+        // "9" як перша цифра дня -- жоден день 90-99 неможливий, одразу "09"; "1" як перша цифра
+        // місяця (не >1) чекає другу цифру -- показуємо як набрано.
+        assert_eq!(format_date_mask("91"), LiveDateMask { display: "09.1".to_string(), error: None });
+    }
+
+    #[test]
+    fn mask_month_gt1_first_digit_auto_pads() {
+        assert_eq!(format_date_mask("189"), LiveDateMask { display: "18.09.".to_string(), error: None });
+    }
+
+    #[test]
+    fn mask_day_month_complete_no_year_is_valid_partial() {
+        assert_eq!(format_date_mask("1808"), LiveDateMask { display: "18.08.".to_string(), error: None });
+    }
+
+    #[test]
+    fn mask_two_digit_year_gets_20_prefix() {
+        // "180826" -- день 18, місяць 08, рік-цифри "26" -> "2026".
+        assert_eq!(
+            format_date_mask("180826"),
+            LiveDateMask { display: "18.08.2026".to_string(), error: None }
+        );
+    }
+
+    #[test]
+    fn mask_four_digit_year_passthrough() {
+        assert_eq!(
+            format_date_mask("18082026"),
+            LiveDateMask { display: "18.08.2026".to_string(), error: None }
+        );
+    }
+
+    #[test]
+    fn mask_day_31_in_30_day_month_is_error_even_without_year() {
+        // "3104" -- 31 квітня, квітень має 30 днів -- помилка одразу, рік не потрібен.
+        let result = format_date_mask("3104");
+        assert_eq!(result.display, "31.04.");
+        assert!(result.error.is_some(), "31.04 має бути помилкою: {result:?}");
+    }
+
+    #[test]
+    fn mask_feb_29_non_leap_year_is_error() {
+        let result = format_date_mask("290227"); // 29.02.2027 -- 2027 не високосний
+        assert!(result.error.is_some(), "29.02.2027 має бути помилкою: {result:?}");
+    }
+
+    #[test]
+    fn mask_feb_29_leap_year_is_ok() {
+        let result = format_date_mask("290228"); // 29.02.2028 -- високосний
+        assert_eq!(result.error, None, "29.02.2028 має бути коректною: {result:?}");
+        assert_eq!(result.display, "29.02.2028");
+    }
+
+    #[test]
+    fn mask_month_13_is_impossible() {
+        // "0113" -- день 01, місяць 13 -- неможливо.
+        let result = format_date_mask("0113");
+        assert!(result.error.is_some(), "місяць 13 має бути помилкою: {result:?}");
+    }
+
+    #[test]
+    fn mask_empty_digits_is_empty_display_no_error() {
+        assert_eq!(format_date_mask(""), LiveDateMask { display: String::new(), error: None });
     }
 }

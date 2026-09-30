@@ -28,3 +28,5 @@
 | `m…_000036_refine_subordination_dates_from_kontrolka` | Етап 6: реальні дати переходу 17 АК→7 КШР з Контролька замість умовної 01.08.2026 у dev-сіді (сам факт переходу не змінюється) | — |
 | `m…_000037_create_generated_document_table` | `generated_document` (05 §вступ, мінімум під Етап 7/D1: kind/org_id/as_of_date/file_path) | `backend/repo/documents.rs` |
 | `m…_000038_widen_generated_document_kind` | Розширює CHECK на `generated_document.kind`: `'d1'` → `'d1','d2'` (Postgres CHECK — лише DROP+ADD, не ALTER) | — |
+| `m…_000039…041` | Етап 8 зріз 1: `reported_group`, `discrepancy`+audit-тригер (04, горизонтальна звірка) | `backend/repo/reconciliation.rs` |
+| `m…_000042_create_outbox_table` | Брокер (09-messaging.md §3.1, Фаза 1): транзакційний `outbox`, БЕЗ audit-тригера (технічна таблиця relay, не людина-актор) | `backend/repo/outbox.rs`, `server` (relay) |

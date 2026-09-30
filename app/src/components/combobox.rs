@@ -111,6 +111,11 @@ pub fn Combobox(
 
     let open = RwSignal::new(false);
     let highlighted = RwSignal::new(0usize);
+    // Чи людина СВІДОМО взаємодіяла зі списком цього відкриття (стрілка/друк) — grid-interaction.md
+    // §2: "просто проходить Tab-ом... значення НЕ змінюється". Без цього прапорця будь-який Tab
+    // при відкритій панелі (тепер відкривається одразу на фокусі) вибирав би підсвічений пункт 0
+    // навіть коли людина лише йшла далі по рядку.
+    let touched = RwSignal::new(false);
     let query = RwSignal::new(String::new());
     let root: NodeRef<leptos::html::Div> = NodeRef::new();
     let search_input: NodeRef<leptos::html::Input> = NodeRef::new();
@@ -156,6 +161,7 @@ pub fn Combobox(
 
     let do_open = move || {
         open.set(true);
+        touched.set(false);
         highlighted.set(current_index().unwrap_or(0));
         if searchable && !input_mode {
             request_animation_frame(move || {
@@ -204,6 +210,7 @@ pub fn Combobox(
         if len == 0 {
             return;
         }
+        touched.set(true);
         let cur = highlighted.get_untracked() as i64;
         highlighted.set((cur + delta).clamp(0, len as i64 - 1) as usize);
     };
@@ -276,8 +283,13 @@ pub fn Combobox(
                 close();
             }
             "Tab" => {
-                if open.get_untracked() {
+                // Shift+Tab — завжди назад БЕЗ вибору; звичайний Tab вибирає підсвічене лише
+                // якщо людина СВІДОМО торкнулась списку цього відкриття (стрілка/друк) —
+                // grid-interaction.md §2.
+                if open.get_untracked() && !ev.shift_key() && touched.get_untracked() {
                     select_index(highlighted.get_untracked());
+                } else if open.get_untracked() {
+                    close();
                 }
                 if grid_mode {
                     forward(ev);
@@ -363,7 +375,7 @@ pub fn Combobox(
                 select_index(highlighted.get_untracked());
                 forward(ev);
             }
-            "Tab" if is_open && len > 0 => {
+            "Tab" if is_open && len > 0 && !ev.shift_key() && touched.get_untracked() => {
                 select_index(highlighted.get_untracked());
                 forward(ev);
             }
@@ -393,11 +405,12 @@ pub fn Combobox(
         ComboboxVariant::InCell => "combobox__field combobox__field--in-cell",
     };
 
-    // Панель у `mode=Input` — лише коли є що показати (введений текст непорожній), як у
-    // `OrgAutocomplete` раніше; `mode=Trigger` показує панель завжди, поки відкрита.
-    let panel_open = Signal::derive(move || {
-        open.get() && (!input_mode || !field_text.get().trim().is_empty())
-    });
+    // Панель відкрита разом з `open` у ВСІХ режимах, незалежно від тексту (grid-interaction.md
+    // §2: "Фокус... → одразу відкритий список: недавні... далі весь довідник" — раніше `mode=
+    // Input` показувала панель лише коли поле вже непорожнє, тому автокомпліт мовчав на самому
+    // фокусі; викликач сам відповідає за те, щоб `items` містив і недавні, і довідник навіть для
+    // порожнього запиту).
+    let panel_open = Signal::derive(move || open.get());
 
     let id_for_button = id.clone();
 
@@ -411,20 +424,37 @@ pub fn Combobox(
                             type="button"
                             id=id_for_button.clone()
                             class=trigger_class
+                            class:combobox__trigger--empty=move || current_label.get().trim().is_empty()
                             disabled=move || disabled.get()
                             aria-haspopup="listbox"
                             aria-expanded=move || open.get().to_string()
                             aria-invalid=move || invalid.get().to_string()
                             title=current_label
                             on:click=move |_| {
+                                // Мишачий клік по кнопці шле `focus` ПЕРЕД `click` (браузер сам
+                                // фокусує ціль на mousedown) -- `on:focus` нижче вже відкриває
+                                // панель до того, як цей обробник встигає спрацювати. Тож "клік
+                                // по вже відкритій" тут означає "щойно відкрито тим самим кліком",
+                                // не "користувач хоче закрити" -- toggle-закриття кліком
+                                // самознищувалось б щоразу. Закриття лишається за Escape/вибором
+                                // /кліком поза.
                                 if disabled.get_untracked() {
                                     return;
                                 }
-                                if open.get_untracked() { close() } else { do_open() }
+                                do_open();
+                            }
+                            on:focus=move |_| {
+                                if !disabled.get_untracked() && !open.get_untracked() {
+                                    do_open();
+                                }
                             }
                             on:keydown=on_trigger_keydown
                         >
                             <span class="combobox__value">{current_label}</span>
+                            // Порожня клітинка в спокої -- порожньо (не "—"); підказка "Порожньо"
+                            // лише на hover/фокус (grid-interaction.md §5, дефект 10) -- CSS-гейт
+                            // через .combobox__trigger--empty, не завжди-видимий текст.
+                            <span class="combobox__empty-hint" aria-hidden="true">"Порожньо"</span>
                             <svg class="combobox__chevron" viewBox="0 0 12 8" width="12" height="8" aria-hidden="true">
                                 <path d="M1 1.5 6 6.5 11 1.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
@@ -452,9 +482,14 @@ pub fn Combobox(
                             cb.run(v.clone());
                         }
                         open.set(true);
+                        touched.set(true);
                         highlighted.set(0);
                     }
-                    on:focus=move |_| open.set(true)
+                    on:focus=move |_| {
+                        if !disabled.get_untracked() && !open.get_untracked() {
+                            do_open();
+                        }
+                    }
                     on:keydown=on_field_keydown
                 />
             </Show>

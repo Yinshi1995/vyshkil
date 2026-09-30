@@ -46,7 +46,7 @@ pub async fn search_orgs(
 ) -> Result<Vec<OrgSearchResult>, DbErr> {
     let norm_query = normalize(query);
     if norm_query.is_empty() {
-        return Ok(Vec::new());
+        return default_org_listing(db).await;
     }
 
     #[derive(FromQueryResult)]
@@ -108,6 +108,36 @@ pub async fn search_orgs(
                 matched_raw: r.matched_raw,
                 is_exact: r.is_exact,
             }
+        })
+        .collect())
+}
+
+/// "Весь довідник" для порожнього запиту (grid-interaction.md §2: "фокус... одразу відкритий
+/// список: недавні... далі весь довідник") — викликач (`autocomplete.rs`) додає недавні клієнтом
+/// ПЕРЕД цим списком; тут лише прості, бюджетні "перші N за назвою" (не намагаємось відтворити
+/// глобальну "найчастіші" статистику через `alias.uses_count` — свідоме спрощення, недавні per-
+/// актор уже покривають найчастіший практичний випадок).
+async fn default_org_listing(db: &DatabaseConnection) -> Result<Vec<OrgSearchResult>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        org_id: i32,
+        short_name: String,
+        number: Option<String>,
+    }
+    let stmt = Statement::from_string(
+        db.get_database_backend(),
+        "SELECT id AS org_id, short_name, number FROM org \
+         WHERE deleted_at IS NULL ORDER BY short_name LIMIT 30",
+    );
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let label = match r.number {
+                Some(n) => format!("{} ({n})", r.short_name),
+                None => r.short_name,
+            };
+            OrgSearchResult { org_id: r.org_id, label, matched_raw: String::new(), is_exact: false }
         })
         .collect())
 }

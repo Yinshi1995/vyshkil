@@ -5,6 +5,144 @@ date: 2026-09-30
 
 # Поточний стан проєкту
 
+## Брокер NATS+JetStream (09-messaging.md) — Фаза 0-2 закриті (2026-09-30)
+
+**Фаза 0**: нові крейти `contracts/` (Envelope+subjects+NotifySend/NotifyResult/discrepancy-події,
+без tokio — компілюється й у wasm) і `bus/` (тонка обгортка над `async-nats`) — 5+2 тести, `bus`
+проти РЕАЛЬНОГО `nats-server -js` у Docker (не мок) — publish/consume roundtrip і `Nats-Msg-Id`-
+дедуплікація на боці брокера підтверджені живьцем. Рішення — `.claude/decisions/
+broker-nats-jetstream.md` (замінює транспорт зі старішого `[[depersonalized-notification-outbox]]`).
+
+**Фаза 1**: реальний transactional outbox — міграція `m20260930_000042_create_outbox_table`
+(БЕЗ audit-тригера — технічна таблиця relay, БЕЗ LISTEN/NOTIFY — свідомо спрощено до
+таймера-опитувача, `server/src/relay.rs`'s doc-comment пояснює чому), `repo::outbox::insert`,
+перший реальний продюсер — `repo::reconciliation::refresh_horizontal` тепер пише
+`DiscrepancyOpened`/`.Resolved` в outbox тією ж транзакцією, що й сам `discrepancy`. `server`
+розбито на `lib`+`bin` (щоб `relay` був тестованим) — перша фонова задача в проєкті
+(`tokio::spawn(relay::run(...))`). Перевірено: реальна транзакція+rollback → рядка в outbox нема;
+`repo::outbox::insert` → `relay::relay_batch` → РЕАЛЬНИЙ NATS → реальний підписник отримує
+конверт — обидва інтеграційні тести зелені (`server/tests/relay.rs`).
+
+**Windows-специфічна грабля, знайдена тут** (додано в "Граблі" нижче): `cargo test -p server`
+(без `--no-run`) намагається лінкувати й сам BIN "server" під test-профілем і падає масовим
+LNK2019 (той самий клас, що вже задокументований для `migration`) — обхід: скомпілювати
+`--test relay --no-run` і запустити готовий `.exe` напряму. Окремо: `main.rs` у test-cfg впирався
+в `recursion_limit` (гігантське Leptos-view-дерево) — `#![recursion_limit = "256"]` на `main.rs`.
+
+**Фаза 2, ЗМІНА ПЛАНУ (feedback користувача, після старту Фази 0-1)**: нотифікатор — НЕ Rust-
+бінарник (як спершу планувалось у 09 §3.7), а **TypeScript/Node 22 LTS, окремий Docker-образ**,
+`whatsapp-web.js` — рішення замовника. `.claude/decisions/notifier-ts-whatsapp-web-js.md`.
+**Bun vs Node перевірено емпірично** (не на слово): ідентичний мінімальний скрипт (`Client`+
+`LocalAuth`, `puppeteer.executablePath` на локальний Chrome) під `bun run` і `node
+--experimental-strip-types` дав ОДНАКОВУ помилку (`Execution context was destroyed` у
+`Client.inject()`) на ОБОХ рантаймах — отже це НЕ Bun-специфічна проблема (ймовірний корінь:
+версійний перекіс локального Chrome 154.x проти `puppeteer@24.38.0`, який тягне
+`whatsapp-web.js@1.34.7` — `storage.googleapis.com` не резолвиться з цієї машини, тож
+пряме порівняння з puppeteer-власним завантаженим Chromium тут не перевірено). Рішення —
+Node 22 LTS (ширша підтримка екосистеми `whatsapp-web.js`, жодної переваги Bun тут не знайдено).
+**Оновлено після повного прогону сервісу**: весь `services/notifier` (міграції реальні, NATS
+реальний, `Client.initialize()` реальний) — QR РЕАЛЬНО згенерувався й опублікувався в NATS KV
+(перевірено прочитанням bucket'а напряму). Рання "Execution context destroyed" відтворилась лише
+2/3 разів в ізольованому тесті — це флейк холодного старту Chromium, не гарантований блокер.
+Досі не зроблено: реальне сканування QR телефоном до стану `connected` (09 §6) — потребує
+фізичного службового номера користувача.
+
+**`services/notifier` побудовано повністю** (TypeScript, Node 22, `.claude/decisions/
+notifier-ts-whatsapp-web-js.md`): `config.ts`/`db.ts` (окрема БД+роль `notifier`/`notifier_test`,
+3 таблиці, простий SQL-раннер `migrate.ts`, БЕЗ ORM)/`nats.ts` (JetStream публікація/consumer,
+NATS KV для стану прив'язки — усе перевірено проти РЕАЛЬНОГО `taktoblik-nats`)/`schemas.ts` (zod)/
+`templates.ts` (єдиний знеособлений шаблон)/`mask.ts` (маскування номера, тест на точний приклад
+зі спеки)/`delivery.ts` (валідація→inbox→рендер→надсилання→журнал, одна транзакція)/
+`whatsapp/{client,channel}.ts` (реальний `whatsapp-web.js` + `FakeChannel` для тестів)/
+`pairing.ts` (машина станів)/`commands.ts` (4 NATS request-reply команди адмінки)/`health.ts`/
+`index.ts`. `contracts` → JSON Schema (`schemars`) → TS-типи (`json2ts`) — повний ланцюжок
+перевірено: зміна Rust-типу й запуск `gen-types` дає робочий `.d.ts` (`src/generated/*.d.ts`,
+НЕ комітити вручну редаговані — перезаписуються). 8/8 TS-тестів (mask+templates+delivery,
+delivery — інтеграційний проти реального `notifier_test`) + `tsc --noEmit` чисто. `npm audit`:
+5 high (транзитивно через `puppeteer`'s browser-download шлях, який ми не використовуємо в
+проді — `.claude/decisions/notifier-ts-whatsapp-web-js.md` документує чому не форсимо фікс).
+
+**Dockerfile+Docker-образ побудовано й перевірено наживо**: системний `chromium` (не
+puppeteer-власний завантажений — `PUPPETEER_SKIP_DOWNLOAD=true`), непривілейований `node`-
+користувач. **Реальна пастка, спіймана саме в контейнері**: без додаткових прав Chromium НЕ
+стартував узагалі ("No usable sandbox!"); `--no-sandbox` НЕ застосовано (§3 забороняє мовчки) —
+натомість `cap_add: SYS_ADMIN` у `docker-compose.yml`'s `notifier` (вужче за `--privileged`): з
+цим прапорцем контейнер доходить до реального QR (перевірено через `host.docker.internal` проти
+`taktoblik-db`/`taktoblik-nats`). `docker-compose.yml` — дві мережі (`internal`, без шлюзу в
+інтернет: `db`/`nats`/`app`; `egress`, звичайний bridge: лише `notifier` в обох) — Docker-рівня
+"так/ні" на вихід в інтернет безкоштовно; ФАКТИЧНИЙ allowlist доменів WhatsApp (не "увесь
+інтернет") — proxy/firewall на реальному хості розгортання, поза цим dev-файлом, свідомо не
+зроблено тут (задокументовано як залишок, не мовчки). `docker/init-notifier-db.sql` — окрема
+роль+БД `notifier` при першій ініціалізації тому Postgres.
+
+**Admin-екран `/admin/whatsapp` (Leptos) побудовано й перевірено наживо, повний ланцюжок**:
+`server::admin_sse::whatsapp_status_stream` — сирий Axum SSE-хендлер (НЕ Leptos `#[server]` fn,
+ті не стрімлять), читає NATS KV `notifier_status` через `bus::SharedNatsClient` (спільний слот:
+`relay` єдиний володіє з'єднанням, адмінка лише читає клон через контекст Leptos — уникнуто
+другого незалежного NATS-з'єднання). QR рендериться в SVG **на сервері** (крейт `qrcode`, не
+client-side JS з CDN — той самий принцип, що self-hosted шрифти). `app::pages::admin_whatsapp` —
+`web_sys::EventSource` на клієнті + 3 `#[server]`-функції (`request_pairing_code`/
+`logout_whatsapp`/`send_test_notification`, NATS core request-reply через `bus::request`).
+**Перевірено НАСКРІЗНО живим стеком**: реальний `server.exe` + реальний контейнер `notifier:test`
+(обидва проти `taktoblik-db`/`taktoblik-nats`) — `curl` на `/api/admin/whatsapp/events` реально
+отримав `data: {"state":"pairing","qr_svg":"<svg...`, готовий SVG, не сирий рядок.
+
+**Дві реальні пастки, спіймані САМЕ в цьому наскрізному прогоні** (не в ізольованих юніт-тестах):
+(1) `watch()` (NATS KV) за замовчуванням `DeliverPolicy::New` — показує лише МАЙБУТНІ зміни;
+адмін, що відкрив сторінку, коли QR уже чекає, бачив би порожньо до наступного оновлення (~20с) —
+фікс: `watch_with_history` (`DeliverPolicy::LastPerSubject`, показує поточне значення одразу).
+(2) Тестовий стрім `server/tests/relay.rs` (`"TEST_EVENTS"`, subject `vyshkil.discrepancy.>`) не
+чистився між прогонами й ПОСТІЙНО блокував створення реального `EVENTS`-стріму тим самим
+producer'ом (JetStream забороняє двом стрімам ділити перекриті subject-и) — relay мовчки не міг
+підключитись жодного разу, поки стрім не видалили вручну. Фікс: тест тепер використовує ТУ САМУ
+назву/subject, що продакшен-`relay` (`contracts::subjects::stream::EVENTS`, ідемпотентний
+get-or-create — той самий виклик, що робить реальний relay), видаляє лише свій durable consumer
+наприкінці, стрім лишає спільним. Урок: dev-NATS, що живе довше одного тестового прогону,
+накопичує стан — перевіряй `jsm.streams.list()` за дивної "недоступності", не одразу вір логам.
+
+**Ще не зроблено**: Фаза 3 (NATS auth/nkeys, права на subject-и — зараз БЕЗ автентифікації, будь-
+хто у внутрішній мережі публікує/читає що завгодно), повний набір тестів §6 (contract version-
+compat, max_deliver→DLQ, needs_pairing-чекає-в-черзі), адмін-екран "Черги" (outbox backlog/DLQ-
+retry — ОКРЕМИЙ від `/admin/whatsapp`, той з Фази 4 первинного плану), ручний сценарій з реальним
+телефоном до стану `connected` (09 §6) — потребує фізичного службового номера користувача.
+
+## Грід `/training-form` — переробка після відхилення, здано (2026-09-30)
+
+**Урок (буквально, як просив користувач)**: UI сітки здається тільки після проходу з клавіатури
+e2e-тестами; сітки — за `docs/spec/components/grid-interaction.md`. Причина: перша здача цього
+розділу була відхилена — базові дефекти (Tab-навігація, автокомпліт, дата-маска) лишались
+зламаними, бо я не проходив форму руками з клавіатури перед "готово". Перевірка тепер вбудована:
+`spec-reviewer` відхиляє diff по `widgets/group_grid/*` без оновленого
+`e2e/tests/grid-interaction.spec.ts`; `/handoff` вимагає зеленого прогону цього файлу.
+
+**Зроблено**: 12 дефектів з брифу користувача — Частина-відправник тепер у тулбарі ОДИН раз
+(`.claude/decisions/sender-org-once-per-submission.md`), не per-рядок; постійний клавіатурний
+контракт (`grid-interaction.md`) — Tab/стрілки/Alt+↓-календар/жива дата-маска
+(`domain::dates::format_date_mask`)/open-on-focus автокомпліт з "недавні→довідник"
+(`localStorage`, `autocomplete.rs`)/`touched`-прапорець (Tab крізь заповнену клітинку не мутує);
+жолоб рядка — один рядок, фіксована висота, номер завжди видно, "відкрити"/меню на hover;
+порожня select-клітинка мовчить у спокої ("Порожньо" лише на hover); гуманізовані помилки
+імпорту (`domain::friendly_error`) + admin-only "Деталі"; 1366×768 без горизонтального скролу.
+
+**Реальний баг, спійманий САМЕ через мій власний ручний прохід** (не автотестом — тести кликали
+через `role=option`/локатори, які оминають цю різницю): `Combobox`-тригер у режимі `Trigger`
+(select-подібні клітинки) відкривався і ОДРАЗУ закривався на мишачий клік. Корінь: браузер шле
+`focus` ПЕРЕД `click` при кліку мишею — `on:focus`-обробник (доданий для контракту "фокус
+відкриває список") уже відкривав панель, а старий `on:click` бачив `open==true` і toggle-закривав
+її тим самим кліком. Фікс: `on:click` більше не toggle-закриває, лише `do_open()` (ідемпотентно) —
+закриття лишається за Escape/вибором/кліком поза. `app/src/components/combobox.rs`. Це другий
+приклад того самого класу пастки, що й попередня сесія (SSR+гідратація гонка) — автотести з
+locator-кліками не завжди відтворюють РЕАЛЬНУ мишачу послідовність focus→click.
+
+**Перевірено**: `e2e/tests/grid-interaction.spec.ts` (15/15) + `e2e/tests/file-upload.spec.ts`
+(6/6) — 21/21 зелено, одним воркером (двома воркерами буває один флейк через конкуренцію за
+той самий dev-сервер/БД, не регресія — підтверджено окремим прогоном). 4 скриншоти (1366×768 і
+1920×1080, спокій+відкрита випадайка) — вручну очима, обидві резолюції коректні.
+
+**Не виправлено, чесно відзначено користувачу**: кнопка "Колонки" в тулбарі має видиму рамку-бокс,
+відмінну від "Імпорт"/"Шпаргалка" (різні візуальні рецепти — `.btn--outline` проти іншого класу) —
+не досліджено й не виправлено, дрібна непослідовність.
+
 ## Етап 8, зріз 1 (зіставлення подань + горизонтальна звірка) — ЗАКРИТО (2026-09-30)
 
 **Перший вертикальний зріз** Етапу 8 (`docs/spec/04-reconciliation-notifications.md`,
@@ -604,6 +742,15 @@ $env:LEPTOS_SITE_ROOT = "target/site"
   Docker Desktop). Симптом: `Connection pool timed out` після 8с на кожному запиті. Якщо таке
   повториться — спершу `docker ps` (не одразу `docker start`, щоб не гадати), тоді `docker start
   taktoblik-db`.
+- **`cargo test -p server` (без `--no-run`) намагається лінкувати й BIN-ціль `server` під
+  test-профілем і падає тим самим класом LNK2019 (сотні unresolved externals, generic
+  монморфізації `app`/`migration`/tachys-view-дерева), навіть з `CARGO_PROFILE_DEV_CODEGEN_UNITS=1`
+  — цей фікс лікує лише "тестові" бінарники (rlib-и), не сам `[[bin]]`. Обхід: скомпілювати
+  окремо (`cargo test -p server --test relay --no-run` — це проходить), тоді запустити готовий
+  `.exe` з `target/debug/deps/relay-*.exe` НАПРЯМУ (з потрібними `TEST_*`-env), минаючи
+  cargo-test-раннер повністю. Заразом: `main.rs`, скомпільований у test-cfg, окремо впирається в
+  `recursion_limit` (гігантське `tachys`-view-дерево з `app::app::{shell, App}`) — фікс
+  `#![recursion_limit = "256"]` на самому `main.rs` (rustc сам підказує це значення).
 - **`markitdown`/`python.exe` на Windows пишуть stdout у `cp1251`, не UTF-8, коли вивід
   перенаправлений (`>`)** — кирилиця в файлі перетворюється на `�`-мотлох (сам файл, не просто
   термінал показує неправильно — перевірено `xxd`). Обхід: `export PYTHONIOENCODING=utf-8` перед

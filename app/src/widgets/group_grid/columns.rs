@@ -7,26 +7,26 @@
 use leptos::prelude::*;
 
 /// Дія — фіксована 40px, не в цьому списку (не змінюється в ширину, завжди перша, sticky
-/// `left: 0`). "Частина" — перший елемент тут, sticky `left: {ACTION_WIDTH}px` (константа, не
-/// рахується в рантаймі — дія не resizable, зсув завжди той самий).
+/// `left: 0`). Частина-відправник більше не колонка рядка (дефект 1, feedback користувача,
+/// `.claude/decisions/sender-org-once-per-submission.md`) — обирається ОДИН раз у тулбарі,
+/// однакова для всіх рядків подання.
 pub const ACTION_WIDTH_PX: f64 = 40.0;
 
 pub struct ColumnDef {
     pub label: &'static str,
     pub min_px: f64,
     pub default_px: f64,
-    /// "Частина" — sticky, завжди видима, не в тулбарі "показати колонки" (§6 спеки).
     pub toggleable: bool,
 }
 
 pub const DATA_COLUMNS: &[ColumnDef] = &[
-    ColumnDef { label: "Частина", min_px: 160.0, default_px: 200.0, toggleable: false },
     ColumnDef { label: "Вид підготовки", min_px: 130.0, default_px: 160.0, toggleable: true },
     ColumnDef { label: "ВОС / посада / курс", min_px: 180.0, default_px: 220.0, toggleable: true },
     ColumnDef { label: "ОВТ", min_px: 130.0, default_px: 160.0, toggleable: true },
     ColumnDef { label: "Місце", min_px: 160.0, default_px: 200.0, toggleable: true },
-    ColumnDef { label: "З", min_px: 90.0, default_px: 110.0, toggleable: true },
-    ColumnDef { label: "По", min_px: 90.0, default_px: 110.0, toggleable: true },
+    // "31.12.2026" + зарезервоване місце під іконку (дефект 6) -- 100 мінімум, не 90.
+    ColumnDef { label: "З", min_px: 100.0, default_px: 120.0, toggleable: true },
+    ColumnDef { label: "По", min_px: 100.0, default_px: 120.0, toggleable: true },
     ColumnDef { label: "План", min_px: 64.0, default_px: 80.0, toggleable: true },
     ColumnDef { label: "Прибуло", min_px: 64.0, default_px: 80.0, toggleable: true },
     ColumnDef { label: "Навчаються", min_px: 64.0, default_px: 80.0, toggleable: true },
@@ -144,6 +144,47 @@ pub fn use_columns() -> ColumnsState {
     });
 
     ColumnsState { widths, visible }
+}
+
+/// "Колонки" — кнопка+панель видимості (§6 спеки), тепер у тулбарі СТОРІНКИ (дефект 8: "один
+/// тулбар в одну лінію"), не в окремому `.grid-toolbar` усередині `Grid`. `ColumnsState` іде
+/// ЗЗОВНІ (той самий екземпляр, що переданий у `Grid`) — сторінка створює його один раз
+/// (`use_columns()`) і ділиться і з тулбаром, і з сіткою.
+#[component]
+pub fn ColumnsToggle(columns: ColumnsState) -> impl IntoView {
+    let open = RwSignal::new(false);
+    view! {
+        <div class="grid-toolbar__columns">
+            <button
+                type="button"
+                class="btn btn--outline"
+                on:click=move |_| open.update(|o| *o = !*o)
+            >
+                "Колонки"
+            </button>
+            <Show when=move || open.get()>
+                <div class="grid-toolbar__columns-panel">
+                    {DATA_COLUMNS
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, c)| c.toggleable)
+                        .map(|(i, c)| {
+                            view! {
+                                <label class="grid-toolbar__columns-item">
+                                    <input
+                                        type="checkbox"
+                                        checked=move || columns.is_visible(i)
+                                        on:change=move |_| columns.toggle_visible(i)
+                                    />
+                                    {c.label}
+                                </label>
+                            }
+                        })
+                        .collect_view()}
+                </div>
+            </Show>
+        </div>
+    }
 }
 
 /// Ручка перетягування правого краю колонки — `on:mousedown` на ній, дальші `mousemove`/`mouseup`

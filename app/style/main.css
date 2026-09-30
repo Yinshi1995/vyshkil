@@ -1113,20 +1113,51 @@ tr:hover td {
   background: var(--accent-dim);
 }
 
+/* Жолоб (grid-interaction.md §5, дефект 2) — номер/відкрити/меню в ОДИН горизонтальний ряд, не
+   стовпчиком; висота рядка фіксована (36px "comfortable" — єдина реалізована щільність зараз,
+   compact 32px лишається на майбутнє в data-table.md). У спокої видно лише номер -- "відкрити"
+   і меню з'являються на hover/фокус РЯДКА (не самого жолоба -- фокус зазвичай у клітинці поруч). */
 .grid__actions {
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 2px;
-  padding: 4px 0;
+  height: 36px;
+  padding: 0 2px;
+}
+
+.grid__row {
+  height: 36px;
 }
 
 .grid__row-number {
+  min-width: 14px;
   font-size: 10px;
   color: var(--fg-subtle);
   font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.grid__expand,
+.row-menu__trigger {
+  opacity: 0;
+}
+
+.grid__row:hover .grid__expand,
+.grid__row:hover .row-menu__trigger,
+.grid__row:focus-within .grid__expand,
+.grid__row:focus-within .row-menu__trigger,
+.grid__expand:focus-visible,
+.row-menu__trigger[aria-expanded="true"] {
+  opacity: 1;
+}
+
+/* Помилка/інфо-крапка лишається видимою навіть коли кнопка "прозора" в спокої -- інакше
+   grid-interaction.md §5 "червона крапка в жолобі" зникала б разом з рештою жолоба. */
+.grid__expand:has(.grid__row-badge) {
+  opacity: 1;
 }
 
 .grid__expand {
@@ -1134,13 +1165,14 @@ tr:hover td {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   background: transparent;
   border: none;
   border-radius: var(--radius-1);
   color: var(--fg-muted);
   cursor: pointer;
+  transition: opacity var(--duration-fast) ease;
 }
 
 .grid__expand:hover,
@@ -1251,6 +1283,7 @@ tr:hover td {
   border-radius: var(--radius-1);
   color: var(--fg-subtle);
   cursor: pointer;
+  transition: opacity var(--duration-fast) ease;
 }
 .row-menu__trigger:hover,
 .row-menu__trigger[aria-expanded="true"] {
@@ -1292,11 +1325,42 @@ tr:hover td {
    `.cell__input`/`.date-picker__icon-btn` (перевикористання), лише обгортка й сам поповер нові
    (portal, `position:fixed`, на відміну від `.date-picker__panel`, яка лишається `absolute`
    для НЕ-портальованого `DatePicker`). */
+/* Дефект 6: іконка календаря вилазила в сусідню колонку -- `.cell__input` мало `width:100%` у
+   flex-рядку разом з іконкою, тому іконці не лишалось місця (без `min-width:0` flex-дитина не
+   стискається нижче свого вмісту). Тепер іконка -- `position:absolute` НАД полем (не займає
+   власної ширини в потоці), полю завжди зарезервовано праве поле під неї; сама іконка видима
+   лише на hover/фокус клітинки (grid-interaction.md §3). */
 .date-range-cell__start,
 .date-range-cell__end {
+  position: relative;
   display: flex;
   align-items: center;
   height: 100%;
+}
+
+.date-range-cell__start .cell__input,
+.date-range-cell__end .cell__input {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding-right: 20px;
+}
+
+.date-range-cell__start .date-picker__icon-btn,
+.date-range-cell__end .date-picker__icon-btn {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px;
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease;
+}
+
+.date-range-cell__start:hover .date-picker__icon-btn,
+.date-range-cell__end:hover .date-picker__icon-btn,
+.date-range-cell__start:focus-within .date-picker__icon-btn,
+.date-range-cell__end:focus-within .date-picker__icon-btn {
+  opacity: 1;
 }
 
 .date-range-cell__panel {
@@ -1520,34 +1584,38 @@ tr:hover td {
   padding-bottom: var(--space-3);
 }
 
-/* Зона перетягування файлу (components::FileDropzone, feedback користувача) — заміна голого
-   <input type="file"> з системною кнопкою "Choose file". Пунктирна рамка — навмисний літерал
-   (не на шкалі товщини бордера — той самий підхід, що 2px в .icon-box/.app-header__mark). */
-.dropzone {
-  display: flex;
+/* Вибір файлу (components::FileDropzone, переробка з нуля — docs/spec/components/file-input.md,
+   .claude/decisions/label-for-file-input.md): <label> обгортає РЕАЛЬНИЙ <input type="file">
+   (візуально прихований -- position:absolute+opacity:0, НЕ display:none -- лишається
+   клавіатурним/фокусованим, той самий патерн, що .checkbox__input) -- клік і Enter/Space на
+   сфокусованому input відкривають системний діалог нативно, без жодного JS `.click()`-форвардингу.
+   Фокус-кільце малюється на самій `.dropzone` через :has() (єдиний спосіб дістатись предка від
+   input-нащадка чистим CSS) -- підтримка :has() у Chromium, цільовий браузер цього стеку. */
+.dropzone-wrap {
+  display: inline-flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-5);
-  border: 2px dashed var(--border);
-  border-radius: var(--radius-2);
-  color: var(--fg-muted);
+}
+
+.dropzone {
+  position: relative;
   cursor: pointer;
-  text-align: center;
   transition: border-color var(--duration-fast) ease, background var(--duration-fast) ease;
 }
 
-.dropzone:hover,
-.dropzone:focus-visible {
-  border-color: var(--border-strong);
-  background: var(--accent-dim);
-  outline: none;
+.dropzone:has(.dropzone__input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
-.dropzone--dragging {
-  border-color: var(--fg-accent);
-  background: var(--accent-dim);
+.dropzone__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .dropzone--disabled {
@@ -1558,6 +1626,7 @@ tr:hover td {
 
 .dropzone__icon {
   color: var(--fg-accent);
+  flex-shrink: 0;
 }
 
 .dropzone__text {
@@ -1566,8 +1635,115 @@ tr:hover td {
   line-height: var(--text-sm-line);
 }
 
-.dropzone__input {
-  display: none;
+/* --compact -- кнопка в тулбарі таблиці (та сама висота, що .btn/.select__trigger). */
+.dropzone--compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  color: var(--fg-main);
+  background: var(--surface-raised);
+}
+
+.dropzone--compact:hover {
+  border-color: var(--border-strong);
+  background: var(--accent-dim);
+}
+
+/* --zone -- велика зона там, де файл є головною дією сторінки (/import). Пунктирна рамка --
+   навмисний літерал (не на шкалі товщини бордера — той самий підхід, що .icon-box/.app-header__mark). */
+.dropzone--zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-2);
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+.dropzone--zone:hover {
+  border-color: var(--border-strong);
+  background: var(--accent-dim);
+}
+
+/* Повноекранний приймач на dragenter будь-де на сторінці (portal) -- замінює завжди-розгорнуту
+   коробку в тулбарі: "перетягніть будь-куди", не лише над маленькою кнопкою. */
+.dropzone-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface-base) 85%, transparent);
+  border: 3px dashed var(--fg-accent);
+}
+
+.dropzone-overlay__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-main);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Чип обраного файлу (ім'я/розмір/стадія/✕) -- окремо від тригера, той самий лишається клікабельним
+   для вибору ІНШОГО файлу. */
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  background: var(--surface-raised);
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-line);
+  max-width: 100%;
+}
+
+.file-chip__stage {
+  color: var(--fg-accent);
+  flex-shrink: 0;
+}
+
+.file-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-chip__size {
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+
+.file-chip__error {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.file-chip__clear {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.file-chip__clear:hover {
+  color: var(--danger);
 }
 
 /* Бічна панель (components::Drawer, feedback користувача — "як Notion") — той самий overlay-фон,
@@ -1783,6 +1959,19 @@ tr:hover td {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
+}
+
+/* "Порожньо" (grid-interaction.md §5) -- порожня клітинка мовчить у спокої, приглушена підказка
+   лише на hover/фокус клітинки, лише коли справді нічого не вибрано. */
+.combobox__empty-hint {
+  display: none;
+  color: var(--fg-subtle);
+  font-style: italic;
+}
+
+.combobox__trigger--empty:hover .combobox__empty-hint,
+.combobox__trigger--empty:focus-visible .combobox__empty-hint {
+  display: inline;
 }
 
 .combobox__chevron {

@@ -1,3 +1,5 @@
+pub mod admin_queues;
+pub mod admin_whatsapp;
 pub mod dictionaries;
 pub mod discrepancies;
 pub mod documents;

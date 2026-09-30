@@ -5,5 +5,10 @@ use leptos::prelude::*;
 /// помилка, а очікуваний стан (01 §6: доступ до доменних даних — лише від імені актора).
 #[component]
 pub fn ActorNotice() -> impl IntoView {
-    view! { <p class="card__desc">"Оберіть актора вгорі, щоб побачити дані."</p> }
+    view! {
+        <div>
+            <p class="card__desc">"Оберіть актора вгорі, щоб побачити дані."</p>
+            <div></div>
+        </div>
+    }
 }

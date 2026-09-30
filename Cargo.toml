@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["app", "frontend", "server", "migration", "style", "style_macros"]
+members = ["app", "frontend", "server", "migration", "style", "style_macros", "contracts", "bus"]
 
 # Єдине місце версій для крейтів Leptos: app/frontend/server завжди компілюються
 # проти однакової версії, інакше SSR-рендер і WASM-гідратація можуть розійтися

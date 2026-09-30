@@ -2,9 +2,12 @@
 //! Сама логіка "чи є незгода" — `domain::reconciliation::detect_horizontal` (чиста); тут лише
 //! читання подань для однієї канонічної групи й запис/автозакриття `discrepancy`.
 
+use crate::backend::repo::outbox;
 use crate::domain::reconciliation::{detect_horizontal, ReportedValues};
 use crate::types::reconciliation::DiscrepancyRow;
+use contracts::{subjects, DiscrepancyMetric, DiscrepancyOpened, DiscrepancyResolved, Envelope};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
+use uuid::Uuid;
 
 fn metric_label(metric: &str) -> &'static str {
     match metric {
@@ -16,6 +19,41 @@ fn metric_label(metric: &str) -> &'static str {
         "site_id" => "Місце",
         _ => "?",
     }
+}
+
+/// `discrepancy.metric` (текстовий стовпець, `text`+`CHECK`, не Postgres ENUM — migration/CLAUDE.md)
+/// → `contracts::DiscrepancyMetric` (`enum`, приватність 09 §3.5). Панікує на невідомому рядку —
+/// той самий стовпець, що `metric_label` уже вичерпно матчить вище; розсинхрон між ними був би
+/// багом коду, не даними з БД.
+fn metric_to_contract(metric: &str) -> DiscrepancyMetric {
+    match metric {
+        "planned_count" => DiscrepancyMetric::PlannedCount,
+        "arrived_count" => DiscrepancyMetric::ArrivedCount,
+        "in_training_count" => DiscrepancyMetric::InTrainingCount,
+        "planned_start" => DiscrepancyMetric::PlannedStart,
+        "planned_end" => DiscrepancyMetric::PlannedEnd,
+        "site_id" => DiscrepancyMetric::SiteId,
+        other => unreachable!("невідома discrepancy.metric {other:?} — розсинхрон із metric_label"),
+    }
+}
+
+/// Загортає `payload` в `Envelope` і пише в `outbox` (09-messaging.md §3.1) — той самий `db`, що
+/// доменний запис вище, тому та сама транзакція: відкат домену відкочує й подію, коміту без
+/// публікації не станеться (relay, Фаза 1, публікує в NATS окремо, поза цією транзакцією).
+/// Продюсер тут не веде наскрізного `correlation_id` через увесь ланцюг виклику (спостережуваність
+/// із §5 "Експлуатація" — поза обсягом Фази 1) — кожна подія отримує власний.
+async fn publish_event<T: serde::Serialize>(
+    db: &impl ConnectionTrait,
+    subject: &str,
+    type_: &str,
+    payload: T,
+) -> Result<(), DbErr> {
+    let envelope =
+        Envelope::new(type_, 1, "app::backend::repo::reconciliation", Uuid::now_v7(), None, payload);
+    let payload_json = serde_json::to_string(&envelope)
+        .map_err(|e| DbErr::Custom(format!("серіалізація події {subject}: {e}")))?;
+    outbox::insert(db, subject, &payload_json, "{}").await?;
+    Ok(())
 }
 
 /// Перечитує ОСТАННЄ подання кожного джерела (`submission.reporting_org_id`), зіставлене з
@@ -116,6 +154,18 @@ pub async fn refresh_horizontal(db: &impl ConnectionTrait, group_id: i32) -> Res
                 [row.id.into()],
             ))
             .await?;
+            publish_event(
+                db,
+                subjects::DISCREPANCY_RESOLVED_V1,
+                "vyshkil.discrepancy.resolved.v1",
+                DiscrepancyResolved {
+                    discrepancy_id: row.id,
+                    org_id: ctx.sender_org_id,
+                    group_id: Some(group_id),
+                    metric: metric_to_contract(&row.metric),
+                },
+            )
+            .await?;
         }
     }
 
@@ -133,10 +183,14 @@ pub async fn refresh_horizontal(db: &impl ConnectionTrait, group_id: i32) -> Res
             ))
             .await?;
         } else {
-            db.execute(Statement::from_sql_and_values(
+            #[derive(FromQueryResult)]
+            struct NewId {
+                id: i32,
+            }
+            let new_row = NewId::find_by_statement(Statement::from_sql_and_values(
                 db.get_database_backend(),
                 "INSERT INTO discrepancy (kind, org_id, group_id, as_of, metric, values, status) \
-                 VALUES ('horizontal', $1, $2, $3::date, $4, $5::jsonb, 'open')",
+                 VALUES ('horizontal', $1, $2, $3::date, $4, $5::jsonb, 'open') RETURNING id",
                 [
                     ctx.sender_org_id.into(),
                     group_id.into(),
@@ -145,6 +199,20 @@ pub async fn refresh_horizontal(db: &impl ConnectionTrait, group_id: i32) -> Res
                     values_json.into(),
                 ],
             ))
+            .one(db)
+            .await?
+            .ok_or_else(|| DbErr::Custom("INSERT discrepancy не повернув id".into()))?;
+            publish_event(
+                db,
+                subjects::DISCREPANCY_OPENED_V1,
+                "vyshkil.discrepancy.opened.v1",
+                DiscrepancyOpened {
+                    discrepancy_id: new_row.id,
+                    org_id: ctx.sender_org_id,
+                    group_id: Some(group_id),
+                    metric: metric_to_contract(d.metric),
+                },
+            )
             .await?;
         }
     }

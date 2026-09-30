@@ -1,0 +1,31 @@
+{
+  "name": "notifier",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types src/index.ts",
+    "gen-types": "mkdir -p src/generated && for f in ../../contracts/schema/*.json; do json2ts \"$f\" -o \"src/generated/$(basename \"$f\" .json).d.ts\" --bannerComment ''; done",
+    "migrate": "node --experimental-strip-types src/migrate.ts",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "1.34.7",
+    "@nats-io/transport-node": "3.4.0",
+    "@nats-io/jetstream": "3.4.0",
+    "@nats-io/kv": "3.4.0",
+    "postgres": "3.4.9",
+    "zod": "4.6.5",
+    "qrcode": "1.5.4",
+    "qrcode-terminal": "0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "@types/qrcode-terminal": "0.12.2",
+    "json-schema-to-typescript": "16.0.0",
+    "typescript": "7.0.2"
+  }
+}
