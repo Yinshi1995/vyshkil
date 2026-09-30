@@ -2,12 +2,20 @@
 //! днів через `chrono` напряму (НЕ через `domain::dates` — `components/` не знає домену за
 //! правилом теки, `.claude/... /components/CLAUDE.md`; невелике дублювання назв місяців тут
 //! свідоме, не лінь). Той самий плаваючий-панель-патерн, що `Select` (`components::select`).
+//!
+//! **Ввід з клавіатури** (feedback користувача — "лише кальцем клацати незручно"): текстове поле
+//! з маскою "тільки цифри" — набираєш `20072026`, крапки `20.07.2026` з'являються самі (позиції
+//! 2 і 4 в 8-цифровому `ддммрррр`), крапки не набираються вручну. Коміт (`on_change`) — лише
+//! коли всі 8 цифр утворюють РЕАЛЬНУ дату (`NaiveDate::from_ymd_opt` сам відкидає `31.02` тощо);
+//! доти показуємо набране як є, з видимою помилкою, не втрачаючи попереднє валідне значення.
 
 use chrono::{Datelike, Duration, Months, NaiveDate};
 use leptos::ev;
 use leptos::leptos_dom::helpers::window_event_listener;
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
+
+use crate::hooks::use_floating_position::use_floating_position;
 
 const MONTH_NAMES: [&str; 12] = [
     "Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень",
@@ -25,6 +33,38 @@ fn month_grid(view_month: NaiveDate) -> Vec<NaiveDate> {
 
 fn fmt_date(d: NaiveDate) -> String {
     format!("{:02}.{:02}.{}", d.day(), d.month(), d.year())
+}
+
+/// Лишає тільки цифри, максимум 8 (ддммрррр) — решту введеного (крапки, пробіли, вставлений
+/// текст) ігноруємо мовчки, а не підсвічуємо помилкою: людина просто набирає числа підряд.
+fn digits_only(s: &str) -> String {
+    s.chars().filter(|c| c.is_ascii_digit()).take(8).collect()
+}
+
+/// Вставляє крапки на позиціях 2 і 4 в міру набору — "2" → "2", "200" → "20.0", "20072026" →
+/// "20.07.2026". Не намагається зберігати позицію курсора при переформатуванні (для звичайного
+/// набору зліва направо це непомітно; складніше редагування посередині — не цей зріз).
+fn mask_digits(digits: &str) -> String {
+    let mut out = String::with_capacity(10);
+    for (i, c) in digits.chars().enumerate() {
+        if i == 2 || i == 4 {
+            out.push('.');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// `None`, якщо цифр не 8 РІВНО, або вони не складаються в реальну дату (`31.02` тощо —
+/// `NaiveDate` сам це відкидає, окремого календарного парсера писати не довелось).
+fn try_parse_ddmmyyyy(digits: &str) -> Option<NaiveDate> {
+    if digits.len() != 8 {
+        return None;
+    }
+    let day: u32 = digits[0..2].parse().ok()?;
+    let month: u32 = digits[2..4].parse().ok()?;
+    let year: i32 = digits[4..8].parse().ok()?;
+    NaiveDate::from_ymd_opt(year, month, day)
 }
 
 /// `chrono` тут БЕЗ feature "clock" (проєктне рішення [[chrono-in-domain]] — компілюється в WASM
@@ -49,6 +89,20 @@ pub fn DatePicker(
     let open = RwSignal::new(false);
     let view_month = RwSignal::new(value.get_untracked().unwrap_or_else(|| today()));
     let root: NodeRef<leptos::html::Div> = NodeRef::new();
+    let (flip_up, align_end) = use_floating_position(root, open.into());
+
+    // Текст поля — окремий сигнал від `value`: під час набору "31" (ще не дата) `value` не має
+    // куди комітитись, поле все одно мусить показувати те, що людина щойно набрала.
+    let raw = RwSignal::new(value.get_untracked().map(fmt_date).unwrap_or_default());
+    let invalid = RwSignal::new(false);
+
+    // Синхронізація ЗЗОВНІ (вибір у календарі теж іде через `pick`, який сам оновлює `raw` —
+    // цей ефект ловить решту випадків: батько скинув `value`, інше поле форми змінило дату).
+    Effect::new(move |_| {
+        let v = value.get();
+        raw.set(v.map(fmt_date).unwrap_or_default());
+        invalid.set(false);
+    });
 
     let handle = window_event_listener(ev::mousedown, move |ev| {
         if !open.get_untracked() {
@@ -67,37 +121,83 @@ pub fn DatePicker(
     on_cleanup(move || handle.remove());
 
     let pick = move |d: NaiveDate| {
+        raw.set(fmt_date(d));
+        invalid.set(false);
         on_change.run(Some(d));
         open.set(false);
+    };
+
+    let on_input = move |ev: ev::Event| {
+        let typed = event_target_value(&ev);
+        let digits = digits_only(&typed);
+        raw.set(mask_digits(&digits));
+        if digits.is_empty() {
+            invalid.set(false);
+            on_change.run(None);
+        } else if digits.len() == 8 {
+            match try_parse_ddmmyyyy(&digits) {
+                Some(d) => {
+                    invalid.set(false);
+                    view_month.set(d);
+                    on_change.run(Some(d));
+                }
+                None => invalid.set(true),
+            }
+        } else {
+            // Ще не всі 8 цифр — не помилка, людина просто не дописала.
+            invalid.set(false);
+        }
     };
 
     let go_prev = move |_| view_month.update(|m| *m = m.checked_sub_months(Months::new(1)).unwrap_or(*m));
     let go_next = move |_| view_month.update(|m| *m = m.checked_add_months(Months::new(1)).unwrap_or(*m));
 
-    let trigger_label = move || value.get().map(fmt_date).unwrap_or_else(|| placeholder.clone());
+    let toggle_open = move || {
+        let was_open = open.get_untracked();
+        open.set(!was_open);
+        if !was_open {
+            view_month.set(value.get_untracked().unwrap_or_else(|| today()));
+        }
+    };
 
     view! {
         <div class="date-picker" node_ref=root>
-            <button
-                type="button"
-                class="date-picker__trigger"
-                aria-haspopup="dialog"
-                aria-expanded=move || open.get().to_string()
-                on:click=move |_| {
-                    let was_open = open.get_untracked();
-                    open.set(!was_open);
-                    if !was_open {
-                        view_month.set(value.get_untracked().unwrap_or_else(|| today()));
+            <div class="date-picker__field" class:date-picker__field--invalid=move || invalid.get()>
+                <input
+                    type="text"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    class="date-picker__input"
+                    placeholder=placeholder
+                    prop:value=move || raw.get()
+                    on:input=on_input
+                    on:keydown=move |ev| {
+                        if ev.key() == "Escape" && open.get_untracked() {
+                            ev.prevent_default();
+                            open.set(false);
+                        }
                     }
-                }
-            >
-                <span class="date-picker__value">{trigger_label}</span>
-                <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                    <path d="M2 3h12v11H2zM2 6h12M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
-                </svg>
-            </button>
+                />
+                <button
+                    type="button"
+                    class="date-picker__icon-btn"
+                    aria-haspopup="dialog"
+                    aria-expanded=move || open.get().to_string()
+                    aria-label="Відкрити календар"
+                    on:click=move |_| toggle_open()
+                >
+                    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                        <path d="M2 3h12v11H2zM2 6h12M5 1v3M11 1v3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
             <Show when=move || open.get()>
-                <div class="date-picker__panel" role="dialog">
+                <div
+                    class="date-picker__panel"
+                    class:date-picker__panel--flip-up=flip_up
+                    class:date-picker__panel--align-end=align_end
+                    role="dialog"
+                >
                     <div class="date-picker__header">
                         <button type="button" class="date-picker__nav" on:click=go_prev aria-label="Попередній місяць">"‹"</button>
                         <span class="date-picker__month">

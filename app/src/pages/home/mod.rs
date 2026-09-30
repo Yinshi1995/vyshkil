@@ -3,6 +3,7 @@ mod server;
 
 use leptos::prelude::*;
 
+use crate::layout::{ContentWidth, PageContent, PageHeader};
 use crate::services::health::health_check;
 use crate::services::orgs::list_orgs;
 use components::{OrgSearch, SubordinationTree};
@@ -13,11 +14,12 @@ pub fn HomePage() -> impl IntoView {
     let orgs = Resource::new(|| (), |_| list_orgs());
 
     view! {
-        <h1>"Taktoblik"</h1>
-        <p>
-            "Облік заходів підготовки військових частин: збір даних, нормалізація, звірка між "
-            "рівнями підпорядкування, звітні документи."
-        </p>
+        <PageHeader
+            title="Taktoblik".to_string()
+            subtitle="Облік заходів підготовки військових частин: збір даних, нормалізація, звірка між рівнями підпорядкування, звітні документи."
+                .to_string()
+        />
+        <PageContent width=ContentWidth::Detail>
         <div class="card-row">
             <div class="card">
                 <div class="icon-box">
@@ -77,5 +79,6 @@ pub fn HomePage() -> impl IntoView {
         </div>
         <OrgSearch/>
         <SubordinationTree/>
+        </PageContent>
     }
 }

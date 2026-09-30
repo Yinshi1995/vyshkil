@@ -1,5 +1,6 @@
 mod accordion;
 mod checkbox;
+mod combobox;
 mod date_picker;
 mod download;
 mod drawer;
@@ -9,6 +10,7 @@ mod select;
 
 pub use accordion::{Accordion, AccordionItem};
 pub use checkbox::Checkbox;
+pub use combobox::{Combobox, ComboboxItem, ComboboxMode, ComboboxVariant};
 pub use date_picker::DatePicker;
 pub use download::download_bytes;
 pub use drawer::Drawer;

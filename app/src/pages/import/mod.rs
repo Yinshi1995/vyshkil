@@ -8,6 +8,7 @@ use leptos::prelude::*;
 
 use crate::components::{read_file_bytes, DatePicker, FileDropzone, Select, SelectOption};
 use crate::hooks::use_actor::use_actor;
+use crate::layout::{ContentWidth, PageContent, PageHeader, Toolbar};
 use crate::types::staffing::{InstructorStaffingRow, StaffingRow};
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
 use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
@@ -83,7 +84,7 @@ pub fn ImportPage() -> impl IntoView {
     let actor = use_actor();
 
     view! {
-        <h1>"Імпорт"</h1>
+        <PageHeader title="Імпорт".to_string()/>
         {move || {
             if actor.get().is_none() {
                 view! { <ActorNotice/> }.into_any()
@@ -366,42 +367,47 @@ fn ImportBody() -> impl IntoView {
     on_cleanup(move || handle.remove());
 
     view! {
-        <div class="training-form">
+        <PageContent width=ContentWidth::Data>
             <p>
                 "Оберіть тип файлу й завантажте xlsx. Розпізнані рядки з'являться в тій самій "
                 "сітці, що й ручне введення — перевірте нерозпізнані клітинки (без вибраної "
                 "частини/ВОС/місця) перед фіксацією."
             </p>
-            <div class="training-form__header">
-                <Select
-                    value=Signal::derive(move || file_kind.get().key().to_string())
-                    options=Signal::derive(|| {
-                        FileKind::ALL.iter().map(|k| SelectOption::new(k.key(), k.label())).collect()
-                    })
-                    on_change=Callback::new(move |v: String| file_kind.set(FileKind::from_key(&v)))
-                />
-                <label class="training-form__as-of">
-                    "Станом на "
-                    <DatePicker
-                        value=Signal::derive(move || {
-                            chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d").ok()
+            <Toolbar>
+                <div class="toolbar__left">
+                    <Select
+                        value=Signal::derive(move || file_kind.get().key().to_string())
+                        options=Signal::derive(|| {
+                            FileKind::ALL.iter().map(|k| SelectOption::new(k.key(), k.label())).collect()
                         })
-                        on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
-                            as_of_date.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
-                        })
-                        placeholder="дд.мм.рррр".to_string()
+                        on_change=Callback::new(move |v: String| file_kind.set(FileKind::from_key(&v)))
                     />
-                </label>
-                <FileDropzone
-                    accept=".xlsx".to_string()
-                    disabled=Signal::derive(move || parsing.get())
-                    on_file=Callback::new(on_file_selected)
-                />
-                <span class="training-form__status">{move || status.get()}</span>
-                <button class="btn btn--primary" on:click=move |_| do_commit()>
-                    "Зафіксувати все (Ctrl+Enter)"
-                </button>
-            </div>
+                    <label class="training-form__as-of">
+                        "Станом на "
+                        <DatePicker
+                            value=Signal::derive(move || {
+                                chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d").ok()
+                            })
+                            on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                                as_of_date
+                                    .set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                            })
+                            placeholder="дд.мм.рррр".to_string()
+                        />
+                    </label>
+                </div>
+                <div class="toolbar__right">
+                    <FileDropzone
+                        accept=".xlsx".to_string()
+                        disabled=Signal::derive(move || parsing.get())
+                        on_file=Callback::new(on_file_selected)
+                    />
+                    <span class="training-form__status">{move || status.get()}</span>
+                    <button class="btn btn--primary" on:click=move |_| do_commit()>
+                        "Зафіксувати все (Ctrl+Enter)"
+                    </button>
+                </div>
+            </Toolbar>
 
             {move || {
                 commit_error
@@ -416,7 +422,16 @@ fn ImportBody() -> impl IntoView {
             }}
 
             <Show when=move || !file_kind.get().is_staffing() && !editable.get().is_empty()>
-                <Grid editable=editable next_id=next_id active_cell=active_cell before_mutate=snapshot/>
+                <Grid
+                    editable=editable
+                    next_id=next_id
+                    active_cell=active_cell
+                    before_mutate=snapshot
+                    as_of=Signal::derive(move || {
+                        chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d")
+                            .unwrap_or_else(|_| chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+                    })
+                />
             </Show>
             <Show when=move || file_kind.get().is_staffing() && !staffing_rows.get().is_empty()>
                 <StaffingTable rows=staffing_rows/>
@@ -438,7 +453,7 @@ fn ImportBody() -> impl IntoView {
                     </div>
                 </div>
             </Show>
-        </div>
+        </PageContent>
     }
 }
 

@@ -6,7 +6,10 @@
 
 use leptos::prelude::*;
 
-use crate::components::{Accordion, AccordionItem, Checkbox, DatePicker, Dialog, Modal};
+use crate::components::{
+    Accordion, AccordionItem, Checkbox, Combobox, ComboboxItem, ComboboxVariant, DatePicker,
+    Dialog, Modal,
+};
 use crate::hooks::use_actor::use_actor;
 use crate::types::actor::Role;
 use style_macros::cx;
@@ -36,6 +39,60 @@ pub fn StyleguidePage() -> impl IntoView {
     let modal_open = RwSignal::new(false);
     let dialog_open = RwSignal::new(false);
     let picked_date = RwSignal::new(None::<chrono::NaiveDate>);
+
+    // --- Combobox (docs/spec/components/select.md) ---
+    let kind_items = Signal::derive(|| {
+        vec![
+            ComboboxItem::new("bzvp", "БЗВП"),
+            ComboboxItem::new("special", "Фахова"),
+            ComboboxItem::new("adaptation", "Адаптація"),
+        ]
+    });
+    let cb_closed = RwSignal::new(String::new());
+    let cb_selected = RwSignal::new("special".to_string());
+    let cb_invalid = RwSignal::new(String::new());
+
+    // in-cell — той самий набір станів, що field (07 §7 вимагає обидва режими), окремі сигнали,
+    // щоб перемикання в одному ряду не смикало інший.
+    let cb_cell_closed = RwSignal::new(String::new());
+    let cb_cell_selected = RwSignal::new("special".to_string());
+    let cb_cell_invalid = RwSignal::new(String::new());
+    let cb_cell_long = RwSignal::new("long".to_string());
+    let cb_cell_vos = RwSignal::new(String::new());
+    let cb_cell_many = RwSignal::new(String::new());
+
+    // "Довгий текст" — перевірка ellipsis+tooltip на вузькому тригері.
+    let long_items = Signal::derive(|| {
+        vec![ComboboxItem::new(
+            "long",
+            "241 окрема бригада територіальної оборони (дуже довга назва для перевірки обрізання)",
+        )]
+    });
+    let cb_long = RwSignal::new("long".to_string());
+
+    // "З пошуком + групи + пояснення" — той самий патерн, що підказка ВОС "вамп → 218, бо Vampire".
+    let vos_items = Signal::derive(|| {
+        vec![
+            ComboboxItem::new("218", "ВОС 218 — зовнішній пілот (оператор) БпЛА")
+                .with_description("бо \"Vampire\" → 218")
+                .with_group("БпЛА"),
+            ComboboxItem::new("217", "ВОС 217 — оператор БпЛА (Mavic/Matrice)")
+                .with_description("бо \"Mavic\" → 217")
+                .with_group("БпЛА"),
+            ComboboxItem::new("219", "ВОС 219 — оператор FPV-дронів")
+                .with_description("бо \"FPV\" → 219")
+                .with_group("БпЛА"),
+            ComboboxItem::new("117", "ВОС 117 — навідник танка").with_group("Бронетехніка"),
+            ComboboxItem::new("121", "ВОС 121 — механік-водій БМП").with_group("Бронетехніка"),
+        ]
+    });
+    let cb_vos = RwSignal::new(String::new());
+
+    // "300 елементів" — перевірка продуктивності рендеру довгого списку (не гальмує typeahead).
+    let many_items = Signal::derive(|| {
+        (1..=300).map(|i| ComboboxItem::new(i.to_string(), format!("Пункт №{i}"))).collect::<Vec<_>>()
+    });
+    let cb_many = RwSignal::new(String::new());
 
     view! {
         <Show when=is_admin fallback=|| view! { <p>"Сторінка лише для адміністратора."</p> }>
@@ -143,6 +200,179 @@ pub fn StyleguidePage() -> impl IntoView {
                 <button class="btn btn--outline" on:click=move |_| dialog_open.set(false)>"Скасувати"</button>
                 <button class="btn btn--primary" on:click=move |_| dialog_open.set(false)>"Підтвердити"</button>
             </Dialog>
+
+            <div class="eyebrow">"Combobox (переробка Select з нуля — docs/spec/components/select.md)"</div>
+            <p class=cx!("fg-muted")>
+                "Портал + hooks::use_popover_position — перевірити наживо: розгорни список і поскрол/зменш вікно, "
+                "щоб побачити flip/align; hover/focus на тригерах — CSS-стани самі підхоплюються (:hover/:focus-visible)."
+            </p>
+            <div class=cx!("flex gap4 items-s wrap")>
+                <div class=cx!("flex col gap1")>
+                    <span class=cx!("t-xs fg-muted")>"field, закритий"</span>
+                    <Combobox
+                        value=cb_closed
+                        items=kind_items
+                        on_change=Callback::new(move |v| cb_closed.set(v))
+                        placeholder="Оберіть вид".to_string()
+                        searchable=false
+                    />
+                </div>
+                <div class=cx!("flex col gap1")>
+                    <span class=cx!("t-xs fg-muted")>"field, вибрано"</span>
+                    <Combobox
+                        value=cb_selected
+                        items=kind_items
+                        on_change=Callback::new(move |v| cb_selected.set(v))
+                        placeholder="Оберіть вид".to_string()
+                    />
+                </div>
+                <div class=cx!("flex col gap1")>
+                    <span class=cx!("t-xs fg-muted")>"field, disabled"</span>
+                    <Combobox
+                        value=cb_selected
+                        items=kind_items
+                        on_change=Callback::new(|_| {})
+                        placeholder="Оберіть вид".to_string()
+                        disabled=true
+                    />
+                </div>
+                <div class=cx!("flex col gap1")>
+                    <span class=cx!("t-xs fg-muted")>"field, invalid"</span>
+                    <Combobox
+                        value=cb_invalid
+                        items=kind_items
+                        on_change=Callback::new(move |v| cb_invalid.set(v))
+                        placeholder="Оберіть вид".to_string()
+                        invalid=true
+                    />
+                </div>
+                <div class=cx!("flex col gap1")>
+                    <span class=cx!("t-xs fg-muted")>"field, довгий текст (обрізання+tooltip)"</span>
+                    <Combobox
+                        value=cb_long
+                        items=long_items
+                        on_change=Callback::new(move |v| cb_long.set(v))
+                        placeholder="—".to_string()
+                    />
+                </div>
+            </div>
+
+            <div class=cx!("mt3")>
+                <span class=cx!("t-xs fg-muted")>
+                    "in-cell — заповнює клітинку рівно (як у Grid), без власної рамки; той самий набір станів, що field (07 §7)"
+                </span>
+                <table class=cx!("mt1 w-full bd")>
+                    <thead>
+                        <tr>
+                            <th class=cx!("p2 bd t-xs fg-muted")>"закритий"</th>
+                            <th class=cx!("p2 bd t-xs fg-muted")>"вибрано"</th>
+                            <th class=cx!("p2 bd t-xs fg-muted")>"disabled"</th>
+                            <th class=cx!("p2 bd t-xs fg-muted")>"invalid"</th>
+                            <th class=cx!("p2 bd t-xs fg-muted")>"довгий текст"</th>
+                            <th class=cx!("p2 bd t-xs fg-muted")>"пошук+групи (ВОС)"</th>
+                            <th class=cx!("p2 bd t-xs fg-muted")>"300 елементів"</th>
+                            <th class=cx!("p2 bd fg-muted")>"сусідня клітинка"</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class=cx!("p0 bd")>
+                                <Combobox
+                                    value=cb_cell_closed
+                                    items=kind_items
+                                    on_change=Callback::new(move |v| cb_cell_closed.set(v))
+                                    placeholder="—".to_string()
+                                    variant=ComboboxVariant::InCell
+                                />
+                            </td>
+                            <td class=cx!("p0 bd")>
+                                <Combobox
+                                    value=cb_cell_selected
+                                    items=kind_items
+                                    on_change=Callback::new(move |v| cb_cell_selected.set(v))
+                                    placeholder="—".to_string()
+                                    variant=ComboboxVariant::InCell
+                                />
+                            </td>
+                            <td class=cx!("p0 bd")>
+                                <Combobox
+                                    value=cb_cell_selected
+                                    items=kind_items
+                                    on_change=Callback::new(|_| {})
+                                    placeholder="—".to_string()
+                                    variant=ComboboxVariant::InCell
+                                    disabled=true
+                                />
+                            </td>
+                            <td class=cx!("p0 bd")>
+                                <Combobox
+                                    value=cb_cell_invalid
+                                    items=kind_items
+                                    on_change=Callback::new(move |v| cb_cell_invalid.set(v))
+                                    placeholder="—".to_string()
+                                    variant=ComboboxVariant::InCell
+                                    invalid=true
+                                />
+                            </td>
+                            <td class=cx!("p0 bd")>
+                                <Combobox
+                                    value=cb_cell_long
+                                    items=long_items
+                                    on_change=Callback::new(move |v| cb_cell_long.set(v))
+                                    placeholder="—".to_string()
+                                    variant=ComboboxVariant::InCell
+                                />
+                            </td>
+                            <td class=cx!("p0 bd")>
+                                <Combobox
+                                    value=cb_cell_vos
+                                    items=vos_items
+                                    on_change=Callback::new(move |v| cb_cell_vos.set(v))
+                                    placeholder="Пошук ВОС…".to_string()
+                                    variant=ComboboxVariant::InCell
+                                    searchable=true
+                                    empty_message="Нічого не знайдено".to_string()
+                                />
+                            </td>
+                            <td class=cx!("p0 bd")>
+                                <Combobox
+                                    value=cb_cell_many
+                                    items=many_items
+                                    on_change=Callback::new(move |v| cb_cell_many.set(v))
+                                    placeholder="Пошук…".to_string()
+                                    variant=ComboboxVariant::InCell
+                                    searchable=true
+                                />
+                            </td>
+                            <td class=cx!("p2 bd fg-muted")>"тригер не налазить"</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class=cx!("mt3 flex gap4 items-s wrap")>
+                <div class=cx!("flex col gap1")>
+                    <span class=cx!("t-xs fg-muted")>"з пошуком, групи, двострічкові пункти (підказка ВОС)"</span>
+                    <Combobox
+                        value=cb_vos
+                        items=vos_items
+                        on_change=Callback::new(move |v| cb_vos.set(v))
+                        placeholder="Пошук ВОС…".to_string()
+                        searchable=true
+                        empty_message="Нічого не знайдено — спробуй \"вамп\" чи \"НРК\"".to_string()
+                    />
+                </div>
+                <div class=cx!("flex col gap1")>
+                    <span class=cx!("t-xs fg-muted")>"300 елементів (продуктивність), порожній результат — набери щось відсутнє"</span>
+                    <Combobox
+                        value=cb_many
+                        items=many_items
+                        on_change=Callback::new(move |v| cb_many.set(v))
+                        placeholder="Пошук…".to_string()
+                        searchable=true
+                    />
+                </div>
+            </div>
 
             <div class="eyebrow">{format!("Усі атоми ({})", style::all_atoms().len())}</div>
             <p class=cx!("fg-muted")>"Повний перелік — для пошуку. Групування за категоріями — style/ATOMS.md."</p>

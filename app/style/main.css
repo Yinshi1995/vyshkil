@@ -54,6 +54,12 @@
 
   --font-heading: "Oswald", "Arial Narrow", sans-serif;
   --font-body: "Roboto", "Segoe UI", sans-serif;
+
+  /* Етап 7.5 (docs/spec/components/layout.md §4) — однакова висота різнорідних контролів
+     у Toolbar (кнопка/Combobox-field/DatePicker-field), не точковий підбір px під кожен рецепт.
+     52px — виміряна фактична висота `.btn` (padding+line-height, `.btn` не звужується під
+     менше значення) — решта рецептів РОСТУТЬ до цього через `min-height`, не навпаки. */
+  --control-height: 52px;
 }
 
 * {
@@ -71,10 +77,127 @@ body {
   line-height: 1.55;
 }
 
+/* Етап 7.5 (docs/spec/components/layout.md §3) — `main` більше НЕ несе власний max-width (це
+   різало ширину ще до Grid'а, попри всю sticky/scroll-верстку розділу Б); кожна сторінка сама
+   оголошує тип через `layout::PageContent`. Сторінки, що ще не мігрували (лише 2 пілотні цього
+   проходу) — тимчасово без обмеження, очікувана регресія до завершення розкатки. */
 main {
+  padding: 32px 20px 56px;
+}
+
+.page-content--detail {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 32px 20px 56px;
+}
+
+/* Дві колонки на широких екранах (§3: "detail — готова під 2 колонки") — сторінка сама вирішує,
+   ЩО саме йде колонками, загортаючи це у `.page-content__grid`; вузько (телефон/планшет) —
+   звичайний стек, без медіа-запиту. */
+@media (min-width: 768px) {
+  .page-content__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+.page-content--reading {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* PageHeader (layout::PageHeader, Етап 7.5) — компактний, не той самий розмір, що h1 величезний
+   деінде (styleguide/головна лишаються на голому h1 — не мігрували в цьому проході). */
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header__breadcrumbs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.page-header__breadcrumbs > * + *::before {
+  content: "/";
+  margin-right: 6px;
+  color: var(--text-muted);
+}
+.page-header__breadcrumbs span {
+  color: var(--text-secondary);
+}
+
+.page-header__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-header__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 22px;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.page-header__subtitle {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  max-width: none;
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Toolbar (layout::Toolbar, Етап 7.5 §4) — двоє дітей-обгорток (`.toolbar__left`/`__right`),
+   `space-between` розводить їх сама; `--control-height` — однакова висота різнорідних контролів
+   (кнопка/Combobox-field/DatePicker-field), а не точковий підбір px під кожен рецепт. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.toolbar__left,
+.toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn,
+.select__trigger,
+.combobox__trigger--field,
+.combobox__field--field,
+.date-picker__field {
+  min-height: var(--control-height);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: calc(var(--space-4) - 1px) calc(var(--space-6) - 1px);
+}
+.btn--ghost:hover {
+  color: var(--accent);
+  background: var(--accent-dim);
 }
 
 h1,
@@ -241,12 +364,27 @@ a:hover {
   display: inline-block;
 }
 
+/* Усередині Grid (feedback користувача — тригер `min-width:160px` ігнорував вузьку
+   `minmax(110px, 1fr)`-колонку й вилазив у сусідню, ламаючи вирівнювання рядка): тут `Select`
+   стоїть НАПРЯМУ як grid-track-дитина (`grid.rs`, TrainingKindCell/SiteCell), тому має заповнювати
+   свою колонку, як і сусідній `.cell__input`, а не диктувати власну мінімальну ширину. */
+.grid__row > .select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+.grid__row > .select .select__trigger {
+  width: 100%;
+  min-width: 0;
+}
+
 .select__trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   min-width: 160px;
+  max-width: 320px;
   background: var(--surface-raised);
   color: var(--fg-main);
   border: 1px solid var(--border);
@@ -306,6 +444,28 @@ a:hover {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-2);
   box-shadow: var(--shadow-2);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.select__dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+.select__dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+.select__dropdown::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-1);
+}
+
+/* Колізія з в'юпортом (hooks::use_floating_position) — той самий фікс, що .date-picker__panel. */
+.select__dropdown--flip-up {
+  top: auto;
+  bottom: calc(100% + var(--space-1));
+}
+.select__dropdown--align-end {
+  left: auto;
+  right: 0;
 }
 
 .select__option {
@@ -336,35 +496,64 @@ a:hover {
   display: inline-block;
 }
 
-.date-picker__trigger {
+/* Поле+іконка (не кнопка — feedback користувача: дату треба й НАБИРАТИ з клавіатури, не лише
+   клацати в календарі). Клік по іконці відкриває той самий `.date-picker__panel`, що й раніше. */
+.date-picker__field {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 160px;
   background: var(--surface-raised);
-  color: var(--fg-main);
   border: 1px solid var(--border);
   border-radius: var(--radius-1);
-  padding: var(--space-2) var(--space-3);
-  font-family: var(--font-body);
-  font-size: var(--text-md-size);
-  line-height: var(--text-md-line);
-  cursor: pointer;
+  padding: 0 var(--space-2) 0 var(--space-3);
   transition: border-color var(--duration-fast) ease;
 }
 
-.date-picker__trigger:hover {
+.date-picker__field:hover,
+.date-picker__field:focus-within {
   border-color: var(--border-strong);
 }
 
-.date-picker__trigger[aria-expanded="true"] {
-  border-color: var(--fg-accent);
+.date-picker__field--invalid {
+  border-color: var(--danger);
 }
 
-.date-picker__trigger svg {
-  color: var(--fg-accent);
+.date-picker__input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: var(--fg-main);
+  font-family: var(--font-body);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+  padding: var(--space-2) 0;
+}
+
+.date-picker__input:focus {
+  outline: none;
+}
+
+.date-picker__input::placeholder {
+  color: var(--fg-muted);
+}
+
+.date-picker__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--fg-accent);
+  padding: var(--space-2);
+  cursor: pointer;
+}
+
+.date-picker__icon-btn[aria-expanded="true"] {
+  color: var(--fg-main);
 }
 
 .date-picker__panel {
@@ -377,6 +566,17 @@ a:hover {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-2);
   box-shadow: var(--shadow-2);
+}
+
+/* Колізія з в'юпортом (hooks::use_floating_position, feedback користувача — панелі раніше
+   завжди відкривались вниз-вправо й вилазили за екран біля країв). */
+.date-picker__panel--flip-up {
+  top: auto;
+  bottom: calc(100% + var(--space-1));
+}
+.date-picker__panel--align-end {
+  left: auto;
+  right: 0;
 }
 
 .date-picker__header {
@@ -780,14 +980,6 @@ tr:hover td {
 }
 
 /* Сітка введення (02) — training_form. Функціональний мінімум, не остаточний вигляд. */
-.training-form__header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-
 .training-form__as-of {
   display: flex;
   align-items: center;
@@ -800,36 +992,76 @@ tr:hover td {
   font-size: 13px;
 }
 
+/* Сітка (розділ Б, docs/spec/components/grid.md §6) — ОДИН скрол-контейнер, обидві осі: sticky
+   заголовок (position:sticky;top) і sticky колонки (position:sticky;left) працюють у тому самому
+   контейнері без окремого вкладеного скролу — найпростіший робастний спосіб тримати заголовок
+   і тіло синхронними по горизонталі. */
 .grid {
-  overflow-x: auto;
+  position: relative;
+  overflow: auto;
+  max-height: 70vh;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--panel);
 }
 
+/* Тіні країв (§6) — видимість перемикає `scroll`-listener у grid.rs через клас на `.grid`. */
+.grid::before,
+.grid::after {
+  content: "";
+  position: sticky;
+  top: 0;
+  width: 12px;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease;
+}
+.grid::before {
+  left: 0;
+  margin-right: -12px;
+  background: linear-gradient(to right, color-mix(in srgb, var(--fg-accent) 35%, transparent), transparent);
+}
+.grid::after {
+  right: 0;
+  margin-left: -12px;
+  background: linear-gradient(to left, color-mix(in srgb, var(--fg-accent) 35%, transparent), transparent);
+}
+.grid--shadow-left::before {
+  opacity: 1;
+}
+.grid--shadow-right::after {
+  opacity: 1;
+}
+
 .grid__header,
 .grid__row {
   display: grid;
-  grid-template-columns: 44px repeat(14, minmax(110px, 1fr));
   gap: 1px;
-  min-width: 1600px;
 }
 
-.grid__expand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--fg-muted);
-  cursor: pointer;
+/* Дія (перша) + Частина (друга) — sticky ліворуч (§6: "sticky ліворуч: колонка дій +
+   'Частина'"); зсув Частини — константа `ACTION_WIDTH_PX` (дія не resizable, завжди 40px). */
+.grid__header > :first-child,
+.grid__row > :first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--panel);
 }
-
-.grid__expand:hover {
-  color: var(--fg-accent);
+.grid__header > :nth-child(2),
+.grid__row > :nth-child(2) {
+  position: sticky;
+  left: 40px;
+  z-index: 2;
+  background: var(--panel);
 }
 
 .grid__header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   background: var(--panel-alt);
   color: var(--text-muted);
   font-family: var(--font-heading);
@@ -837,9 +1069,40 @@ tr:hover td {
   font-size: 11px;
   letter-spacing: 0.04em;
 }
+.grid__header > :first-child,
+.grid__header > :nth-child(2) {
+  z-index: 4;
+  background: var(--panel-alt);
+}
 
-.grid__header span {
+.grid__header-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
   padding: 8px 6px;
+}
+
+.grid__header-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grid__resize-handle {
+  position: absolute;
+  right: -1px;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 1;
+}
+.grid__resize-handle:hover {
+  background: var(--border-strong);
+}
+
+.grid__actions-header {
+  display: block;
 }
 
 .grid__row {
@@ -850,8 +1113,55 @@ tr:hover td {
   background: var(--accent-dim);
 }
 
-.cell {
+.grid__actions {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.grid__row-number {
+  font-size: 10px;
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.grid__expand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-1);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.grid__expand:hover,
+.grid__expand:focus-visible {
+  color: var(--fg-accent);
+  background: var(--accent-dim);
+}
+
+.grid__row-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.grid__row-badge--danger {
+  background: var(--danger);
+}
+.grid__row-badge--info {
+  background: var(--fg-accent);
 }
 
 .cell__input {
@@ -872,55 +1182,151 @@ tr:hover td {
   z-index: 1;
 }
 
-.cell__dropdown {
+.cell__input--invalid {
+  outline: 1px solid var(--danger);
+  outline-offset: -1px;
+}
+
+.cell__input--number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell__input--number::placeholder {
+  color: var(--fg-subtle);
+}
+
+/* Тулбар сітки (§6: "перемикач 'показати колонки'") — усередині Grid, не чекає на Етап 7.5's
+   сторінковий Toolbar. */
+.grid-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-2);
+}
+
+.grid-toolbar__columns {
+  position: relative;
+}
+
+.grid-toolbar__columns-panel {
   position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 20;
-  min-width: 260px;
-  max-height: 240px;
-  overflow-y: auto;
-  margin: 0;
-  padding: 4px 0;
-  list-style: none;
-  background: var(--panel-alt);
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 200px;
+  padding: var(--space-2);
+  background: var(--surface-raised);
   border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  box-shadow: 0 4px 16px var(--shadow);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
 }
 
-.cell__dropdown-item {
-  padding: 6px 10px;
+.grid-toolbar__columns-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm-size);
+  color: var(--fg-main);
   cursor: pointer;
-  font-size: 13px;
 }
 
-.cell__dropdown-item--active,
-.cell__dropdown-item:hover {
+/* Меню рядка (`row_menu.rs`) — портал, той самий `use_popover_position`, що Combobox. */
+.row-menu {
+  position: relative;
+  display: flex;
+}
+
+.row-menu__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-1);
+  color: var(--fg-subtle);
+  cursor: pointer;
+}
+.row-menu__trigger:hover,
+.row-menu__trigger[aria-expanded="true"] {
+  color: var(--fg-accent);
   background: var(--accent-dim);
 }
 
-.cell__dropdown-empty {
-  padding: 6px 10px;
-  color: var(--text-muted);
-  font-size: 13px;
+.row-menu__panel {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: var(--space-1);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
 }
 
-.cell__dropdown-matched,
-.cell__dropdown-why {
-  color: var(--text-muted);
-  font-size: 12px;
+.row-menu__item {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-1);
+  color: var(--fg-main);
+  font-size: var(--text-sm-size);
+  cursor: pointer;
+}
+.row-menu__item:hover {
+  background: var(--accent-dim);
+}
+.row-menu__item--danger {
+  color: var(--danger);
 }
 
-.cell__dropdown-kind {
-  color: var(--accent);
-  font-size: 11px;
-  text-transform: uppercase;
-  margin-right: 4px;
+/* "З"/"По" пов'язані (`date_range_cell.rs`, docs/spec/components/grid.md §4) — поля лишаються
+   `.cell__input`/`.date-picker__icon-btn` (перевикористання), лише обгортка й сам поповер нові
+   (portal, `position:fixed`, на відміну від `.date-picker__panel`, яка лишається `absolute`
+   для НЕ-портальованого `DatePicker`). */
+.date-range-cell__start,
+.date-range-cell__end {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.date-range-cell__panel {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
+}
+
+.date-range-cell__day--in-range {
+  background: var(--accent-dim);
+  border-radius: var(--radius-1);
+}
+
+.date-range-cell__day--focused {
+  outline: 1px solid var(--fg-accent);
+  outline-offset: -1px;
+}
+
+.date-picker__footer {
+  margin-top: var(--space-2);
+  display: flex;
+  justify-content: center;
 }
 
 .grid__add-row {
-  margin: 8px;
+  margin-top: var(--space-2);
 }
 
 /* Модальна панель (components::Modal/Dialog + перейменовано з .cheat-sheet__* — той самий
@@ -1257,6 +1663,253 @@ tr:hover td {
 
 .composition-editor__row > *:first-child {
   flex: 1;
+}
+
+/* Combobox (components::combobox, docs/spec/components/select.md) — переробка Select з нуля
+   (feedback користувача, 2026-09-30): портал + `use_popover_position`, два варіанти тригера. */
+.combobox {
+  position: relative;
+  display: inline-block;
+}
+
+.combobox__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  color: var(--fg-main);
+  font-family: var(--font-body);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease;
+}
+
+.combobox__trigger--field {
+  min-width: 160px;
+  max-width: 320px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+.combobox__trigger--field:hover {
+  border-color: var(--border-strong);
+}
+
+.combobox__trigger--field[aria-expanded="true"] {
+  border-color: var(--fg-accent);
+}
+
+/* in-cell (Grid): заповнює клітинку рівно, без власної рамки/підкладки — шеврон з'являється
+   лише на hover/focus (§3 спеки — саме це "не форсує власний min-width", на відміну від старого
+   `.select__trigger`, ламало вирівнювання колонок). */
+.combobox__trigger--in-cell {
+  height: 100%;
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 0;
+}
+
+.combobox__trigger--in-cell .combobox__chevron {
+  opacity: 0;
+}
+
+.combobox__trigger--in-cell:hover .combobox__chevron,
+.combobox__trigger--in-cell:focus-visible .combobox__chevron,
+.combobox__trigger--in-cell[aria-expanded="true"] .combobox__chevron {
+  opacity: 1;
+}
+
+.combobox__trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.combobox__trigger[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+/* `mode=Input` (докс/spec/components/grid.md §2) — видимий елемент сам `<input>`, той самий
+   візуальний рецепт, що `.combobox__trigger`, лише текстове поле замість кнопки. */
+.combobox__field {
+  width: 100%;
+  color: var(--fg-main);
+  font-family: var(--font-body);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+  transition: border-color var(--duration-fast) ease;
+}
+
+.combobox__field--field {
+  min-width: 160px;
+  max-width: 320px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+.combobox__field--field:hover {
+  border-color: var(--border-strong);
+}
+
+.combobox__field--field[aria-expanded="true"] {
+  border-color: var(--fg-accent);
+}
+
+.combobox__field--in-cell {
+  height: 100%;
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 0;
+}
+
+.combobox__field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.combobox__field[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.combobox__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.combobox__chevron {
+  color: var(--fg-accent);
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) ease, opacity var(--duration-fast) ease;
+}
+
+.combobox__trigger[aria-expanded="true"] .combobox__chevron {
+  transform: rotate(180deg);
+}
+
+/* Портал (`document.body`) — `position: fixed`, координати рахує `use_popover_position` через
+   `style:`-біндинги (не статичний `style="..."`, `architecture.rs` це розрізняє). */
+.combobox__panel {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  /* без max-width панель росте до ширини найдовшого нетрункованого пункту (shrink-to-fit на
+     position:fixed без width) — переповнює в'юпорт замість трункації text-overflow (знайдено
+     через Playwright — довгий пункт розтягнув панель до 698px при в'юпорті 480px). */
+  max-width: min(420px, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.combobox__panel::-webkit-scrollbar {
+  width: 8px;
+}
+.combobox__panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.combobox__panel::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-1);
+}
+
+.combobox__search {
+  flex-shrink: 0;
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  color: var(--fg-main);
+  font-size: var(--text-md-size);
+}
+
+.combobox__search:focus {
+  outline: none;
+  border-color: var(--fg-accent);
+}
+
+.combobox__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-y: auto;
+}
+
+.combobox__group {
+  padding: var(--space-2) var(--space-3) 0;
+  text-transform: uppercase;
+  letter-spacing: var(--track-3);
+  font-size: var(--text-xs-size);
+  color: var(--fg-subtle);
+}
+
+.combobox__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-1);
+  cursor: pointer;
+  transition: background var(--duration-fast) ease;
+}
+
+.combobox__option--active,
+.combobox__option:hover {
+  background: var(--accent-dim);
+}
+
+.combobox__option--selected .combobox__option-label {
+  color: var(--fg-accent);
+  font-weight: var(--weight-5);
+}
+
+.combobox__option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.combobox__option-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.combobox__option-desc {
+  font-size: var(--text-xs-size);
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.combobox__check {
+  color: var(--fg-accent);
+  flex-shrink: 0;
+}
+
+.combobox__empty {
+  padding: var(--space-4) var(--space-3);
+  color: var(--fg-muted);
+  text-align: center;
+  font-size: var(--text-sm-size);
 }
 
 /* === style::generate_css() — НЕ РЕДАГУВАТИ ВРУЧНУ, cargo run -p style --bin gen === */

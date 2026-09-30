@@ -8,6 +8,7 @@ use leptos::prelude::*;
 
 use crate::components::{read_file_bytes, DatePicker, FileDropzone, Select, SelectOption};
 use crate::hooks::use_actor::use_actor;
+use crate::layout::{ContentWidth, PageContent, PageHeader, Toolbar};
 use crate::types::submission::{CommitOutcome, DraftPayload, GroupFormRow};
 use crate::widgets::group_grid::{snapshot_rows, wrap_rows, EditableRow, Grid};
 use crate::widgets::ActorNotice;
@@ -61,7 +62,7 @@ pub fn TrainingFormPage() -> impl IntoView {
     let actor = use_actor();
 
     view! {
-        <h1>"Внесення груп на навчанні"</h1>
+        <PageHeader title="Внесення груп на навчанні".to_string()/>
         {move || {
             if actor.get().is_none() {
                 view! { <ActorNotice/> }.into_any()
@@ -111,7 +112,7 @@ fn FormBody() -> impl IntoView {
         }
     };
 
-    let cheat_sheet_open = RwSignal::new(true);
+    let cheat_sheet_open = RwSignal::new(false);
     let command_palette_open = RwSignal::new(false);
     let save_status = RwSignal::new(String::new());
     let commit_error = RwSignal::new(None::<(usize, String, String)>);
@@ -267,40 +268,45 @@ fn FormBody() -> impl IntoView {
     on_cleanup(move || handle.remove());
 
     view! {
-        <div class="training-form">
-            <div class="training-form__header">
-                <label class="training-form__as-of">
-                    "Станом на "
-                    <DatePicker
-                        value=Signal::derive(move || {
-                            chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d").ok()
+        <PageContent width=ContentWidth::Data>
+            <Toolbar>
+                <div class="toolbar__left">
+                    <label class="training-form__as-of">
+                        "Станом на "
+                        <DatePicker
+                            value=Signal::derive(move || {
+                                chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d").ok()
+                            })
+                            on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                                as_of_date
+                                    .set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                            })
+                            placeholder="дд.мм.рррр".to_string()
+                        />
+                    </label>
+                    <Select
+                        value=Signal::derive(move || file_kind.get().key().to_string())
+                        options=Signal::derive(|| {
+                            FileKind::ALL.iter().map(|k| SelectOption::new(k.key(), k.label())).collect()
                         })
-                        on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
-                            as_of_date.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
-                        })
-                        placeholder="дд.мм.рррр".to_string()
+                        on_change=Callback::new(move |v: String| file_kind.set(FileKind::from_key(&v)))
                     />
-                </label>
-                <Select
-                    value=Signal::derive(move || file_kind.get().key().to_string())
-                    options=Signal::derive(|| {
-                        FileKind::ALL.iter().map(|k| SelectOption::new(k.key(), k.label())).collect()
-                    })
-                    on_change=Callback::new(move |v: String| file_kind.set(FileKind::from_key(&v)))
-                />
-                <FileDropzone
-                    accept=".xlsx".to_string()
-                    disabled=Signal::derive(move || parsing.get())
-                    on_file=Callback::new(on_file_selected)
-                />
-                <span class="training-form__status">{move || save_status.get()}</span>
-                <button class="btn btn--primary" on:click=move |_| do_commit()>
-                    "Зберегти все (Ctrl+Enter)"
-                </button>
-                <button class="btn btn--outline" on:click=move |_| cheat_sheet_open.update(|v| *v = !*v)>
-                    "? Шпаргалка"
-                </button>
-            </div>
+                </div>
+                <div class="toolbar__right">
+                    <FileDropzone
+                        accept=".xlsx".to_string()
+                        disabled=Signal::derive(move || parsing.get())
+                        on_file=Callback::new(on_file_selected)
+                    />
+                    <span class="training-form__status">{move || save_status.get()}</span>
+                    <button class="btn btn--primary" on:click=move |_| do_commit()>
+                        "Зберегти все (Ctrl+Enter)"
+                    </button>
+                    <button class="btn btn--ghost" on:click=move |_| cheat_sheet_open.update(|v| *v = !*v)>
+                        "? Шпаргалка"
+                    </button>
+                </div>
+            </Toolbar>
 
             {move || {
                 commit_error
@@ -314,7 +320,16 @@ fn FormBody() -> impl IntoView {
                     })
             }}
 
-            <Grid editable=editable next_id=next_id active_cell=active_cell before_mutate=snapshot/>
+            <Grid
+                editable=editable
+                next_id=next_id
+                active_cell=active_cell
+                before_mutate=snapshot
+                as_of=Signal::derive(move || {
+                    chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d")
+                        .unwrap_or_else(|_| chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+                })
+            />
 
             <Show when=move || cheat_sheet_open.get()>
                 <CheatSheet on_close=move || cheat_sheet_open.set(false)/>
@@ -332,7 +347,7 @@ fn FormBody() -> impl IntoView {
                     }
                 />
             </Show>
-        </div>
+        </PageContent>
     }
 }
 

@@ -2,6 +2,7 @@ mod server;
 
 use leptos::prelude::*;
 
+use crate::layout::{ContentWidth, PageContent, PageHeader};
 use server::get_equipment_vos_hint;
 
 /// Сторінка `/vos-lookup`: підказка "ОВТ/сленг → ВОС" (02 §3, критерій готовності Етапу 2:
@@ -21,7 +22,8 @@ pub fn VosLookupPage() -> impl IntoView {
     );
 
     view! {
-        <h1>"Підказка ВОС за ОВТ"</h1>
+        <PageHeader title="Підказка ВОС за ОВТ".to_string()/>
+        <PageContent width=ContentWidth::Reading>
         <p>
             "Набери назву чи сленг обладнання (\"вамп\", \"mavic\", \"fpv\", \"нрк\", \"darts\"…) — "
             "покажемо ВОС, до якого веде ця підказка."
@@ -76,5 +78,6 @@ pub fn VosLookupPage() -> impl IntoView {
                 }}
             </Suspense>
         </div>
+        </PageContent>
     }
 }

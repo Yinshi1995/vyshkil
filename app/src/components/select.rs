@@ -9,6 +9,8 @@ use leptos::leptos_dom::helpers::window_event_listener;
 use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
+use crate::hooks::use_floating_position::use_floating_position;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectOption {
     pub value: String,
@@ -52,6 +54,7 @@ pub fn Select(
     let open = RwSignal::new(false);
     let highlighted = RwSignal::new(0usize);
     let root: NodeRef<leptos::html::Div> = NodeRef::new();
+    let (flip_up, align_end) = use_floating_position(root, open.into());
 
     let current_index = move || {
         let v = value.get();
@@ -227,7 +230,12 @@ pub fn Select(
                 </svg>
             </button>
             <Show when=move || open.get()>
-                <ul class="select__dropdown" role="listbox">
+                <ul
+                    class="select__dropdown"
+                    class:select__dropdown--flip-up=flip_up
+                    class:select__dropdown--align-end=align_end
+                    role="listbox"
+                >
                     <For
                         each=move || { options.get().into_iter().enumerate().collect::<Vec<_>>() }
                         key=|(i, o)| (*i, o.value.clone())

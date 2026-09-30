@@ -3,6 +3,7 @@ mod server;
 use leptos::prelude::*;
 
 use crate::hooks::use_actor::use_actor;
+use crate::layout::{ContentWidth, PageContent, PageHeader};
 use crate::services::dictionaries::get_dictionaries_overview;
 use crate::types::dictionaries::DictionaryEntry;
 use crate::widgets::ActorNotice;
@@ -16,7 +17,8 @@ pub fn DictionariesPage() -> impl IntoView {
     let overview = Resource::new(|| (), |_| get_dictionaries_overview());
 
     view! {
-        <h1>"Довідники підготовки"</h1>
+        <PageHeader title="Довідники підготовки".to_string()/>
+        <PageContent width=ContentWidth::Detail>
         <p>"Словники Етапу 2: види й напрямки підготовки, ВОС, посади, ОВТ, курси, причини убуття."</p>
 
         <Suspense fallback=|| view! { <p>"…"</p> }>
@@ -49,6 +51,7 @@ pub fn DictionariesPage() -> impl IntoView {
             }
             view! { <LearnedAliasQueue/> }.into_any()
         }}
+        </PageContent>
     }
 }
 
