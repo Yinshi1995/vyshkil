@@ -3,8 +3,8 @@
 //! Адаптація по кожному з них. Сама арифметика воронки — `domain::counting` (як і `repo::groups`);
 //! тут лише SQL-вибірка й розкладання по секціях/видах підготовки.
 //!
-//! `internship` (стажування, з ІВС) свідомо ВИКЛЮЧЕНО з rollup — D1 (05 §D1, еталон
-//! `source_files/Зразок/26.09/`) має рівно три колонки БЗВП/Фахова/Адаптація, стажування там
+//! `internship` (стажування, з ІВС) свідомо ВИКЛЮЧЕНО з rollup — D1/D2 (05 §D1/§D2, еталони
+//! `source_files/Зразок/26.09/`) мають колонки лише БЗВП/Фахова/Адаптація, стажування там
 //! немає окремою колонкою.
 
 use crate::domain::counting::{events_on, in_training, EventType, GroupEventRecord};
@@ -15,6 +15,8 @@ pub struct KindCounts {
     pub total: i64,
     pub finishing_today: i64,
     pub started_today: i64,
+    /// "Вибули з різних причин" (05 §D2) — `EventType::Attrition` на цю дату. D1 це поле не читає.
+    pub left_today: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -222,6 +224,7 @@ fn kind_counts(events: &[GroupEventRecord], as_of: &str) -> KindCounts {
         total: in_training(events, as_of, None),
         finishing_today: events_on(events, EventType::Completed, as_of, None),
         started_today: events_on(events, EventType::Started, as_of, None),
+        left_today: events_on(events, EventType::Attrition, as_of, None),
     }
 }
 
@@ -279,6 +282,76 @@ fn merge_counts(acc: &mut KindCounts, add: KindCounts) {
     acc.total += add.total;
     acc.finishing_today += add.finishing_today;
     acc.started_today += add.started_today;
+    acc.left_today += add.left_today;
+}
+
+/// Корінь ієрархії на `as_of` — орган без штатного батька, у якого Є штатні діти (відсікає
+/// самотні org без підпорядкування, напр. `foreign_state`) — без хардкоду назви "УВ(с) 'Південь'".
+pub async fn root_org_id(db: &DatabaseConnection, as_of: &str) -> Result<Option<i32>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+    }
+    let row = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        SELECT o.id
+        FROM org o
+        WHERE o.deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM subordination_closure sc
+              WHERE sc.descendant_id = o.id AND sc.axis = 'staff' AND sc.depth = 1
+                AND daterange(sc.valid_from, sc.valid_to, '[)') @> $1::date
+          )
+          AND EXISTS (
+              SELECT 1 FROM subordination_closure sc2
+              WHERE sc2.ancestor_id = o.id AND sc2.depth = 1
+          )
+        LIMIT 1
+        "#,
+        [as_of.into()],
+    ))
+    .one(db)
+    .await?;
+    Ok(row.map(|r| r.id))
+}
+
+/// Прямі штатні діти кореня ієрархії — ті самі 6 корпусів/угруповань (17 АК/20 АК/30 КМП/7 КШР/
+/// ОТУ "Одеса"/ЧБП), але БЕЗ хардкоду назв (Етап 7, 05 §D2: "Контролька" охоплює всіх одразу,
+/// на відміну від D1, де корпус обирає користувач).
+pub async fn top_level_orgs(db: &DatabaseConnection, as_of: &str) -> Result<Vec<(i32, String)>, DbErr> {
+    let Some(root_id) = root_org_id(db, as_of).await? else { return Ok(Vec::new()) };
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+        short_name: String,
+        number: Option<String>,
+    }
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        SELECT o.id, o.short_name, o.number
+        FROM org o
+        JOIN subordination_closure sc ON sc.descendant_id = o.id
+            AND sc.axis = 'staff' AND sc.depth = 1
+            AND daterange(sc.valid_from, sc.valid_to, '[)') @> $2::date
+        WHERE sc.ancestor_id = $1 AND o.deleted_at IS NULL
+        ORDER BY o.short_name
+        "#,
+        [root_id.into(), as_of.into()],
+    );
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let label = match r.number {
+                Some(n) => format!("{} ({n})", r.short_name),
+                None => r.short_name,
+            };
+            (r.id, label)
+        })
+        .collect())
 }
 
 /// "<short_name> (<номер>)" органу, для якого генерується документ (заголовок аркуша) — `None`,

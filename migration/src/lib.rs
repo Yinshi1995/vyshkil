@@ -37,6 +37,7 @@ mod m20260929_000034_create_staffing_tables;
 mod m20260929_000035_attach_audit_triggers_staffing;
 mod m20260929_000036_refine_subordination_dates_from_kontrolka;
 mod m20260929_000037_create_generated_document_table;
+mod m20260930_000038_widen_generated_document_kind;
 
 pub struct Migrator;
 
@@ -92,6 +93,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260929_000036_refine_subordination_dates_from_kontrolka::Migration),
             // Етап 7: generated_document (05 §вступ) — мінімум під D1.
             Box::new(m20260929_000037_create_generated_document_table::Migration),
+            // Етап 7, D2: розширити kind на 'd2'.
+            Box::new(m20260930_000038_widen_generated_document_kind::Migration),
         ]
     }
 }

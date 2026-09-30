@@ -19,4 +19,4 @@
 | `imports_terminy.rs` | `resolve_rows` — `TerminyExtract` (3 паралельні списки) → `GroupFormRow`, той самий Grid, різні `training_kind` (bzvp/special/adaptation) | `pages/training_form/server.rs` |
 | `imports_vch_archive.rs` | `resolve_rows` — Етап 6, `RawVchArchiveRow` → `GroupFormRow`, `training_kind='special'`, "Місце проведення" — вільний географічний текст (часто нерозпізнане) | `pages/import/server.rs` |
 | `staffing.rs` | `insert_snapshot`/`insert_instructor_snapshot` — `staffing_snapshot`+`staffing_metric` (01 §4, різні набори метрик КВід/ІВС) | `pages/import/server.rs` |
-| `documents.rs` | `daily_training_rollup` — правило групування (01 §1) + БЗВП/Фахова/Адаптація rollup по органу/дню; `org_label`/`insert_generated_document` (Етап 7, 05) | `pages/documents/server.rs` |
+| `documents.rs` | `daily_training_rollup` — правило групування (01 §1) + БЗВП/Фахова/Адаптація rollup по органу/дню; `top_level_orgs`/`root_org_id` (Етап 7, D2 — корпуси без хардкоду назв); `org_label`/`insert_generated_document` | `pages/documents/server.rs` |

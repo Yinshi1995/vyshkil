@@ -7,10 +7,10 @@ use crate::components::{download_bytes, DatePicker};
 use crate::hooks::use_actor::use_actor;
 use crate::widgets::group_grid::OrgAutocomplete;
 use crate::widgets::ActorNotice;
-use server::generate_d1;
+use server::{generate_d1, generate_d2};
 
-/// Генерація документів (Етап 7, 05) — перший вертикальний зріз: лише D1 (щоденна зведена
-/// таблиця органу, один денний аркуш). D2/D3/D4 — окремі кроки після.
+/// Генерація документів (Етап 7, 05) — D1 (щоденна зведена, один день) і D2 ("Контролька", один
+/// тиждень). D3/D4 — окремі кроки після.
 #[component]
 pub fn DocumentsPage() -> impl IntoView {
     let actor = use_actor();
@@ -29,6 +29,16 @@ pub fn DocumentsPage() -> impl IntoView {
 
 #[component]
 fn DocumentsBody() -> impl IntoView {
+    view! {
+        <div class=cx!("flex col gap3")>
+            <D1Block/>
+            <D2Block/>
+        </div>
+    }
+}
+
+#[component]
+fn D1Block() -> impl IntoView {
     let actor = use_actor();
 
     let org_id = RwSignal::new(None::<i32>);
@@ -77,7 +87,7 @@ fn DocumentsBody() -> impl IntoView {
             <div class=cx!("flex items-c gap2 wrap")>
                 <div class=cx!("w-full bg-raised bd r1")>
                     <OrgAutocomplete
-                        id="documents-org".to_string()
+                        id="documents-d1-org".to_string()
                         label=Signal::derive(move || org_label.get())
                         on_select=Callback::new(move |(id, label): (i32, String)| {
                             org_id.set(Some(id));
@@ -105,6 +115,70 @@ fn DocumentsBody() -> impl IntoView {
                     on:click=do_generate
                 >
                     "Згенерувати D1"
+                </button>
+                <span class=cx!("fg-muted")>{move || status.get()}</span>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn D2Block() -> impl IntoView {
+    let actor = use_actor();
+
+    let any_day = RwSignal::new(String::new());
+    let status = RwSignal::new(String::new());
+    let generating = RwSignal::new(false);
+
+    let do_generate = move |_| {
+        let Some(actor) = actor.get_untracked() else { return };
+        let date = any_day.get_untracked();
+        if date.trim().is_empty() {
+            status.set("оберіть будь-який день потрібного тижня".to_string());
+            return;
+        }
+        generating.set(true);
+        status.set("генерую…".to_string());
+        leptos::task::spawn_local(async move {
+            match generate_d2(Some(actor), date.clone()).await {
+                Ok(bytes) => {
+                    let filename = format!("D2_Контролька_{date}.xlsx");
+                    download_bytes(
+                        &bytes,
+                        &filename,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    );
+                    status.set("готово".to_string());
+                }
+                Err(e) => status.set(format!("не вдалось згенерувати: {e}")),
+            }
+            generating.set(false);
+        });
+    };
+
+    view! {
+        <div class=cx!("flex col gap3")>
+            <p class="card__desc">
+                "D2 — \"Контролька\" (05 §D2): той самий rollup, накопичувальним тижнем по всіх "
+                "корпусах одразу (07 §1 — один тиждень, не весь журнал). Оберіть будь-який день "
+                "потрібного тижня."
+            </p>
+            <div class=cx!("flex items-c gap2 wrap")>
+                <DatePicker
+                    value=Signal::derive(move || {
+                        chrono::NaiveDate::parse_from_str(&any_day.get(), "%Y-%m-%d").ok()
+                    })
+                    on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                        any_day.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                    })
+                    placeholder="дд.мм.рррр".to_string()
+                />
+                <button
+                    class="btn btn--primary"
+                    disabled=move || generating.get()
+                    on:click=do_generate
+                >
+                    "Згенерувати D2 (тиждень)"
                 </button>
                 <span class=cx!("fg-muted")>{move || status.get()}</span>
             </div>
