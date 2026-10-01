@@ -22,3 +22,4 @@
 | `documents.rs` | `daily_training_rollup` — правило групування (01 §1) + БЗВП/Фахова/Адаптація rollup по органу/дню; `top_level_orgs`/`root_org_id` (Етап 7, D2 — корпуси без хардкоду назв); `org_label`/`insert_generated_document` | `pages/documents/server.rs` |
 | `reconciliation.rs` | `refresh_horizontal`/`refresh_temporal`/`refresh_vertical` (перерахунок `discrepancy` після фіксації, 04 §3-4, усі три пишуть `DiscrepancyOpened`/`.Resolved` в outbox), `list_discrepancies` (Етап 8 зрізи 1-2) | `repo::groups::commit_group_rows`, `services/reconciliation.rs` |
 | `outbox.rs` | `insert` — транзакційний outbox (09-messaging.md §3.1, Фаза 1); `backlog` — відставання для адмін-екрана "Черги" (§5, Фаза 4) | `repo::reconciliation` (перший продюсер), `pages::admin_queues::server` |
+| `notifications.rs` | Сповіщення (Етап 8 зріз 4, 04 §5) — CRUD для внутрішніх повідомлень | `services/notifications.rs`, `layout` |

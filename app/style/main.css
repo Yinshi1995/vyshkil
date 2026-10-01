@@ -77,12 +77,24 @@ body {
   line-height: 1.55;
 }
 
+body {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201, 168, 76, 0.03) 0%, transparent 70%),
+    var(--bg-darkest);
+}
+
+::selection {
+  background: rgba(201, 168, 76, 0.25);
+  color: var(--text-main);
+}
+
 /* Етап 7.5 (docs/spec/components/layout.md §3) — `main` більше НЕ несе власний max-width (це
    різало ширину ще до Grid'а, попри всю sticky/scroll-верстку розділу Б); кожна сторінка сама
    оголошує тип через `layout::PageContent`. Сторінки, що ще не мігрували (лише 2 пілотні цього
    проходу) — тимчасово без обмеження, очікувана регресія до завершення розкатки. */
 main {
-  padding: 32px 20px 56px;
+  padding: 40px 32px 64px;
+  min-height: calc(100vh - 60px);
 }
 
 .page-content--detail {
@@ -142,9 +154,13 @@ main {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  font-size: 22px;
+  font-size: 24px;
   color: var(--text-main);
   margin: 0;
+  background: linear-gradient(135deg, var(--text-main) 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .page-header__subtitle {
@@ -214,6 +230,10 @@ h3 {
 h1 {
   font-size: 34px;
   letter-spacing: 0.04em;
+  background: linear-gradient(135deg, var(--text-main) 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 p {
@@ -254,8 +274,9 @@ a:hover {
 .eyebrow::after {
   content: "";
   height: 1px;
-  width: 32px;
-  background: var(--border-strong);
+  flex: 1;
+  max-width: 80px;
+  background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
   opacity: 0.5;
 }
 
@@ -272,10 +293,14 @@ a:hover {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  background: var(--surface-panel);
+  padding: var(--space-3) var(--space-5);
+  background: linear-gradient(180deg, rgba(31, 34, 23, 0.95) 0%, rgba(23, 25, 18, 0.98) 100%);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-1), 0 1px 0 rgba(201, 168, 76, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .app-header__brand {
@@ -285,8 +310,8 @@ a:hover {
 }
 
 .app-header__mark {
-  width: var(--space-6);
-  height: var(--space-6);
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-3);
   border: 2px solid var(--fg-accent);
   display: flex;
@@ -298,6 +323,8 @@ a:hover {
   font-size: var(--text-md-size);
   line-height: var(--text-md-line);
   flex-shrink: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(201, 168, 76, 0.15), transparent 70%);
+  box-shadow: 0 0 12px rgba(201, 168, 76, 0.1);
 }
 
 .app-header__title {
@@ -326,11 +353,42 @@ a:hover {
   text-transform: uppercase;
   letter-spacing: var(--track-3);
   color: var(--fg-muted);
+  padding: var(--space-2) var(--space-1);
+  position: relative;
+  transition: color var(--duration-fast) ease;
+}
+
+.app-header__nav a::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--fg-accent);
+  border-radius: 1px;
+  transition: width var(--duration-base) ease, left var(--duration-base) ease;
 }
 
 .app-header__nav a:hover {
   color: var(--fg-accent);
   text-decoration: none;
+}
+
+.app-header__nav a:hover::after {
+  width: 100%;
+  left: 0;
+}
+
+.app-header__nav a[aria-current="page"],
+.app-header__nav a.active {
+  color: var(--fg-accent);
+}
+
+.app-header__nav a[aria-current="page"]::after,
+.app-header__nav a.active::after {
+  width: 100%;
+  left: 0;
 }
 
 .actor-switcher {
@@ -392,14 +450,14 @@ a:hover {
 .notification-bell__dropdown {
   position: absolute;
   right: 0;
-  top: 100%;
-  width: 320px;
+  top: calc(100% + 8px);
+  width: 340px;
   max-height: 400px;
   overflow-y: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  background: var(--surface-raised);
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  border-radius: var(--radius-2);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(201, 168, 76, 0.05);
   z-index: 100;
 }
 
@@ -547,11 +605,12 @@ a:hover {
   flex-direction: column;
   gap: var(--space-1);
   background: var(--surface-raised);
-  border: 1px solid var(--border-strong);
+  border: 1px solid rgba(201, 168, 76, 0.25);
   border-radius: var(--radius-2);
-  box-shadow: var(--shadow-2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(201, 168, 76, 0.08);
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
+  animation: fade-in-up var(--duration-fast) ease;
 }
 .select__dropdown::-webkit-scrollbar {
   width: 8px;
@@ -776,6 +835,8 @@ a:hover {
   color: var(--fg-accent);
   margin-bottom: var(--space-4);
   flex-shrink: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(201, 168, 76, 0.08), transparent 70%);
+  box-shadow: 0 0 20px rgba(201, 168, 76, 0.06);
 }
 
 .icon-box svg {
@@ -794,13 +855,32 @@ a:hover {
 }
 
 .card {
-  background: var(--surface-panel);
+  background: linear-gradient(145deg, rgba(31, 34, 23, 0.8), rgba(23, 25, 18, 0.95));
   border: 1px solid var(--border);
   border-radius: var(--radius-2);
   padding: var(--space-5);
   box-shadow: var(--shadow-2);
   flex: 1 1 240px;
   min-width: 220px;
+  transition: border-color var(--duration-base) ease, box-shadow var(--duration-base) ease, transform var(--duration-base) ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.3), transparent);
+}
+
+.card:hover {
+  border-color: rgba(201, 168, 76, 0.3);
+  box-shadow: var(--shadow-2), 0 0 30px rgba(201, 168, 76, 0.05);
+  transform: translateY(-2px);
 }
 
 .card__label {
@@ -820,6 +900,7 @@ a:hover {
   line-height: var(--text-display-line);
   font-weight: var(--weight-7);
   color: var(--fg-accent);
+  text-shadow: 0 0 30px rgba(201, 168, 76, 0.15);
 }
 
 .card__desc {
@@ -856,12 +937,19 @@ a:hover {
 .btn--primary {
   background: linear-gradient(135deg, var(--fg-accent), var(--gold-4));
   color: var(--fg-on-accent);
+  box-shadow: 0 2px 8px rgba(201, 168, 76, 0.2);
 }
 
 .btn--primary:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 40px color-mix(in srgb, var(--fg-accent) 30%, transparent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--fg-accent) 35%, transparent);
   text-decoration: none;
+  filter: brightness(1.05);
+}
+
+.btn--primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(201, 168, 76, 0.2);
 }
 
 .btn--outline {
@@ -872,10 +960,16 @@ a:hover {
 }
 
 .btn--outline:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   border-color: var(--fg-accent);
   background: var(--accent-dim);
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.1);
   text-decoration: none;
+}
+
+.btn--outline:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 /* Пошук організацій (02 §3) — вхід нечіткого пошуку + список результатів */
@@ -891,11 +985,17 @@ a:hover {
   font-family: var(--font-body);
   font-size: var(--text-md-size);
   line-height: var(--text-md-line);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
 
 .org-search__input:focus {
   outline: none;
   border-color: var(--fg-accent);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+.org-search__input::placeholder {
+  color: var(--fg-subtle);
 }
 
 .org-search__results {
@@ -948,11 +1048,17 @@ a:hover {
   font-family: var(--font-body);
   font-size: var(--text-md-size);
   line-height: var(--text-md-line);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
 
 .hint-search__input:focus {
   outline: none;
   border-color: var(--fg-accent);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+.hint-search__input::placeholder {
+  color: var(--fg-subtle);
 }
 
 .hint-search__results {
@@ -1045,16 +1151,17 @@ a:hover {
 /* Таблиці — навмисно БЕЗ декору (без фото, без скосів): "без шкоди читабельності" (02 §8) */
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   overflow: hidden;
 }
 
 th,
 td {
-  padding: 10px 14px;
+  padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid var(--border);
   font-size: 15px;
@@ -1062,15 +1169,21 @@ td {
 
 th {
   font-family: var(--font-heading);
-  color: var(--text-muted);
+  color: var(--fg-accent);
   font-weight: 600;
   text-transform: uppercase;
   font-size: 12px;
   letter-spacing: 0.05em;
+  background: rgba(201, 168, 76, 0.04);
+  border-bottom: 1px solid rgba(201, 168, 76, 0.2);
 }
 
 tr:last-child td {
   border-bottom: none;
+}
+
+tbody tr:nth-child(even) td {
+  background: rgba(31, 34, 23, 0.3);
 }
 
 tr:hover td {
@@ -2220,6 +2333,571 @@ tr:hover td {
   color: var(--fg-muted);
   text-align: center;
   font-size: var(--text-sm-size);
+}
+
+/* Порожній стан — коли потрібно обрати актора або немає даних */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+  color: var(--fg-muted);
+  min-height: 40vh;
+  position: relative;
+}
+
+.empty-state::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201, 168, 76, 0.03) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.empty-state__icon {
+  width: 80px;
+  height: 80px;
+  border: 2px solid rgba(201, 168, 76, 0.2);
+  border-radius: var(--radius-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-5);
+  color: rgba(201, 168, 76, 0.35);
+  background: radial-gradient(circle, rgba(201, 168, 76, 0.04), transparent 70%);
+  transition: border-color var(--duration-base) ease, color var(--duration-base) ease;
+}
+
+.empty-state:hover .empty-state__icon {
+  border-color: rgba(201, 168, 76, 0.35);
+  color: rgba(201, 168, 76, 0.5);
+}
+
+.empty-state__icon svg {
+  width: 36px;
+  height: 36px;
+  stroke: currentColor;
+  fill: none;
+}
+
+.empty-state__title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg-size);
+  font-weight: var(--weight-5);
+  color: var(--fg-muted);
+  margin: 0 0 var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: var(--track-3);
+}
+
+.empty-state__text {
+  font-size: var(--text-md-size);
+  color: var(--fg-subtle);
+  max-width: 360px;
+  margin: 0;
+}
+
+/* Покращене посилання */
+a {
+  transition: color var(--duration-fast) ease;
+}
+
+/* Плавна анімація появи контенту */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-content--detail,
+.page-content--reading {
+  animation: fade-in-up var(--duration-slow) ease;
+}
+
+/* Тулбар-інпути та select */
+.select__trigger,
+.combobox__trigger--field,
+.combobox__field--field,
+.date-picker__field {
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+
+.select__trigger:focus-within,
+.combobox__trigger--field:focus-within,
+.combobox__field--field:focus-visible,
+.date-picker__field:focus-within {
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+/* Notification bell styling improvements */
+.notification-bell__dropdown {
+  border-radius: var(--radius-2);
+  animation: fade-in-up var(--duration-fast) ease;
+}
+
+/* Grid improvements */
+.grid {
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-1);
+}
+
+/* Modal improvements */
+.modal__panel {
+  border: 1px solid rgba(201, 168, 76, 0.2);
+}
+
+.drawer__panel {
+  border-left: 1px solid rgba(201, 168, 76, 0.2);
+}
+
+/* Actor-switcher — покращене стилювання дропдаунів */
+.actor-switcher select,
+.actor-switcher .select__trigger {
+  background: rgba(31, 34, 23, 0.6);
+  border: 1px solid rgba(201, 168, 76, 0.25);
+  transition: border-color var(--duration-fast) ease;
+}
+
+.actor-switcher select:hover,
+.actor-switcher .select__trigger:hover {
+  border-color: rgba(201, 168, 76, 0.5);
+}
+
+/* Tree improvements */
+.org-tree__node {
+  border-left-color: rgba(201, 168, 76, 0.15);
+  transition: border-left-color var(--duration-fast) ease;
+}
+
+.org-tree__node:hover {
+  border-left-color: rgba(201, 168, 76, 0.4);
+}
+
+/* Discrepancy row status badges */
+.status-error {
+  font-weight: var(--weight-5);
+}
+
+.status-ok {
+  font-weight: var(--weight-5);
+}
+
+.status-warning {
+  font-weight: var(--weight-5);
+}
+
+/* Smooth page transition */
+main {
+  animation: fade-in-up var(--duration-base) ease;
+}
+
+/* ── Custom scrollbar (весь застосунок) ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 168, 76, 0.2) transparent;
+}
+
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(201, 168, 76, 0.2);
+  border-radius: 3px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(201, 168, 76, 0.35); }
+
+/* ── Custom radio buttons ── */
+input[type="radio"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(201, 168, 76, 0.35);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+input[type="radio"]:hover {
+  border-color: rgba(201, 168, 76, 0.6);
+}
+
+input[type="radio"]:checked {
+  border-color: var(--fg-accent);
+  background: transparent;
+}
+
+input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-accent);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px rgba(201, 168, 76, 0.4);
+}
+
+input[type="radio"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
+}
+
+/* ── Custom checkboxes ── */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(201, 168, 76, 0.35);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) ease, background var(--duration-fast) ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:hover {
+  border-color: rgba(201, 168, 76, 0.6);
+}
+
+input[type="checkbox"]:checked {
+  border-color: var(--fg-accent);
+  background: var(--fg-accent);
+}
+
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--fg-on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
+}
+
+/* ── VOS lookup — покращена сторінка пошуку ── */
+.hint-search__input {
+  border: 1px solid rgba(201, 168, 76, 0.2);
+  background: rgba(31, 34, 23, 0.5);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+
+.hint-search__input:focus {
+  border-color: rgba(201, 168, 76, 0.5);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08), 0 0 20px rgba(201, 168, 76, 0.05);
+}
+
+.hint-search__result {
+  transition: background var(--duration-fast) ease;
+}
+
+.hint-search__result:hover {
+  background: rgba(201, 168, 76, 0.06);
+}
+
+.hint-search__label {
+  color: var(--text-main);
+}
+
+.hint-search__reason {
+  color: var(--fg-accent);
+  font-size: 12px;
+}
+
+/* ── Org-search input icon ── */
+.org-search__input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='rgba(201,168,76,0.4)' stroke-width='1.5' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 16px center;
+  background-size: 16px;
+  padding-left: 42px;
+}
+
+/* ── Status badges (pill-стиль) ── */
+.status-error,
+.status-ok,
+.status-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.status-error {
+  background: rgba(200, 60, 60, 0.12);
+  color: var(--error);
+}
+
+.status-ok {
+  background: rgba(90, 160, 90, 0.1);
+  color: var(--text-secondary);
+}
+
+.status-warning {
+  background: rgba(201, 168, 76, 0.1);
+  color: var(--fg-accent);
+}
+
+/* ── Покращений tree-controls__date input ── */
+.tree-controls__date input {
+  border-color: rgba(201, 168, 76, 0.2);
+  border-radius: var(--radius-1);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+
+.tree-controls__date input:focus {
+  border-color: rgba(201, 168, 76, 0.5);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08);
+  outline: none;
+}
+
+/* ── Dictionaries links ── */
+a {
+  color: var(--fg-accent);
+  text-decoration: none;
+  transition: color var(--duration-fast) ease;
+}
+
+a:hover {
+  color: var(--gold-4, #e0c866);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(201, 168, 76, 0.3);
+}
+
+/* ── Table cell improvements ── */
+td a {
+  font-weight: 500;
+}
+
+/* ── Footer gradient ── */
+body::after {
+  content: "";
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(201, 168, 76, 0.3) 25%,
+    rgba(201, 168, 76, 0.5) 50%,
+    rgba(201, 168, 76, 0.3) 75%,
+    transparent 100%
+  );
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* ── Focus visible global ── */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.3);
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.3);
+  border-radius: var(--radius-1);
+}
+
+/* ── Gradient h1 — всюди ── */
+h1 {
+  background: linear-gradient(135deg, var(--text-main) 0%, var(--fg-accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Плавний перехід таблиць ── */
+table {
+  animation: fade-in-up var(--duration-base) ease;
+}
+
+tbody tr {
+  transition: background var(--duration-fast) ease;
+}
+
+/* ── Card icon glow ── */
+.card__label svg,
+.card svg:first-child {
+  filter: drop-shadow(0 0 4px rgba(201, 168, 76, 0.15));
+}
+
+/* ── Combobox/Autocomplete dropdown ── */
+.combobox__listbox,
+.org-search__results,
+.hint-search__results {
+  border: 1px solid rgba(201, 168, 76, 0.15);
+  border-radius: var(--radius-2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(201, 168, 76, 0.05);
+  animation: fade-in-up var(--duration-fast) ease;
+}
+
+/* ── Notification bell hover glow ── */
+.notification-bell__btn:hover svg {
+  filter: drop-shadow(0 0 4px rgba(201, 168, 76, 0.3));
+}
+
+.notification-bell__badge {
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 60, 60, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(200, 60, 60, 0); }
+}
+
+/* ── Eyebrow dividers glow ── */
+.eyebrow::before,
+.eyebrow::after {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.25), transparent);
+}
+
+/* ── Code / slug tags у таблицях (dictionaries, etc.) ── */
+code,
+td code,
+.slug {
+  font-family: 'Roboto Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  background: rgba(201, 168, 76, 0.06);
+  border: 1px solid rgba(201, 168, 76, 0.12);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--fg-accent);
+  white-space: nowrap;
+}
+
+/* ── Tooltip-style hover info ── */
+[title] {
+  cursor: help;
+}
+
+/* ── Subtle pattern для порожніх сторінок ── */
+.page-content--detail:empty::after,
+.page-content--reading:empty::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(201, 168, 76, 0.02) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* ── Card hover — icon-box subtle pulse ── */
+.card:hover .icon-box {
+  box-shadow: 0 0 24px rgba(201, 168, 76, 0.12);
+  border-color: rgba(201, 168, 76, 0.5);
+}
+
+/* ── Table header sticky ── */
+table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+}
+
+/* ── Better notification bell badge position and style ── */
+.notification-bell__badge {
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Smooth backdrop for header on scroll ── */
+.app-header {
+  border-bottom: 1px solid rgba(201, 168, 76, 0.08);
+}
+
+/* ── Dictionaries page — section cards ── */
+.dict-section {
+  background: linear-gradient(145deg, rgba(31, 34, 23, 0.5), rgba(23, 25, 18, 0.7));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+/* ── Loading skeleton shimmer ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    rgba(201, 168, 76, 0.03) 25%,
+    rgba(201, 168, 76, 0.08) 50%,
+    rgba(201, 168, 76, 0.03) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-1);
+}
+
+/* ── Transition for icon-box on cards ── */
+.icon-box {
+  transition: box-shadow var(--duration-base) ease, border-color var(--duration-base) ease;
+}
+
+/* ── Org tree node depth indicators ── */
+.org-tree__node > a {
+  transition: color var(--duration-fast) ease, padding-left var(--duration-fast) ease;
+}
+
+.org-tree__node > a:hover {
+  padding-left: 4px;
+}
+
+/* ── Subtle text selection ── */
+::selection {
+  background: rgba(201, 168, 76, 0.3);
+}
+
+/* ── Responsive touch targets */
+@media (max-width: 768px) {
+  .app-header {
+    padding: var(--space-3) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .app-header__nav {
+    display: none;
+  }
+
+  main {
+    padding: var(--space-5) var(--space-3) var(--space-7);
+  }
 }
 
 /* === style::generate_css() — НЕ РЕДАГУВАТИ ВРУЧНУ, cargo run -p style --bin gen === */

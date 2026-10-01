@@ -14,3 +14,4 @@
 | `dictionaries.rs` | `get_dictionaries_overview` — усі прості довідники Етапу 2 одним викликом | `pages/dictionaries`, `widgets/group_grid` |
 | `groups.rs` | `search_vos_position_course`, `get_training_sites` (02 §3, §1 колонка 5) | `widgets/group_grid` |
 | `submission_grid.rs` | `get_draft_impl`/`save_draft_impl`/`commit_grid_impl` — спільна логіка чернетки/фіксації (form/table) | `pages/training_form/server.rs`, `pages/import/server.rs` |
+| `notifications.rs` | `get_notifications`/`mark_read` — серверні функції для сповіщень (Етап 8 зріз 4, 04 §5) | `layout`, `pages/*` |
