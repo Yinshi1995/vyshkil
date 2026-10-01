@@ -102,6 +102,37 @@ is_blank()` (спільний метод типу, `app/src/types/submission.rs`
 (`pages/training_form/mod.rs`) — той самий підхід, що вже `widgets/group_grid/columns.rs`'s
 ширини колонок (per-browser UI-зручність, не серверний стан).
 
+## Автономний режим (tmux Remote Control + нічний раннер) — інфраструктура готова, чекає ручного кроку (2026-10-01)
+
+`docs/GOALS.md`/`QUESTIONS.md`/`STATUS.md` (протокол — немає вбудованої `/goal`-команди,
+звірено проти code.claude.com/docs) + `CLAUDE.md`'s розділ "Автономний режим" +
+`infra/ansible/roles/autonomy` (прогнано на VM): `loginctl enable-linger dev` — зроблено;
+`vyshkil-night-runner.timer` — активний, щоночі о 22:00, resource-guard на RAM, ізольований
+git-worktree, retry/backoff, merge --ff-only БЕЗ push; `vyshkil-tmux.service` (tmux-сесія
+"vyshkil-dev" з `claude remote-control --permission-mode auto`) — встановлено, АЛЕ НЕ
+запущено навмисно.
+
+**Чекпоінт (А), ще не пройдено — потребує користувача**: `/login` на VM вже зроблено
+(`~/.claude/.credentials.json` існує), але "Enable Remote Control" (підтвердження y/n при
+першому запуску) — консентний крок, який я свідомо НЕ автоматизую. Користувачу: SSH на VM →
+`systemctl --user start vyshkil-tmux.service && tmux attach -t vyshkil-dev`, відповісти "y",
+відсканувати QR з телефону. Після цього `systemctl --user enable vyshkil-tmux.service` (сам
+не enabled — переживе reboot лише після ручного підтвердження).
+
+**Чекпоінт (Б), ще не пройдено**: перше повідомлення користувача з телефону через Remote
+Control — не вигадувати, що це вже відбулось.
+
+`docs/GOALS.md` зараз ПОРОЖНІЙ (плейсхолдер) — нічний раннер коректно no-op'ає, доки
+користувач не допише реальну ціль.
+
+**Знайдено й виправлено тут же — реальна грабля з git-синхронізацією VM**: робоча копія на VM
+була занесена повним rsync `.git`, тому мала drift (60 файлів, суто line-ending CRLF↔LF, не
+змістовний) і НЕ бачила жодного коміту цієї сесії (`git worktree add ... main` мовчки брав
+застиглий старий HEAD). Виправлено БЕЗ `git push` (заблокований) і без DNS (зламаний) —
+`git bundle create` (локальний файл) → `rsync` → `git fetch bundle main:X` → `git reset --hard
+X` на VM. Перевірено безпечним (drift — лише line-ending, не власна робота на VM). Тепер це
+й робочий спосіб "оновити код на VM" (`infra/README.md`), не лише разовий фікс.
+
 ## Брокер NATS+JetStream (09-messaging.md) — Фаза 0-2 закриті (2026-09-30)
 
 **Фаза 0**: нові крейти `contracts/` (Envelope+subjects+NotifySend/NotifyResult/discrepancy-події,
