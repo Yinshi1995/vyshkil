@@ -1226,6 +1226,9 @@ a:hover {
 }
 
 .org-tree__label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   color: var(--fg-main);
   font-family: 'Oswald', sans-serif;
   font-size: 14px;
@@ -1237,6 +1240,15 @@ a:hover {
 
 .org-tree__label:hover {
   color: var(--fg-accent);
+}
+
+.org-tree__fullname {
+  display: block;
+  font-family: 'Roboto', sans-serif;
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--fg-muted);
+  letter-spacing: 0;
 }
 
 /* Таблиці — навмисно БЕЗ декору (без фото, без скосів): "без шкоди читабельності" (02 §8) */

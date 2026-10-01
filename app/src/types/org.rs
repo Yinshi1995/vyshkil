@@ -18,6 +18,7 @@ pub struct OrgSearchResult {
 pub struct OrgTreeRow {
     pub id: i32,
     pub label: String,
+    pub full_name: Option<String>,
     pub parent_id: Option<i32>,
 }
 

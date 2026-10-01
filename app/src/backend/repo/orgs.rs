@@ -237,6 +237,7 @@ pub async fn subordination_tree(
     struct Row {
         id: i32,
         short_name: String,
+        full_name: Option<String>,
         number: Option<String>,
         parent_id: Option<i32>,
     }
@@ -244,7 +245,7 @@ pub async fn subordination_tree(
     let stmt = Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
-        SELECT o.id, o.short_name, o.number, sc.ancestor_id AS parent_id
+        SELECT o.id, o.short_name, o.full_name, o.number, sc.ancestor_id AS parent_id
         FROM org o
         LEFT JOIN subordination_closure sc
             ON sc.descendant_id = o.id
@@ -266,7 +267,7 @@ pub async fn subordination_tree(
                 Some(n) => format!("{} ({n})", r.short_name),
                 None => r.short_name,
             };
-            OrgTreeRow { id: r.id, label, parent_id: r.parent_id }
+            OrgTreeRow { id: r.id, label, full_name: r.full_name, parent_id: r.parent_id }
         })
         .collect())
 }

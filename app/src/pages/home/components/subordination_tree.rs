@@ -98,6 +98,7 @@ fn render_level(
             let has_children = rows.iter().any(|r| r.parent_id == Some(node_id));
             let child_rows: Vec<OrgTreeRow> = rows.to_vec();
             let label = node.label.clone();
+            let full_name = node.full_name.clone();
             let is_collapsed = Signal::derive(move || collapsed.get().contains(&node_id));
             let child_depth = depth + 1;
 
@@ -139,7 +140,12 @@ fn render_level(
                         } else {
                             view! { <span class="org-tree__leaf-indent"></span> }.into_any()
                         }}
-                        <a href=format!("/org/{node_id}") class="org-tree__label">{label}</a>
+                        <a href=format!("/org/{node_id}") class="org-tree__label">
+                            {label}
+                            {full_name.map(|fn_| view! {
+                                <span class="org-tree__fullname">{fn_}</span>
+                            })}
+                        </a>
                     </span>
                     {move || {
                         if is_collapsed.get() {
