@@ -5,11 +5,9 @@
 лише поточний стан на момент останнього оновлення.
 
 **Останнє оновлення**: 2026-10-01
-**Поточна ціль** (з `docs/GOALS.md`): Етап 7.5 — Лейаут сторінок — **ЗАКРИТО**
-**Стан**: Усі 11 сторінок мігровано на `PageHeader`/`PageContent`. `DocumentsPage` і
-`StyleguidePage` — останні дві мігровані; кнопки D1-D4 на `/documents` переведені з
-`btn--primary` на `btn--outline` (ієрархія кнопок §5 — рівноважні дії, не одна головна).
-Spec (`docs/spec/components/layout.md` §6) оновлено таблицею з 11 сторінок.
-cargo test --workspace ✅, clippy ✅.
+**Поточна ціль** (з `docs/GOALS.md`): Етап 8 зріз 2 — Вертикальна + часова звірка — **ЗАКРИТО**
+**Стан**: Domain-логіка `detect_vertical`/`detect_temporal` (8 unit-тестів), repo-шар
+`refresh_temporal`/`refresh_vertical` з outbox-подіями, UI колонка "Тип" на `/discrepancies`,
+інтеграція в `commit_group_rows`. cargo test --workspace ✅ (93 тести), clippy ✅.
 **Локальні коміти** чекають push — заблоковано settings.json, користувач має виконати
 `git push -u origin main` вручну.
