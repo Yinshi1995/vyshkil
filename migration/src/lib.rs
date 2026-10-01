@@ -42,6 +42,7 @@ mod m20260930_000039_create_reported_group_table;
 mod m20260930_000040_create_discrepancy_table;
 mod m20260930_000041_attach_audit_trigger_discrepancy;
 mod m20260930_000042_create_outbox_table;
+mod m20261001_000043_create_notification_table;
 
 pub struct Migrator;
 
@@ -107,6 +108,8 @@ impl MigratorTrait for Migrator {
             // Брокер (09-messaging.md, Фаза 1): транзакційний outbox — .claude/decisions/
             // broker-nats-jetstream.md.
             Box::new(m20260930_000042_create_outbox_table::Migration),
+            // Етап 8, зріз 4 (04 §5): внутрішні сповіщення (дзвіночок у шапці).
+            Box::new(m20261001_000043_create_notification_table::Migration),
         ]
     }
 }

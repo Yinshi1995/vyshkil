@@ -110,7 +110,7 @@ fn DiscrepanciesBody() -> impl IntoView {
 fn DiscrepancyTable(rows: Vec<DiscrepancyRow>, on_refresh: RwSignal<u32>) -> impl IntoView {
     let actor = use_actor();
     let can_edit = move |org_id: i32| {
-        actor.get().map_or(false, |a| {
+        actor.get().is_some_and(|a| {
             a.role == Role::Admin || (a.role == Role::OrgEditor && a.org_id == org_id)
         })
     };

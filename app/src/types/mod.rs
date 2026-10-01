@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod dictionaries;
+pub mod notification;
 pub mod org;
 pub mod reconciliation;
 pub mod staffing;

@@ -2,7 +2,7 @@
 //! workflow розбіжностей (зріз 3).
 //! Чиста логіка ("чи є незгода") — `domain::reconciliation`; тут лише SQL + запис `discrepancy`.
 
-use crate::backend::repo::outbox;
+use crate::backend::repo::{notifications, outbox};
 use crate::domain::reconciliation::{
     detect_horizontal, detect_vertical, AggregatedCounts, ReportedValues,
 };
@@ -59,6 +59,26 @@ async fn publish_event<T: serde::Serialize>(
         .map_err(|e| DbErr::Custom(format!("серіалізація події {subject}: {e}")))?;
     outbox::insert(db, subject, &payload_json, "{}").await?;
     Ok(())
+}
+
+async fn notify_discrepancy_opened(
+    db: &impl ConnectionTrait,
+    org_id: i32,
+    kind: &str,
+    metric_label_str: &str,
+) -> Result<(), DbErr> {
+    let title = format!("Нова розбіжність: {metric_label_str}");
+    let body = format!("{} розбіжність — перевірте розділ «Розбіжності»", kind_label_ua(kind));
+    notifications::insert(db, org_id, "discrepancy", &title, Some(&body), Some("/discrepancies")).await
+}
+
+fn kind_label_ua(kind: &str) -> &'static str {
+    match kind {
+        "horizontal" => "Горизонтальна",
+        "vertical" => "Вертикальна",
+        "temporal" => "Часова",
+        _ => "Нова",
+    }
 }
 
 /// Перечитує ОСТАННЄ подання кожного джерела (`submission.reporting_org_id`), зіставлене з
@@ -219,6 +239,8 @@ pub async fn refresh_horizontal(db: &impl ConnectionTrait, group_id: i32) -> Res
                 },
             )
             .await?;
+            notify_discrepancy_opened(db, ctx.sender_org_id, "horizontal", metric_label(d.metric))
+                .await?;
         }
     }
 
@@ -366,6 +388,8 @@ pub async fn refresh_temporal(db: &impl ConnectionTrait, group_id: i32) -> Resul
                     },
                 )
                 .await?;
+                notify_discrepancy_opened(db, ctx.sender_org_id, "temporal", metric_label("total"))
+                    .await?;
             }
         }
     }
@@ -505,6 +529,8 @@ pub async fn refresh_vertical(
                     },
                 )
                 .await?;
+                notify_discrepancy_opened(db, sender_org_id, "vertical", metric_label(d.metric))
+                    .await?;
             }
         }
     }

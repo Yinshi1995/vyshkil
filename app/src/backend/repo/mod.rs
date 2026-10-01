@@ -7,6 +7,7 @@ pub mod imports_ivs;
 pub mod imports_kvid;
 pub mod imports_terminy;
 pub mod imports_vch_archive;
+pub mod notifications;
 pub mod orgs;
 pub mod outbox;
 pub mod reconciliation;
