@@ -149,11 +149,11 @@ mod tests {
     #[test]
     fn restrict_tree_reroots_own_org_and_drops_invisible() {
         let rows = vec![
-            OrgTreeRow { id: 1, label: "УВ(с)".into(), parent_id: None },
-            OrgTreeRow { id: 2, label: "17 АК".into(), parent_id: Some(1) },
-            OrgTreeRow { id: 3, label: "241 обр ТрО".into(), parent_id: Some(2) },
-            OrgTreeRow { id: 4, label: "20 АК".into(), parent_id: Some(1) },
-            OrgTreeRow { id: 5, label: "110 омбр".into(), parent_id: Some(4) },
+            OrgTreeRow { id: 1, label: "УВ(с)".into(), full_name: None, parent_id: None },
+            OrgTreeRow { id: 2, label: "17 АК".into(), full_name: None, parent_id: Some(1) },
+            OrgTreeRow { id: 3, label: "241 обр ТрО".into(), full_name: None, parent_id: Some(2) },
+            OrgTreeRow { id: 4, label: "20 АК".into(), full_name: None, parent_id: Some(1) },
+            OrgTreeRow { id: 5, label: "110 омбр".into(), full_name: None, parent_id: Some(4) },
         ];
         // org_editor з 17 АК (id=2): видимі — 2 і 3 (своя + піддерево), НЕ видно 1/4/5.
         let visible = [2, 3];
