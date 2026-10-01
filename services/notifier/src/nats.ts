@@ -30,8 +30,23 @@ export const MAX_DELIVER = 5;
  *  має значення, попередні не потрібні). Стрім `NOTIFY_CMD` МАЄ вже існувати (створює його
  *  relay/адмін-крок на боці `app`, не тут -- `bus`/`server` у Rust-частині володіють схемою
  *  стрімів, notifier лише читає). */
+/** `@nats-io/nats-core`'s `servers` option не приймає `user:pass@host:port` як єдиний рядок --
+ *  його внутрішній парсер рахує двокрапки, щоб відрізнити IPv6, і рядок із вбудованими
+ *  обліковими даними (дві двокрапки: user:pass і host:port) хибно розпізнається як IPv6,
+ *  після чого обгортається в "[...]" і падає на `new URL()` (`ERR_INVALID_URL`). Реальна
+ *  грабля, зловлена на dev-VM при першому `docker compose up` з увімкненою автентифікацією
+ *  NATS (Фаза 3) -- розбираємо URL самі, обліковки йдуть окремими полями `user`/`pass`. */
+function parseNatsUrl(raw: string): { servers: string; user?: string; pass?: string } {
+  const u = new URL(raw);
+  return {
+    servers: `${u.hostname}:${u.port}`,
+    user: u.username ? decodeURIComponent(u.username) : undefined,
+    pass: u.password ? decodeURIComponent(u.password) : undefined,
+  };
+}
+
 export async function connectNats(): Promise<NatsHandles> {
-  const nc = await connect({ servers: config.natsUrl });
+  const nc = await connect(parseNatsUrl(config.natsUrl));
   const jsm = await jetstreamManager(nc);
   const js = jetstream(nc);
   const kvm = new Kvm(nc);

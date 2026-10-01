@@ -22,6 +22,8 @@ use crate::widgets::group_grid::{
 use crate::widgets::ActorNotice;
 use server::{commit_grid, get_draft, parse_bps_file, parse_fah_file, parse_terminy_file, save_draft};
 
+const CHEAT_SHEET_SEEN_KEY: &str = "training_form_cheatsheet_seen";
+
 /// Тип файлу, яким можна ДОПОВНИТИ сітку — Фах/БпС/Терміни, чисті виробники `GroupFormRow`
 /// (03, Етап 5, перенесено з `pages::import` при об'єднанні з ручним вводом —
 /// [[unified-training-form-source-type]]). КВід/ІВС/Архів ВЧ лишились на `/import`: інша форма
@@ -59,12 +61,6 @@ impl FileKind {
             _ => FileKind::Fah,
         }
     }
-}
-
-/// Рядок ще нічим не заповнений — `sender_org_id` більше НЕ показник (тулбар проставляє його в
-/// КОЖЕН рядок одразу, дефект 1), перевіряємо реально введені поля.
-fn row_is_blank(r: &GroupFormRow) -> bool {
-    r.training_kind_id.is_none() && r.vos_position_course_label.is_empty() && r.note.is_empty()
 }
 
 /// Сітка введення (02): весь рядок вноситься без миші, автозбереження чернетки, `Ctrl+Enter`
@@ -127,6 +123,20 @@ fn FormBody() -> impl IntoView {
     };
 
     let cheat_sheet_open = RwSignal::new(false);
+    // Шпаргалка показується автоматично при першому відкритті форми (02 §2) -- "перше
+    // відкриття" per-браузер через `localStorage` (той самий підхід, що ширини колонок у
+    // `widgets/group_grid/columns.rs`), не серверний стан: суто UI-зручність, не домен.
+    Effect::new(move |_| {
+        if !cfg!(target_arch = "wasm32") {
+            return;
+        }
+        let Some(win) = web_sys::window() else { return };
+        let Ok(Some(storage)) = win.local_storage() else { return };
+        if storage.get_item(CHEAT_SHEET_SEEN_KEY).ok().flatten().is_none() {
+            cheat_sheet_open.set(true);
+            let _ = storage.set_item(CHEAT_SHEET_SEEN_KEY, "1");
+        }
+    });
     let command_palette_open = RwSignal::new(false);
     let save_status = RwSignal::new(String::new());
     let commit_error = RwSignal::new(None::<(usize, String, String)>);
@@ -211,7 +221,7 @@ fn FormBody() -> impl IntoView {
                     return;
                 }
                 let current_rows = snapshot_rows(editable);
-                if current_rows.iter().all(row_is_blank) {
+                if current_rows.iter().all(GroupFormRow::is_blank) {
                     return;
                 }
                 let payload = DraftPayload { as_of_date: as_of, rows: current_rows };
@@ -281,7 +291,7 @@ fn FormBody() -> impl IntoView {
                         Ok(rows) => {
                             let n = rows.len();
                             let existing = snapshot_rows(editable);
-                            let is_blank = existing.iter().all(row_is_blank);
+                            let is_blank = existing.iter().all(GroupFormRow::is_blank);
                             snapshot();
                             if is_blank {
                                 replace_rows(rows);

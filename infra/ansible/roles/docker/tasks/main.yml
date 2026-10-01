@@ -32,7 +32,7 @@
     state: present
     update_cache: true
 
-- name: daemon.json — лог-ротація, live-restore (10 §4.2)
+- name: "daemon.json — лог-ротація, live-restore, явний DNS (10 §4.2)"
   ansible.builtin.copy:
     dest: /etc/docker/daemon.json
     content: |
@@ -42,7 +42,8 @@
           "max-size": "{{ docker_log_max_size }}",
           "max-file": "{{ docker_log_max_file }}"
         },
-        "live-restore": true
+        "live-restore": true,
+        "dns": {{ docker_dns_servers | to_json }}
       }
     owner: root
     group: root

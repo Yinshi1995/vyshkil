@@ -5,3 +5,9 @@
 docker_add_primary_user_to_group: true
 docker_log_max_size: "10m"
 docker_log_max_file: "3"
+# /etc/resolv.conf на Ubuntu вказує на systemd-resolved stub (127.0.0.53), не досяжний з мережі
+# контейнера — без явного docker-level DNS `apt-get update` усередині збірки падає з
+# "Temporary failure resolving" (реальна грабля, зловлена при першому docker compose up --build).
+docker_dns_servers:
+  - "{{ dev_vm_gateway | default('192.168.1.1') }}"
+  - "1.1.1.1"

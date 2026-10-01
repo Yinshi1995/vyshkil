@@ -9,11 +9,16 @@ FROM rust:1-slim-bookworm AS builder
 # а не набір окремих пакетів по одному: якась транзитивна залежність cargo-leptos тягне
 # openssl-sys/vendored, чий build-скрипт компілює OpenSSL через Configure+make (Perl + C toolchain).
 # сама БД-комунікація йде через rustls (runtime-tokio-rustls), тому в рантайм-образі openssl не знадобиться.
+# mold — той самий лінкер, що й на dev-VM (.cargo/config.toml, infra/ansible/roles/rust_toolchain):
+# без нього тут COPY . . нижче притягує корінний .cargo/config.toml з -fuse-ld=mold, і збірка
+# падає "collect2: fatal error: cannot find 'ld'" (gcc не знаходить лінкер за вказаною назвою) —
+# реальна грабля, зловлена при першому docker compose up --build на dev-VM.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
     libssl-dev \
     perl \
+    mold \
     && rm -rf /var/lib/apt/lists/*
 
 # wasm-opt (Binaryen) кладемо в образ заздалегідь із локально завантаженого й перевіреного (sha256)

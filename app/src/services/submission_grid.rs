@@ -57,13 +57,21 @@ pub async fn commit_grid_impl(
         return Err("немає жодного рядка для збереження".to_string());
     }
 
+    // Сітка завжди тримає один порожній "наступний" рядок у кінці (02 §2) -- без цього фільтра
+    // коміт стабільно падав би валідацією САМЕ цього технічного рядка щоразу, коли введено
+    // більше одного реального рядка (реальний баг, зловлений через e2e — training-form.spec.ts).
+    let rows: Vec<_> = payload.rows.iter().filter(|r| !r.is_blank()).cloned().collect();
+    if rows.is_empty() {
+        return Err("немає жодного рядка для збереження".to_string());
+    }
+
     // as_of_date приходить з <input type="date"> -- вже ISO, парсимо напряму (без евристики
     // року з domain::dates::parse_date, та для рядків без явного року).
     let as_of = chrono::NaiveDate::parse_from_str(&payload.as_of_date, "%Y-%m-%d")
         .map_err(|_| "«станом на»: неможлива дата".to_string())?;
 
-    let mut validated = Vec::with_capacity(payload.rows.len());
-    for (index, row) in payload.rows.iter().enumerate() {
+    let mut validated = Vec::with_capacity(rows.len());
+    for (index, row) in rows.iter().enumerate() {
         if let Some(sender_org_id) = row.sender_org_id {
             if !policy::can_edit_org(actor, sender_org_id) {
                 return Ok(CommitOutcome::ValidationFailed {

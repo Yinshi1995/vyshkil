@@ -1,11 +1,11 @@
 ---
 tags: [status]
-date: 2026-09-30
+date: 2026-10-01
 ---
 
 # Поточний стан проєкту
 
-## Dev-VM на Proxmox (10-dev-vm.md) — Фаза 0-1 закриті (2026-10-01)
+## Dev-VM на Proxmox (10-dev-vm.md) — Фаза 0-4 закриті (2026-10-01)
 
 **Мета**: перенести розробку з Windows (MSVC-лінкер: LNK2019 cross-CGU, LNK1140 PDB-ліміт —
 обидва повторювались із ростом графа залежностей) на Linux dev-VM на Proxmox замовника.
@@ -44,10 +44,48 @@ Control node — WSL2/Arch (вже був на машині, Ubuntu не пер�
 - `docs/spec/11-prod-deploy.md`: додано §0.1 (хост без апгрейду RAM не вміщає прод поруч із
   dev-VM) і §0.2 (застосунок НІКОЛИ не публікується через наявний Cloudflare tunnel `cf-connector`).
 
-**Наступне (Фаза 2, ще НЕ виконано)**: реальний прогін `provision-dev-vm.yml` проти живого PVE —
-`roles/provision` (Proxmox API: download-url імпорт cloud-образу, create/clone VM) написана за
-документацією модулів, ще НЕ перевірена проти живого pve-manager 9.2.2 — перший прогін майже
-напевно щось поправить (особливо крок `download-url` + `import-from` синтаксис диска).
+**Фаза 2**: `provision-dev-vm.yml` прогнано проти живого PVE — реальні граблі знайдено й виправлено
+саме тут (не в теорії): `download-url` вимагав `.qcow2`-розширення й `images`-storage (`local-lvm`,
+не `local`/iso-only), `proxmox_kvm update:true` мовчки дропав `net0` без `update_unsafe: true`,
+disk resize вимагав явний суфікс `"150G"`. VM піднялась, але DHCP-лізи не було ~100-110с на
+boot (підтверджено двома чистими порівняльними тестами 150ГБ/4ГБ — однаковий таймінг, це
+НЕ resize2fs) — фікс: статична IP (192.168.1.200). Автоматизаційний SSH-ключ (`vyshkil-dev`,
+без passphrase) + `~/.ssh/config`-запис на Windows.
+
+**Фаза 3**: повний стек (`cargo leptos build` debug+release, `docker compose up -d --build`)
+зібрано й піднято на VM. Три архітектурні граблі, знайдені саме тут: (1) `internal: true`
+Docker-мережа НЕ має gateway-ендпоінта взагалі — `ports:` на ній структурно не публікується
+(підтверджено `iptables -t nat -L DOCKER` порожнім) — фікс: третя мережа `publish`
+(`enable_ip_masquerade: "false"` — публікує порти, БЕЗ SNAT в інтернет); (2) контейнери не
+резолвили DNS (`/etc/resolv.conf` → недосяжний з контейнера `127.0.0.53` stub) — фікс: явний
+`"dns"` у `daemon.json` через роль `docker`; (3) `cargo leptos build --release` в Docker-білдері
+падав `cannot find 'ld'` — корінь: проєктний `.cargo/config.toml` (`-fuse-ld=mold`) потрапляв у
+білдер без встановленого `mold` — додано в `Dockerfile`.
+
+**Фаза 4 закрита**: `cargo test --workspace` ✅ (увесь воркспейс, включно з `bus`/`server`
+інтеграційними тестами проти РЕАЛЬНОГО NATS — одноразовий `nats:2-alpine` без auth, не
+production compose-стек, бо client-порт 4222 навмисно не проброшений на хост, 09 §3.6), `cargo
+clippy --workspace --all-targets` ✅ чисто (лише стилістичні `useless_conversion`-попередження,
+не нові), `cargo leptos build` debug+release ✅ (нативно, не лише в Docker), `docker compose up -d
+--build` ✅ усі 4 контейнери healthy. **RAM-вимір (відкрите питання Фази 0 закрито)**: під повним
+стеком — усі контейнери РАЗОМ ~220 МБ (`app` 8 МБ, `db` 132 МБ, `notifier` 67 МБ, `nats` 11 МБ),
+`free -h` 7.0 ГБ available — тиск на пам'ять дає НЕ рантайм, а сам КРОК КОМПІЛЯЦІЇ
+`cargo leptos build --release` в Docker-білдері (короткочасний swap ~300 МБ під час збірки,
+система лишається відповідною) — 8 ГБ RAM + 8 ГБ swap вистачає із запасом.
+
+**e2e (Playwright) 24/24 зелено** — `e2e/tests/training-form.spec.ts` переписано під переробку
+сітки (Combobox click+`getByRole("option")`-патерн з `grid-interaction.spec.ts`, замість
+нативних `<select>`/посимвольного друку) + знайдено й виправлено РЕАЛЬНИЙ баг застосунку:
+`commit_grid_impl` валідував і технічний завжди-порожній "наступний" рядок сітки (02 §2) — коміт
+стабільно падав би щоразу, коли введено більше одного реального рядка. Фікс — `GroupFormRow::
+is_blank()` (спільний метод типу, `app/src/types/submission.rs`), фільтрація перед валідацією в
+`services/submission_grid.rs::commit_grid_impl`. **Другий, менший пробіл знайдено тим самим
+прогоном**: шпаргалка гарячих клавіш (02 §2: "показується автоматично при першому відкритті") не
+відкривалась сама НІКОЛИ — `cheat_sheet_open` ініціювався `false` без жодної логіки "перший
+візит" (попередня сесія лише прибрала СТАРИЙ протилежний баг — завжди-`true`, сама авто-появу на
+першому візиті не додала назад). Фікс: `localStorage`-прапорець `training_form_cheatsheet_seen`
+(`pages/training_form/mod.rs`) — той самий підхід, що вже `widgets/group_grid/columns.rs`'s
+ширини колонок (per-browser UI-зручність, не серверний стан).
 
 ## Брокер NATS+JetStream (09-messaging.md) — Фаза 0-2 закриті (2026-09-30)
 

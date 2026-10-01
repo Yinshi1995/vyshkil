@@ -26,11 +26,16 @@ async fn fresh_test_db() -> Option<DatabaseConnection> {
         return None;
     };
     let slash = test_url.rfind('/').expect("TEST_DATABASE_URL має бути виду postgres://.../ім'я_бази");
-    let db_name = &test_url[slash + 1..];
+    let base_name = &test_url[slash + 1..];
     assert!(
-        !db_name.is_empty() && db_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
-        "ім'я тестової бази має містити лише [a-zA-Z0-9_]: {db_name:?}"
+        !base_name.is_empty() && base_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+        "ім'я тестової бази має містити лише [a-zA-Z0-9_]: {base_name:?}"
     );
+    // Унікальна БД на виклик (не буквально ім'я з URL) -- два тести в цьому файлі раніше
+    // ганялись за ОДНІЄЮ й тією ж назвою паралельно (cargo test за замовчуванням паралелить
+    // тести в одному бінарнику) і псували одне одному DROP/CREATE. Реальна грабля, спіймана
+    // на dev-VM при додаванні другого NATS-тесту в цей файл.
+    let db_name = format!("{base_name}_{}", Uuid::now_v7().simple());
     let admin_url = format!("{}/postgres", &test_url[..slash]);
 
     let admin_db = Database::connect(&admin_url).await.expect("maintenance-база 'postgres'");
@@ -44,7 +49,8 @@ async fn fresh_test_db() -> Option<DatabaseConnection> {
     admin_db.execute_unprepared(&format!("DROP DATABASE IF EXISTS {db_name}")).await.expect("drop");
     admin_db.execute_unprepared(&format!("CREATE DATABASE {db_name}")).await.expect("create");
 
-    let db = Database::connect(&test_url).await.expect("з'єднання з тестовою базою");
+    let db_url = format!("{}/{db_name}", &test_url[..slash]);
+    let db = Database::connect(&db_url).await.expect("з'єднання з тестовою базою");
     migration::Migrator::up(&db, None).await.expect("міграції на тестовій базі");
     Some(db)
 }

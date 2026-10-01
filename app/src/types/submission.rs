@@ -54,6 +54,16 @@ pub struct GroupFormRow {
     pub note: String,
 }
 
+impl GroupFormRow {
+    /// Рядок ще нічим не заповнений — `sender_org_id` НЕ показник (тулбар проставляє його в
+    /// кожен рядок одразу, "дефект 1"), перевіряємо реально введені поля. Сітка завжди тримає
+    /// один порожній "наступний" рядок у кінці (02 §2) — без цього фільтра коміт падав би на
+    /// ВАЛІДАЦІЇ цього самого технічного рядка щоразу, коли рядків більше одного.
+    pub fn is_blank(&self) -> bool {
+        self.training_kind_id.is_none() && self.vos_position_course_label.is_empty() && self.note.is_empty()
+    }
+}
+
 /// Чернетка сітки: увесь незбережений стан форми (02 §6) — те, що автозберігається кожні
 /// кілька секунд у `submission.draft_payload`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

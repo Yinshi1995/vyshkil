@@ -8,8 +8,27 @@ use serde::Serialize;
 
 use crate::error::{BusError, BusResult};
 
+/// `async_nats::connect(url)` НЕ витягує `user:pass@` з рядка самостійно -- `ConnectInfo.user`/
+/// `.pass` у crate беруться лише з `ConnectOptions.auth`, яке звичайний `connect()` ніколи не
+/// заповнює (перевірено в джерелі crate 0.38.0, `connector.rs`). З увімкненою автентифікацією
+/// сервер мовчки отримує порожні облікові дані й відповідає "authentication error" -- реальна
+/// грабля, зловлена на dev-VM при першому запуску проти автентифікованого NATS (Фаза 3 раніше
+/// тестувалась проти сервера без `authorization {}` взагалі). Розбираємо URL самі.
 pub async fn connect(url: &str) -> BusResult<async_nats::Client> {
-    async_nats::connect(url).await.map_err(BusError::from)
+    let parsed = url::Url::parse(url).map_err(|e| BusError(format!("невірний NATS_URL: {e}")))?;
+    let host_port = format!(
+        "{}:{}",
+        parsed.host_str().unwrap_or("127.0.0.1"),
+        parsed.port().unwrap_or(4222)
+    );
+    let mut options = async_nats::ConnectOptions::new();
+    if !parsed.username().is_empty() {
+        options = options.user_and_password(
+            parsed.username().to_string(),
+            parsed.password().unwrap_or("").to_string(),
+        );
+    }
+    options.connect(host_port).await.map_err(BusError::from)
 }
 
 /// Core NATS request-reply (не JetStream — разові команди адмінки, 09 §4), таймаут — вбудований
