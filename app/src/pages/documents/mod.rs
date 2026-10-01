@@ -43,7 +43,7 @@ fn D1Block() -> impl IntoView {
 
     let org_id = RwSignal::new(None::<i32>);
     let org_label = RwSignal::new(String::new());
-    let as_of_date = RwSignal::new(String::new());
+    let any_day = RwSignal::new(String::new());
     let status = RwSignal::new(String::new());
     let generating = RwSignal::new(false);
 
@@ -53,9 +53,9 @@ fn D1Block() -> impl IntoView {
             status.set("оберіть частину".to_string());
             return;
         };
-        let date = as_of_date.get_untracked();
+        let date = any_day.get_untracked();
         if date.trim().is_empty() {
-            status.set("«станом на»: оберіть дату".to_string());
+            status.set("оберіть будь-який день потрібного тижня".to_string());
             return;
         }
         generating.set(true);
@@ -81,8 +81,9 @@ fn D1Block() -> impl IntoView {
     view! {
         <div class=cx!("flex col gap3")>
             <p class="card__desc">
-                "D1 — щоденна зведена таблиця органу (05 §D1): БЗВП/Фахова/Адаптація по прямих "
-                "підрозділах, за правилом групування (01 §1)."
+                "D1 — тижнева зведена таблиця органу (05 §D1): 7 денних аркушів + тижневий "
+                "підсумок \"Закінчили/Почали\" формулами SUM(початок:кінець!C5). "
+                "Оберіть будь-який день потрібного тижня."
             </p>
             <div class=cx!("flex items-c gap2 wrap")>
                 <div class=cx!("w-full bg-raised bd r1")>
@@ -102,10 +103,10 @@ fn D1Block() -> impl IntoView {
                 </div>
                 <DatePicker
                     value=Signal::derive(move || {
-                        chrono::NaiveDate::parse_from_str(&as_of_date.get(), "%Y-%m-%d").ok()
+                        chrono::NaiveDate::parse_from_str(&any_day.get(), "%Y-%m-%d").ok()
                     })
                     on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
-                        as_of_date.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                        any_day.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
                     })
                     placeholder="дд.мм.рррр".to_string()
                 />
@@ -114,7 +115,7 @@ fn D1Block() -> impl IntoView {
                     disabled=move || generating.get()
                     on:click=do_generate
                 >
-                    "Згенерувати D1"
+                    "Згенерувати D1 (тиждень)"
                 </button>
                 <span class=cx!("fg-muted")>{move || status.get()}</span>
             </div>
