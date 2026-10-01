@@ -1,9 +1,10 @@
-//! Горизонтальна звірка (04 §3-4, Етап 8 зріз 1) — SQL навколо `discrepancy`/`reported_group`.
-//! Сама логіка "чи є незгода" — `domain::reconciliation::detect_horizontal` (чиста); тут лише
-//! читання подань для однієї канонічної групи й запис/автозакриття `discrepancy`.
+//! Звірка подань (04 §3-4): горизонтальна (зріз 1), часова + вертикальна (зріз 2).
+//! Чиста логіка ("чи є незгода") — `domain::reconciliation`; тут лише SQL + запис `discrepancy`.
 
 use crate::backend::repo::outbox;
-use crate::domain::reconciliation::{detect_horizontal, ReportedValues};
+use crate::domain::reconciliation::{
+    detect_horizontal, detect_vertical, AggregatedCounts, ReportedValues,
+};
 use crate::types::reconciliation::DiscrepancyRow;
 use contracts::{subjects, DiscrepancyMetric, DiscrepancyOpened, DiscrepancyResolved, Envelope};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
@@ -372,6 +373,158 @@ pub async fn refresh_temporal(db: &impl ConnectionTrait, group_id: i32) -> Resul
         auto_close_temporal(db, group_id).await?;
     }
 
+    Ok(())
+}
+
+/// Вертикальна звірка (04 §3, decision §3): для кожного органу, згаданого у поданні, перевіряє,
+/// чи є "чуже" подання (від батьківського органу) з іншими агрегатними числами. Виклик —
+/// після commit_group_rows, для кожного зачепленого `sender_org_id` + `training_kind_id`.
+pub async fn refresh_vertical(
+    db: &impl ConnectionTrait,
+    sender_org_id: i32,
+    training_kind_id: i32,
+    as_of: &str,
+) -> Result<(), DbErr> {
+    #[derive(FromQueryResult)]
+    struct Agg {
+        reporting_org_id: i32,
+        total: i64,
+        finishing: i64,
+        started: i64,
+    }
+
+    let rows = Agg::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT s.reporting_org_id, \
+                COALESCE(SUM(rg.in_training_count), 0)::bigint AS total, \
+                0::bigint AS finishing, \
+                0::bigint AS started \
+         FROM reported_group rg \
+         JOIN submission s ON s.id = rg.submission_id \
+         WHERE rg.sender_org_id = $1 \
+           AND rg.training_kind_id = $2 \
+           AND s.as_of_date = $3::date \
+           AND s.status = 'committed' \
+         GROUP BY s.reporting_org_id",
+        [sender_org_id.into(), training_kind_id.into(), as_of.into()],
+    ))
+    .all(db)
+    .await?;
+
+    let own_report = rows.iter().find(|r| r.reporting_org_id == sender_org_id);
+    let parent_reports: Vec<_> = rows.iter().filter(|r| r.reporting_org_id != sender_org_id).collect();
+
+    if parent_reports.is_empty() {
+        auto_close_vertical(db, sender_org_id, training_kind_id, as_of).await?;
+        return Ok(());
+    }
+
+    let Some(own) = own_report else {
+        return Ok(());
+    };
+
+    let own_counts = AggregatedCounts { total: own.total, finishing: own.finishing, started: own.started };
+
+    for parent in &parent_reports {
+        let parent_counts =
+            AggregatedCounts { total: parent.total, finishing: parent.finishing, started: parent.started };
+
+        let discrepancies = detect_vertical(
+            &format!("подання від org #{}", parent.reporting_org_id),
+            &parent_counts,
+            &format!("власне подання org #{sender_org_id}"),
+            &own_counts,
+        );
+
+        if discrepancies.is_empty() {
+            auto_close_vertical(db, sender_org_id, training_kind_id, as_of).await?;
+            continue;
+        }
+
+        for d in &discrepancies {
+            let values_json = serde_json::to_string(&vec![
+                (parent.reporting_org_id, d.parent.total.to_string()),
+                (sender_org_id, d.children_sum.total.to_string()),
+            ])
+            .map_err(|e| DbErr::Custom(format!("серіалізація vertical values: {e}")))?;
+
+            #[derive(FromQueryResult)]
+            struct Existing {
+                id: i32,
+            }
+            let existing = Existing::find_by_statement(Statement::from_sql_and_values(
+                db.get_database_backend(),
+                "SELECT id FROM discrepancy \
+                 WHERE org_id = $1 AND kind = 'vertical' AND metric = $2 AND status = 'open' \
+                   AND as_of = $3::date",
+                [sender_org_id.into(), d.metric.into(), as_of.into()],
+            ))
+            .one(db)
+            .await?;
+
+            if let Some(row) = existing {
+                db.execute(Statement::from_sql_and_values(
+                    db.get_database_backend(),
+                    "UPDATE discrepancy SET values = $1::jsonb, updated_at = now() WHERE id = $2",
+                    [values_json.into(), row.id.into()],
+                ))
+                .await?;
+            } else {
+                #[derive(FromQueryResult)]
+                struct NewId {
+                    id: i32,
+                }
+                let new_row = NewId::find_by_statement(Statement::from_sql_and_values(
+                    db.get_database_backend(),
+                    "INSERT INTO discrepancy (kind, org_id, group_id, as_of, metric, values, status) \
+                     VALUES ('vertical', $1, NULL, $2::date, $3, $4::jsonb, 'open') RETURNING id",
+                    [
+                        sender_org_id.into(),
+                        as_of.into(),
+                        d.metric.into(),
+                        values_json.into(),
+                    ],
+                ))
+                .one(db)
+                .await?
+                .ok_or_else(|| DbErr::Custom("INSERT vertical discrepancy не повернув id".into()))?;
+                publish_event(
+                    db,
+                    subjects::DISCREPANCY_OPENED_V1,
+                    "vyshkil.discrepancy.opened.v1",
+                    DiscrepancyOpened {
+                        discrepancy_id: new_row.id,
+                        org_id: sender_org_id,
+                        group_id: None,
+                        metric: match d.metric {
+                            "total" => DiscrepancyMetric::InTrainingCount,
+                            "finishing" => DiscrepancyMetric::PlannedEnd,
+                            _ => DiscrepancyMetric::InTrainingCount,
+                        },
+                    },
+                )
+                .await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn auto_close_vertical(
+    db: &impl ConnectionTrait,
+    org_id: i32,
+    _training_kind_id: i32,
+    as_of: &str,
+) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "UPDATE discrepancy SET status = 'resolved', \
+            resolution_note = 'автоматично: вертикальну розбіжність усунуто', updated_at = now() \
+         WHERE org_id = $1 AND kind = 'vertical' AND status = 'open' AND as_of = $2::date",
+        [org_id.into(), as_of.into()],
+    ))
+    .await?;
     Ok(())
 }
 

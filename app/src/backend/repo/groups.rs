@@ -3,7 +3,7 @@
 //! (02 §5 — уся сітка зберігається одним усе-або-нічого записом).
 //! Сама арифметика воронки — в `domain::counting` (чиста, без БД); тут лише SQL і перетворення типів.
 
-use super::reconciliation::{refresh_horizontal, refresh_temporal};
+use super::reconciliation::{refresh_horizontal, refresh_temporal, refresh_vertical};
 use crate::domain::counting::{EventType, GroupEventRecord};
 use crate::domain::dates::{parse_date, parse_end_date, parse_maybe_range, validate_period, DateError};
 use crate::domain::normalize::normalize;
@@ -532,6 +532,30 @@ pub async fn commit_group_rows(
     for group_id in &affected_groups {
         refresh_horizontal(db, *group_id).await?;
         refresh_temporal(db, *group_id).await?;
+    }
+
+    // Вертикальна звірка — на рівні (org, training_kind, date), не per-group.
+    #[derive(FromQueryResult)]
+    struct SubDate {
+        as_of: String,
+    }
+    if let Some(sub) = SubDate::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT to_char(as_of_date, 'YYYY-MM-DD') AS as_of FROM submission WHERE id = $1",
+        [submission_id.into()],
+    ))
+    .one(db)
+    .await?
+    {
+        let mut vertical_keys = BTreeSet::new();
+        for (row, _) in rows {
+            if let (Some(org), Some(kind)) = (row.sender_org_id, row.training_kind_id) {
+                vertical_keys.insert((org, kind));
+            }
+        }
+        for (org_id, kind_id) in vertical_keys {
+            refresh_vertical(db, org_id, kind_id, &sub.as_of).await?;
+        }
     }
 
     Ok(group_ids)
