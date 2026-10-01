@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
 use leptos_router::components::Router;
+use leptos_router::hooks::use_location;
 
 use crate::layout::Header;
 use crate::routes::AppRoutes;
@@ -39,10 +40,22 @@ pub fn App() -> impl IntoView {
         <Stylesheet id="leptos" href="/pkg/taktoblik.css"/>
         <Title text="Taktoblik — облік підготовки"/>
         <Router>
-            <Header/>
-            <main>
-                <AppRoutes/>
-            </main>
+            <AppShell/>
         </Router>
+    }
+}
+
+#[component]
+fn AppShell() -> impl IntoView {
+    let location = use_location();
+    let is_login = Memo::new(move |_| location.pathname.get() == "/login");
+
+    view! {
+        <Show when=move || !is_login.get()>
+            <Header/>
+        </Show>
+        <main>
+            <AppRoutes/>
+        </main>
     }
 }
