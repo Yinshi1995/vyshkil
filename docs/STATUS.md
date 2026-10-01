@@ -21,5 +21,10 @@
   empty state з іконкою, custom scrollbar, footer gold-лінія, status badges, animations.
   cargo test ✅, clippy ✅.
 
-**Локальні коміти** (22 шт.) чекають push — заблоковано settings.json, користувач має виконати
+- **Функціональний дашборд + лейаут** — головна переписана з тестової на робочу: статистика
+  (частини/групи/подання/розбіжності), швидкі дії, таблиця останніх подань. OrgSearch — підказки
+  на фокус. Hamburger-меню для мобільних. Центрування контенту (960px detail / 1400px data).
+  Вертикальний ритм (8px grid, Material Design spacing). cargo test ✅ (97), clippy ✅.
+
+**Локальні коміти** (25 шт.) чекають push — заблоковано settings.json, користувач має виконати
 `git push -u origin main` вручну.
