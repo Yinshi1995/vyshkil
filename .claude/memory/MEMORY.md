@@ -324,12 +324,33 @@ external symbol` на generic-монmorphізаціях sea-orm/std усеред
 ламає крос-CGU лінкування генериків у виконуваних бінарниках). Якщо повториться — спробувати цей
 env var ПЕРШИМ, до `cargo clean`.
 
-## Етап 7.5 (Лейаут сторінок) — ЗАКРИТО, усі 6 сторінок мігровано (2026-09-30)
+## Етап 8, зріз 2 (вертикальна + часова звірка) — ЗАКРИТО (2026-10-01)
+
+**Domain-логіка** (`app/src/domain/reconciliation.rs`): `detect_vertical` (порівнює зведене
+подання органу з сумою підлеглих, 3 метрики: total/finishing/started), `detect_temporal`
+(зменшення total без достатньої кількості пояснюючих подій attrition/completed). Типи:
+`AggregatedCounts`, `VerticalSide`, `VerticalDiscrepancy`, `TemporalSnapshot`,
+`TemporalDiscrepancy`. 8 нових unit-тестів (4 vertical + 4 temporal), загалом 15 тестів звірки.
+
+**Repo-шар** (`app/src/backend/repo/reconciliation.rs`): `refresh_temporal(db, group_id)` —
+знаходить послідовні подання одного джерела, шукає пояснюючі події між датами, відкриває/
+автозакриває часові розбіжності + outbox. `refresh_vertical(db, sender_org_id, training_kind_id,
+as_of)` — агрегує `in_training_count` по `reporting_org_id`, порівнює зведене з сумою підлеглих,
+відкриває/автозакриває вертикальні розбіжності + outbox. Обидва викликаються з
+`commit_group_rows` після `refresh_horizontal`.
+
+**UI**: колонка "Тип" в `DiscrepancyTable` (горизонтальна/вертикальна/часова/дублікат/якість
+даних). Сторінка `/discrepancies` лишається read-only (workflow — наступний зріз).
+
+**Що лишається для Етапу 8** (наступні зрізи): неоднозначне зіставлення (UI дизамбігуації),
+`canonical_from`, workflow розбіжностей (open→notified→in_progress→resolved|dismissed),
+внутрішні сповіщення (дзвіночок), WhatsApp production.
+
+## Етап 7.5 (Лейаут сторінок) — ЗАКРИТО, усі 11 сторінок мігровано (2026-10-01)
 
 **Процес** (explicit-гейтований план користувача, не патч): розділ А (Combobox) → розділ Б (Grid)
-→ Етап 7.5 (лейаут) → **Етап 8, зріз 1** (звірка/розбіжності) — усі закриті. Наступний крок —
-Етап 8 зріз 2 (вертикальна/часова звірка, workflow розв'язання, сповіщення) чи новий запит
-користувача.
+→ Етап 7.5 (лейаут) → **Етап 8, зрізи 1-2** (звірка/розбіжності) — усі закриті. Наступний крок —
+Етап 8 зріз 3 (workflow розбіжностей, сповіщення) чи новий запит користувача.
 
 **Етап 7.5**: `docs/spec/components/layout.md`, `.claude/decisions/page-layout-system.md` — новий
 `layout::{PageHeader, Toolbar, PageContent, ContentWidth, Breadcrumb}`. Корінь проблеми:

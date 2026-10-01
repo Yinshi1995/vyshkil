@@ -12,4 +12,4 @@
 | `format.rs` | `thousands`/`signed_delta`/`percent` — числа для текстових звітів (NBSP-тисячі, справжній мінус "−", відсоток цілим, 05 §D3) | `backend/documents/d3.rs` |
 | `friendly_error.rs` | `humanize_import_error` — переклад технічних серверних помилок імпорту в людські (дефект 7, 2026-09-30) | `pages/training_form`, `pages/import` |
 | `validation.rs` | `validate_count`/`validate_funnel_order`/`looks_like_personal_name` (03 §5) | `pages/training_form` (Етап 4) |
-| `reconciliation.rs` | `detect_horizontal` — горизонтальна звірка (04 §3, Етап 8 зріз 1): та сама канонічна група, незгодний метрик між поданнями | `backend/repo/reconciliation.rs` |
+| `reconciliation.rs` | `detect_horizontal` (горизонтальна), `detect_vertical` (сума підлеглих vs зведене), `detect_temporal` (зміна без пояснення) — 04 §3, Етап 8 зрізи 1-2 | `backend/repo/reconciliation.rs` |
