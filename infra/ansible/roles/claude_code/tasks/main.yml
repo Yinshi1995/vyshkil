@@ -1,0 +1,55 @@
+---
+# Офіційний apt-репозиторій (перевірено проти docs.claude.com/docs/en/setup напряму перед
+# написанням ролі, не з пам'яті — 10 §4.5), не curl|bash інсталятор: apt-метод природно
+# ідемпотентний і керується тим самим шляхом, що й решта пакетів на VM.
+- name: Каталог для ключа Claude Code
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Завантажити ключ підпису релізів Claude Code
+  ansible.builtin.get_url:
+    url: https://downloads.claude.ai/keys/claude-code.asc
+    dest: /etc/apt/keyrings/claude-code.asc
+    mode: "0644"
+
+- name: Перевірити відбиток ключа
+  ansible.builtin.command: gpg --show-keys --with-colons /etc/apt/keyrings/claude-code.asc
+  register: claude_code_key_check
+  changed_when: false
+
+- name: "Відбиток МАЄ збігатись з офіційним (безпека ланцюжка постачання)"
+  ansible.builtin.assert:
+    that:
+      - claude_code_key_fingerprint in claude_code_key_check.stdout
+    fail_msg: >-
+      Відбиток завантаженого ключа НЕ збігається з документованим
+      {{ claude_code_key_fingerprint }} — НЕ продовжувати встановлення, перевірити мережу/DNS
+      (можлива підміна) вручну.
+
+- name: python3-debian (потрібен deb822_repository)
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+
+- name: "Репозиторій Claude Code (канал: {{ claude_code_channel }}, deb822)"
+  ansible.builtin.deb822_repository:
+    name: claude-code
+    types: deb
+    uris: "https://downloads.claude.ai/claude-code/apt/{{ claude_code_channel }}"
+    suites: "{{ claude_code_channel }}"
+    components: main
+    signed_by: /etc/apt/keyrings/claude-code.asc
+
+- name: Встановити claude-code
+  ansible.builtin.apt:
+    name: claude-code
+    state: present
+    update_cache: true
+
+- name: "Автентифікація — НЕ автоматизувати (10 §4.5)"
+  ansible.builtin.debug:
+    msg: >-
+      claude-code встановлено. Автентифікація — підписка: замовник заходить сам
+      (`claude` → інтерактивний /login по SSH), секрети сюди не кладуться.

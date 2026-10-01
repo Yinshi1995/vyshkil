@@ -1,0 +1,9 @@
+# Шаблон. Реальний файл — group_vars/vault.yml, зашифрований `ansible-vault encrypt`, НЕ в git
+# (.gitignore), пароль vault-у — поза репо (`[[dev-vm-parameters]]`, 10 §4.7).
+#
+# Створення:
+#   ansible-vault create inventories/dev/group_vars/vault.yml
+#   (вставити ключі нижче з реальними значеннями, зберегти)
+
+vault_pve_api_token_id: "ansible@pve!provision"
+vault_pve_api_token_secret: "СЕКРЕТ-ТОКЕНА-СЮДИ"

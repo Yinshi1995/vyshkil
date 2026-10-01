@@ -1,0 +1,38 @@
+---
+- name: Встановити nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: "Перевірка: у docker-compose.yml репо нема портів на 0.0.0.0 (10 §4.8)"
+  ansible.builtin.command: "grep -nE '\"[0-9]+:[0-9]+\"' {{ project_checkout_path }}/docker-compose.yml"
+  register: compose_exposed_ports
+  changed_when: false
+  failed_when: false
+  when: bare_repo_has_main.rc is defined and bare_repo_has_main.rc == 0
+
+- name: "Попередження, якщо docker-compose.yml публікує порт без 127.0.0.1-прив'язки"
+  ansible.builtin.debug:
+    msg: >-
+      Знайдено проброс портів без явного 127.0.0.1: {{ compose_exposed_ports.stdout_lines }}.
+      Перевірити вручну — 10 §4.8 вимагає, щоб жоден порт не йшов на 0.0.0.0.
+  when:
+    - compose_exposed_ports is defined
+    - compose_exposed_ports.stdout is defined
+    - compose_exposed_ports.stdout | regex_findall('\"[0-9]+:[0-9]+\"') | length > 0
+
+- name: Конфіг nftables
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0640"
+    validate: "nft -c -f %s"
+  notify: Перезавантажити nftables
+
+- name: Увімкнути й запустити nftables
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started

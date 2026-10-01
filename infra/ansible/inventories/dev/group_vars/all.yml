@@ -1,0 +1,53 @@
+# Несекретні параметри (`[[dev-vm-parameters]]`). Секрети — group_vars/vault.yml (не в git,
+# шаблон значень — group_vars/vault.yml.example), підтягуються через `ansible.cfg` автоматично,
+# якщо файл існує і розшифровується `--ask-vault-pass`/`--vault-password-file`.
+
+# --- Proxmox (провіжн VM) ---
+pve_node: pidhotovka
+# IP напряму — DNS-ім'я не обов'язково резолвиться з control node.
+pve_api_host: "{{ pve_api_host_override | default('192.168.1.106') }}"
+# Тимчасово root@pam+пароль для першого реального прогону (пароль — лише через -e
+# pve_api_password=..., ніколи в файл; замовник міняє пароль рута одразу після). Перехід на
+# токен `ansible@pve!provision` пізніше — просто інші значення тут, роль не зміниться.
+pve_api_user: root@pam
+pve_template_vmid: 9000
+pve_template_name: ubuntu-24.04-cloudimg
+pve_dev_vmid: 300
+pve_dev_vm_name: vyshkil-dev
+pve_storage_images: local-lvm
+pve_storage_templates: local
+cloud_image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+
+# --- Розмір dev-VM (свідомо скориговано під реальну RAM хоста, не мінімуми з 10 §3) ---
+dev_vm_cores: 6
+dev_vm_cpu_type: host
+dev_vm_memory_mb: 8192
+dev_vm_swap_gb: 8
+dev_vm_disk_gb: 150
+cargo_build_jobs: 4
+
+# --- Мережа (спрощено: та сама LAN, що й Windows-хост розробки — не VyOS-сегмент) ---
+dev_vm_bridge: vmbr0
+dev_vm_vlan_tag: null  # без VLAN-тегу навмисно
+# Статична IP замість DHCP (10 §1.7 був незаповненим плейсхолдером; DHCP підозрюється як причина
+# зависання першого завантаження — cloud-init стабільно вмирає рівно біля позначки ~100-110с
+# незалежно від розміру диска, діагностика `[[dev-vm-parameters]]`). .200 — вільна (поза
+# помітними зайнятими .50/.103/.106 з LAN-скана).
+dev_vm_ip_cidr: "192.168.1.200/24"
+dev_vm_gateway: "192.168.1.1"
+
+# --- Rust ---
+rust_toolchain_channel: "1.97.1"  # з rust-toolchain.toml у корені репо — тримати синхронним
+
+# --- Node (services/notifier) ---
+node_major_version: 22
+
+# --- Користувач VM ---
+dev_vm_user: dev
+# Публічні ключі — не секрет, тому тут, не в vault.yml. Два: особистий ключ замовника (той самий,
+# що й для git/GitHub, але він з паролем — непридатний для неінтерактивної автоматизації) і
+# окремий ключ БЕЗ пароля спеціально для автоматизованого доступу Claude Code/Ansible
+# (~/.ssh/vyshkil-dev на Windows-машині, згенерований для цієї мети).
+dev_vm_user_ssh_public_key: |
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILnSkk/si0+4Z5UNniaDb44wy8ZnplfYR5RHJ/4kUrGq pidhotova
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMPvMSFcV5sKCnbCdxkncrxqUIHoMocKFAbGckoSNpS6 claude-code@vyshkil-dev-automation

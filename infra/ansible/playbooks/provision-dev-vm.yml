@@ -1,0 +1,6 @@
+---
+- name: Створити шаблон і dev-VM на Proxmox
+  hosts: proxmox_api
+  gather_facts: false
+  roles:
+    - provision

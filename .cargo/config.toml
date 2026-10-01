@@ -1,0 +1,6 @@
+# Секція per-target — стосується ЛИШЕ збірки під Linux (dev-VM, docs/spec/10-dev-vm.md §4.3);
+# Windows компілює під іншим target-triple (x86_64-pc-windows-msvc) і цю секцію не бачить
+# взагалі, тому цей файл безпечно спільний для обох платформ. Потребує пакета `mold`
+# (`infra/ansible/roles/rust_toolchain`).
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]

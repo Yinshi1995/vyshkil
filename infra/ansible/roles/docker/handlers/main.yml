@@ -1,0 +1,5 @@
+---
+- name: Перезапустити docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted

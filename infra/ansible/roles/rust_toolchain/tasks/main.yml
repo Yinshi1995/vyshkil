@@ -1,0 +1,107 @@
+---
+# `cargo install` (sccache/cargo-leptos/cargo-modules нижче) потребує `cc`-лінкер — build-essential
+# інакше ставиться лише в ролі devtools, яка йде ПІЗНІШЕ в dev-vm.yml. Власна залежність ролі, не
+# покладатись на порядок ролей у плейбуці.
+- name: C-тулчейн для `cargo install` (build-essential/pkg-config)
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - pkg-config
+    state: present
+
+- name: Перевірити, чи rustup уже встановлено для {{ base_primary_user }}
+  ansible.builtin.stat:
+    path: "/home/{{ base_primary_user }}/.cargo/bin/rustup"
+  register: rustup_bin
+
+- name: Встановити rustup + toolchain {{ rust_toolchain_channel }}
+  become: true
+  become_user: "{{ base_primary_user }}"
+  when: not rustup_bin.stat.exists
+  block:
+    - name: Завантажити rustup-init
+      ansible.builtin.get_url:
+        url: https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init
+        dest: /tmp/rustup-init
+        mode: "0755"
+
+    - name: Запустити rustup-init (non-interactive, профіль default — несе rustfmt+clippy)
+      ansible.builtin.command: >
+        /tmp/rustup-init -y --no-modify-path --profile default
+        --default-toolchain {{ rust_toolchain_channel }}
+      args:
+        creates: "/home/{{ base_primary_user }}/.cargo/bin/rustc"
+
+- name: wasm32-unknown-unknown таргет
+  become: true
+  become_user: "{{ base_primary_user }}"
+  ansible.builtin.command: "/home/{{ base_primary_user }}/.cargo/bin/rustup target add wasm32-unknown-unknown"
+  register: wasm_target_add
+  changed_when: "'is up to date' not in wasm_target_add.stderr"
+
+- name: "PATH: ~/.cargo/bin у .bashrc (неінтерактивні SSH-сесії теж бачать cargo/rustup)"
+  ansible.builtin.lineinfile:
+    path: "/home/{{ base_primary_user }}/.bashrc"
+    line: 'export PATH="$HOME/.cargo/bin:$PATH"'
+    create: true
+    owner: "{{ base_primary_user }}"
+    group: "{{ base_primary_user }}"
+
+- name: mold (швидший і економніший по RAM лінкер за ld.bfd — 10 §4.3)
+  ansible.builtin.apt:
+    name: mold
+    state: present
+
+- name: sccache
+  become: true
+  become_user: "{{ base_primary_user }}"
+  community.general.cargo:
+    name: sccache
+    locked: true
+  environment:
+    PATH: "/home/{{ base_primary_user }}/.cargo/bin:{{ ansible_env.PATH }}"
+
+- name: "RUSTC_WRAPPER=sccache у .bashrc"
+  ansible.builtin.lineinfile:
+    path: "/home/{{ base_primary_user }}/.bashrc"
+    line: 'export RUSTC_WRAPPER="$HOME/.cargo/bin/sccache"'
+    create: true
+    owner: "{{ base_primary_user }}"
+    group: "{{ base_primary_user }}"
+
+- name: cargo-leptos (та сама команда встановлення, що в Dockerfile — версії не розходяться довільно)
+  become: true
+  become_user: "{{ base_primary_user }}"
+  community.general.cargo:
+    name: cargo-leptos
+    locked: true
+  environment:
+    PATH: "/home/{{ base_primary_user }}/.cargo/bin:{{ ansible_env.PATH }}"
+
+- name: cargo-modules (граф коду — `[[cargo-modules-over-graphify]]`)
+  become: true
+  become_user: "{{ base_primary_user }}"
+  community.general.cargo:
+    name: cargo-modules
+    locked: true
+  environment:
+    PATH: "/home/{{ base_primary_user }}/.cargo/bin:{{ ansible_env.PATH }}"
+
+- name: "wasm-opt (binaryen {{ rust_toolchain_binaryen_version }} — та сама версія/sha256, що в Docker-образі)"
+  block:
+    - name: Завантажити й перевірити архів binaryen
+      ansible.builtin.get_url:
+        url: "{{ rust_toolchain_binaryen_url }}"
+        dest: /tmp/binaryen.tar.gz
+        checksum: "sha256:{{ rust_toolchain_binaryen_sha256 }}"
+        mode: "0644"
+
+    - name: Розпакувати лише wasm-opt у /usr/local/bin
+      ansible.builtin.unarchive:
+        src: /tmp/binaryen.tar.gz
+        dest: /usr/local
+        remote_src: true
+        extra_opts:
+          - "--strip-components=1"
+          - "binaryen-{{ rust_toolchain_binaryen_version }}/bin/wasm-opt"
+        creates: /usr/local/bin/wasm-opt

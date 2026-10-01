@@ -23,7 +23,9 @@ services:
       POSTGRES_PASSWORD: taktoblik
       POSTGRES_DB: taktoblik
     ports:
-      - "5432:5432"
+      # 127.0.0.1, не 0.0.0.0 (docs/spec/10-dev-vm.md §4.8: Postgres не публікується назовні
+      # навіть на dev-VM — доступ по SSH-тунелю, як і 3000/8222 нижче).
+      - "127.0.0.1:5432:5432"
     volumes:
       - taktoblik_pgdata:/var/lib/postgresql/data
       # Лише при ПЕРШІЙ ініціалізації тому (09 §3.7: окрема роль/БД для notifier).
@@ -70,7 +72,8 @@ services:
       NATS_URL: nats://app:app-dev-password@nats:4222
       RUST_LOG: info,sqlx=warn
     ports:
-      - "3000:3000"
+      # 127.0.0.1 — доступ через SSH-тунель (docs/spec/10-dev-vm.md §4.8), не напряму з LAN.
+      - "127.0.0.1:3000:3000"
 
   notifier:
     build: ./services/notifier

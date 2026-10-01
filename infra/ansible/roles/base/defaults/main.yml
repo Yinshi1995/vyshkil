@@ -1,0 +1,14 @@
+---
+# Параметризовано для перевикористання в 11-prod-deploy.md (11 §2: "base прод-режим — без sudo
+# для сервісних користувачів") — dev-VM використовує значення за замовчуванням нижче, прод
+# перевизначає в group_vars/prod.
+base_primary_user: "{{ dev_vm_user | default('dev') }}"
+base_user_passwordless_sudo: true
+base_timezone: Europe/Kyiv
+base_locales:
+  - uk_UA.UTF-8
+  - en_US.UTF-8
+base_swap_gb: "{{ dev_vm_swap_gb | default(4) }}"
+base_swappiness: 10
+base_inotify_max_user_watches: 1048576
+base_unattended_upgrades_security_only: true

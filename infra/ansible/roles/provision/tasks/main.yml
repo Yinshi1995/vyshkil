@@ -1,0 +1,203 @@
+---
+# Усе звідси йде проти Proxmox API, не по SSH на гіпервізор (`[[iac-ansible]]`). ПЕРШИЙ реальний
+# прогін — Фаза 2 (`10-dev-vm.md` §5): auth тимчасово root@pam+пароль (`pve_api_password`,
+# передається через -e при виклику, НЕ зберігається в репо/vault) — замовник сам поміняє пароль
+# рута одразу після цього прогону; токен `ansible@pve!provision` — наступний крок, коли дійдемо
+# до постійної конфігурації (роль це підтримає без змін, достатньо задати pve_api_user/-password
+# з group_vars замість -e).
+
+- name: "Ticket + CSRF для API (password-автентифікація {{ pve_api_user }})"
+  ansible.builtin.uri:
+    url: "https://{{ pve_api_host }}:8006/api2/json/access/ticket"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      username: "{{ pve_api_user }}"
+      password: "{{ pve_api_password }}"
+    validate_certs: false
+    status_code: 200
+  register: pve_ticket
+  no_log: true
+
+- name: Перевірити, чи вже існує шаблон {{ pve_template_vmid }}
+  community.proxmox.proxmox_vm_info:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password }}"
+    validate_certs: false
+    node: "{{ pve_node }}"
+    vmid: "{{ pve_template_vmid }}"
+  register: template_lookup
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: Шаблон {{ pve_template_vmid }} — створення (тільки якщо не існує)
+  when: template_lookup.proxmox_vms | default([]) | length == 0
+  block:
+    - name: Чи вже є імпортований образ у сховищі {{ pve_storage_templates }}
+      community.proxmox.proxmox_storage_contents_info:
+        api_host: "{{ pve_api_host }}"
+        api_user: "{{ pve_api_user }}"
+        api_password: "{{ pve_api_password }}"
+        validate_certs: false
+        node: "{{ pve_node }}"
+        storage: "{{ pve_storage_templates }}"
+        content: import
+      register: template_image_lookup
+      no_log: true
+
+    - name: Завантажити cloud-образ Ubuntu 24.04 у сховище {{ pve_storage_templates }} (content=import)
+      when: >-
+        (template_image_lookup.proxmox_storage_content | default([]))
+        | selectattr('volid', 'equalto', pve_storage_templates ~ ':import/' ~ pve_template_name ~ '.qcow2')
+        | list | length == 0
+      block:
+        - name: POST download-url
+          ansible.builtin.uri:
+            url: "https://{{ pve_api_host }}:8006/api2/json/nodes/{{ pve_node }}/storage/{{ pve_storage_templates }}/download-url"
+            method: POST
+            headers:
+              Cookie: "PVEAuthCookie={{ pve_ticket.json.data.ticket }}"
+              CSRFPreventionToken: "{{ pve_ticket.json.data.CSRFPreventionToken }}"
+            body_format: json
+            body:
+              content: import
+              filename: "{{ pve_template_name }}.qcow2"
+              url: "{{ cloud_image_url }}"
+            validate_certs: false
+            status_code: 200
+          register: download_task
+          no_log: true
+
+        - name: Дочекатись завершення завантаження (PVE task)
+          ansible.builtin.uri:
+            url: "https://{{ pve_api_host }}:8006/api2/json/nodes/{{ pve_node }}/tasks/{{ download_task.json.data }}/status"
+            method: GET
+            headers:
+              Cookie: "PVEAuthCookie={{ pve_ticket.json.data.ticket }}"
+            validate_certs: false
+          register: download_status
+          until: download_status.json.data.status == "stopped"
+          retries: 60
+          delay: 5
+          no_log: true
+
+        - name: Перевірити, що завантаження завершилось успішно (exitstatus=OK)
+          ansible.builtin.assert:
+            that:
+              - download_status.json.data.exitstatus == "OK"
+            fail_msg: "download-url завершився не OK: {{ download_status.json.data.exitstatus | default('невідомо') }}"
+
+    - name: Створити VM-оболонку {{ pve_template_vmid }} з імпортованого диска
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ pve_api_host }}"
+        api_user: "{{ pve_api_user }}"
+        api_password: "{{ pve_api_password }}"
+        validate_certs: false
+        node: "{{ pve_node }}"
+        vmid: "{{ pve_template_vmid }}"
+        name: "{{ pve_template_name }}"
+        cores: 2
+        memory: 2048
+        cpu: host
+        scsihw: virtio-scsi-pci
+        scsi:
+          scsi0: "{{ pve_storage_images }}:0,import-from={{ pve_storage_templates }}:import/{{ pve_template_name }}.qcow2"
+        ide:
+          ide2: "{{ pve_storage_images }}:cloudinit"
+        boot: "order=scsi0"
+        serial:
+          serial0: socket
+        vga: serial0
+        agent: "enabled=1"
+        state: present
+      no_log: true
+
+    - name: Позначити {{ pve_template_vmid }} шаблоном
+      community.proxmox.proxmox_kvm:
+        api_host: "{{ pve_api_host }}"
+        api_user: "{{ pve_api_user }}"
+        api_password: "{{ pve_api_password }}"
+        validate_certs: false
+        node: "{{ pve_node }}"
+        vmid: "{{ pve_template_vmid }}"
+        template: true
+        state: present
+      no_log: true
+
+- name: Клонувати dev-VM {{ pve_dev_vmid }} із шаблону {{ pve_template_vmid }} (повторний прогін — без змін, якщо вже існує)
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password }}"
+    validate_certs: false
+    node: "{{ pve_node }}"
+    clone: "{{ pve_template_name }}"
+    vmid: "{{ pve_template_vmid }}"
+    newid: "{{ pve_dev_vmid }}"
+    name: "{{ pve_dev_vm_name }}"
+    full: true
+    storage: "{{ pve_storage_images }}"
+    timeout: 600
+    state: present
+  register: dev_vm_clone
+  no_log: true
+
+- name: "Розширити системний диск до {{ dev_vm_disk_gb }} ГБ (10 §3 — шаблон успадкував лише ~3.5 ГБ хмарного образу)"
+  community.proxmox.proxmox_disk:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password }}"
+    validate_certs: false
+    vmid: "{{ pve_dev_vmid }}"
+    disk: scsi0
+    size: "{{ dev_vm_disk_gb }}G"
+    state: resized
+  no_log: true
+
+- name: Застосувати розмір і cloud-init до dev-VM {{ pve_dev_vmid }}
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password }}"
+    validate_certs: false
+    node: "{{ pve_node }}"
+    vmid: "{{ pve_dev_vmid }}"
+    cores: "{{ dev_vm_cores }}"
+    cpu: "{{ dev_vm_cpu_type }}"
+    memory: "{{ dev_vm_memory_mb }}"
+    net:
+      net0: "virtio,bridge={{ dev_vm_bridge }}{{ ',tag=' + dev_vm_vlan_tag | string if dev_vm_vlan_tag else '' }}"
+    ipconfig:
+      ipconfig0: "ip={{ dev_vm_ip_cidr }},gw={{ dev_vm_gateway }}"
+    nameservers:
+      - "{{ dev_vm_gateway }}"
+    ciuser: "{{ dev_vm_user }}"
+    sshkeys: "{{ dev_vm_user_ssh_public_key }}"
+    agent: "enabled=1"
+    update: true
+    update_unsafe: true  # net0 (bridge) входить у список "безпечно заблокованих" полів без цього
+    state: present
+  no_log: true
+  changed_when: false  # модуль завжди повертає changed=true на цій гілці (config.set не діффить) —
+                        # перевірено емпірично: значення ідентичні, реального ефекту нема (10 §5,
+                        # "повторний прогін — без змін")
+
+- name: Запустити dev-VM {{ pve_dev_vmid }}
+  community.proxmox.proxmox_kvm:
+    api_host: "{{ pve_api_host }}"
+    api_user: "{{ pve_api_user }}"
+    api_password: "{{ pve_api_password }}"
+    validate_certs: false
+    node: "{{ pve_node }}"
+    vmid: "{{ pve_dev_vmid }}"
+    state: started
+  no_log: true
+
+- name: "Далі: дочекатись IP від qemu-guest-agent і вписати в inventories/dev/hosts.yml вручну (Фаза 2)"
+  ansible.builtin.debug:
+    msg: >-
+      VM {{ pve_dev_vmid }} запущена. IP ще не відомий автоматично (DHCP) —
+      перевірити в PVE UI (Summary → IPs, потребує qemu-guest-agent) і вписати в
+      inventories/dev/hosts.yml перед прогоном dev-vm.yml.

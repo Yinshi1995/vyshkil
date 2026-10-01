@@ -34,6 +34,7 @@
 | "хто що викликає" / залежності символів | `cargo modules dependencies` — перед grep по всьому проєкту |
 | Конкретна логіка в конкретному файлі | читай файл напряму |
 | Стилізація компонента (класи, кольори, варіанти) | skill `styling` (`.claude/skills/styling/SKILL.md`) — не `style/grammar_data.rs` напряму |
+| Інфраструктура (dev-VM на Proxmox, майбутній прод) | `infra/README.md`, `docs/spec/10-dev-vm.md`, `docs/spec/11-prod-deploy.md` |
 
 ## Запуск і перевірка (коротко — деталі в MEMORY.md)
 

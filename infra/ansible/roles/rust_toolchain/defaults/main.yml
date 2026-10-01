@@ -1,0 +1,12 @@
+---
+# Тримати синхронним з /rust-toolchain.toml у корені репозиторію (10 §4.3) — єдине джерело
+# версії для rustup тут, бо репозиторій на момент цієї ролі ще не клонований (project — остання
+# роль у dev-vm.yml).
+rust_toolchain_channel: "1.97.1"
+
+# Той самий архів/sha256, що вже перевірений для Docker-збірки (.docker-tools/binaryen.tar.gz.sha256,
+# Dockerfile: "apt дає лише стару binaryen 108, несумісну з форматом, який очікує саме ця версія
+# cargo-leptos") — та сама версія тут, щоб локальна збірка на VM й Docker-образ не розходились.
+rust_toolchain_binaryen_version: version_123
+rust_toolchain_binaryen_url: "https://github.com/WebAssembly/binaryen/releases/download/{{ rust_toolchain_binaryen_version }}/binaryen-{{ rust_toolchain_binaryen_version }}-x86_64-linux.tar.gz"
+rust_toolchain_binaryen_sha256: "e959f2170af4c20c552e9de3a0253704d6a9d2766e8fdb88e4d6ac4bae9388fe"

@@ -1,0 +1,83 @@
+---
+# Git-remote — bare-репо ПРЯМО на dev-VM (`[[dev-vm-parameters]]`): Windows стає `remote`, не
+# навпаки. Ця роль лише готує порожній bare-репо й (якщо вже є що клонувати) робочу копію —
+# перший `git push` із Windows виконує замовник вручну (infra/README.md), Ansible не має доступу
+# до поточного робочого репозиторію на Windows-машині.
+
+- name: Каталог для bare-репо
+  ansible.builtin.file:
+    path: /srv/git
+    state: directory
+    owner: "{{ base_primary_user }}"
+    group: "{{ base_primary_user }}"
+    mode: "0750"
+
+- name: "Bare-репо {{ project_bare_repo_path }}"
+  ansible.builtin.command: "git init --bare {{ project_bare_repo_path }}"
+  args:
+    creates: "{{ project_bare_repo_path }}/HEAD"
+  become: true
+  become_user: "{{ base_primary_user }}"
+
+- name: Чи є вже гілка main у bare-репо (чи замовник уже push-нув із Windows)
+  ansible.builtin.command: "git --git-dir={{ project_bare_repo_path }} rev-parse --verify refs/heads/main"
+  register: bare_repo_has_main
+  failed_when: false
+  changed_when: false
+  become: true
+  become_user: "{{ base_primary_user }}"
+
+- name: "Нема що клонувати — bare-репо ще порожній"
+  ansible.builtin.debug:
+    msg: >-
+      {{ project_bare_repo_path }} створено, але порожній. На Windows:
+      git remote add vm ssh://{{ base_primary_user }}@<IP>{{ project_bare_repo_path }} &&
+      git push vm main — тоді повторний прогін цієї ролі зробить робочу копію.
+  when: bare_repo_has_main.rc != 0
+
+- name: Робоча копія — клонувати/оновити з bare-репо
+  when: bare_repo_has_main.rc == 0
+  become: true
+  become_user: "{{ base_primary_user }}"
+  block:
+    - name: Перевірити, чи робоча копія вже є
+      ansible.builtin.stat:
+        path: "{{ project_checkout_path }}/.git"
+      register: checkout_exists
+
+    - name: Клонувати bare-репо в робочу копію
+      ansible.builtin.command: "git clone {{ project_bare_repo_path }} {{ project_checkout_path }}"
+      when: not checkout_exists.stat.exists
+
+    - name: Підтягнути зміни, якщо робоча копія вже є
+      ansible.builtin.command: "git -C {{ project_checkout_path }} pull --ff-only"
+      when: checkout_exists.stat.exists
+      register: project_pull
+      changed_when: "'Already up to date' not in project_pull.stdout"
+      failed_when: false
+
+    - name: ".env із .env.example, якщо .env ще нема (dev-паролі — як у репо, це нормально)"
+      ansible.builtin.copy:
+        src: "{{ project_checkout_path }}/.env.example"
+        dest: "{{ project_checkout_path }}/.env"
+        remote_src: true
+        force: false
+        owner: "{{ base_primary_user }}"
+        group: "{{ base_primary_user }}"
+        mode: "0600"
+
+- name: "data/ застосунку (застосунок пише сюди, не в ДСК-том)"
+  ansible.builtin.file:
+    path: "{{ project_checkout_path }}/data"
+    state: directory
+    owner: "{{ base_primary_user }}"
+    group: "{{ base_primary_user }}"
+    mode: "0750"
+  when: bare_repo_has_main.rc == 0
+
+- name: "source_files/ (ДСК) — НЕ монтується (10 §1.11, явного 'так' не було)"
+  ansible.builtin.debug:
+    msg: >-
+      project_mount_source_files=false — тести, що потребують source_files/, лишаються skip,
+      так само як зараз на Windows. Увімкнути пізніше без зміни решти ролі.
+  when: not project_mount_source_files

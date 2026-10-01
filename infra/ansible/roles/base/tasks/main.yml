@@ -1,0 +1,126 @@
+---
+- name: Оновити кеш apt
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Встановити базові пакети
+  ansible.builtin.apt:
+    name:
+      - qemu-guest-agent
+      - unattended-upgrades
+      - locales
+      - rsync
+      - ca-certificates
+      - gnupg
+    state: present
+
+- name: Увімкнути й запустити qemu-guest-agent
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    enabled: true
+    state: started
+
+- name: Згенерувати потрібні локалі
+  community.general.locale_gen:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ base_locales }}"
+
+- name: Встановити часовий пояс
+  community.general.timezone:
+    name: "{{ base_timezone }}"
+
+- name: "unattended-upgrades: тільки security (10 §4.1)"
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/51unattended-upgrades-security-only
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+    owner: root
+    group: root
+    mode: "0644"
+  when: base_unattended_upgrades_security_only
+
+- name: Користувач {{ base_primary_user }} — без пароля, вхід лише SSH-ключем
+  ansible.builtin.user:
+    name: "{{ base_primary_user }}"
+    shell: /bin/bash
+    password_lock: true
+    groups: sudo
+    append: true
+    create_home: true
+
+- name: SSH-ключ для {{ base_primary_user }}
+  ansible.posix.authorized_key:
+    user: "{{ base_primary_user }}"
+    key: "{{ dev_vm_user_ssh_public_key }}"
+    state: present
+
+- name: Passwordless sudo для {{ base_primary_user }} (dev-режим; прод вимикає через base_user_passwordless_sudo=false)
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ base_primary_user }}"
+    content: "{{ base_primary_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+  when: base_user_passwordless_sudo
+
+- name: Прибрати passwordless sudo, якщо вимкнено (прод)
+  ansible.builtin.file:
+    path: "/etc/sudoers.d/90-{{ base_primary_user }}"
+    state: absent
+  when: not base_user_passwordless_sudo
+
+- name: SSH — вимкнути root-логін і парольну автентифікацію
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    validate: sshd -t -f %s
+  loop:
+    - { regexp: "^#?PermitRootLogin", line: "PermitRootLogin no" }
+    - { regexp: "^#?PasswordAuthentication", line: "PasswordAuthentication no" }
+  notify: Перезапустити sshd
+
+- name: "Swap-файл ({{ base_swap_gb }} ГБ) — створити, якщо нема"
+  community.general.filesize:
+    path: /swapfile
+    size: "{{ base_swap_gb }}G"
+  register: swapfile_created
+
+- name: Права на /swapfile
+  ansible.builtin.file:
+    path: /swapfile
+    mode: "0600"
+  when: swapfile_created.changed
+
+- name: Зробити /swapfile swap-областю
+  ansible.builtin.command: mkswap /swapfile
+  when: swapfile_created.changed
+
+- name: Увімкнути /swapfile
+  ansible.builtin.command: swapon /swapfile
+  when: swapfile_created.changed
+
+- name: /swapfile у fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "/swapfile none swap sw 0 0"
+    state: present
+
+- name: vm.swappiness
+  ansible.posix.sysctl:
+    name: vm.swappiness
+    value: "{{ base_swappiness }}"
+    state: present
+    reload: true
+
+- name: fs.inotify.max_user_watches (cargo/IDE)
+  ansible.posix.sysctl:
+    name: fs.inotify.max_user_watches
+    value: "{{ base_inotify_max_user_watches }}"
+    state: present
+    reload: true

@@ -1,0 +1,56 @@
+---
+- name: Загальні утиліти (10 §4.3)
+  ansible.builtin.apt:
+    name:
+      - git
+      - build-essential
+      - pkg-config
+      - clang
+      - jq
+      - ripgrep
+      - fd-find
+      - htop
+      - tmux
+      - postgresql-client
+      - unzip
+    state: present
+
+- name: "fd: Ubuntu пакує бінарник як fdfind — симлінк fd для сумісності"
+  ansible.builtin.file:
+    src: /usr/bin/fdfind
+    dest: /usr/local/bin/fd
+    state: link
+
+- name: Системні залежності Playwright-браузерів (без самих браузерів — ті в project, після npm ci)
+  ansible.builtin.command: "npx --yes playwright@{{ devtools_playwright_pin }} install-deps chromium"
+  environment:
+    PATH: "/usr/bin:{{ ansible_env.PATH }}"
+  register: playwright_deps
+  changed_when: false  # playwright CLI завжди друкує "Installing dependencies..." як статичний
+                        # заголовок, навіть коли apt нічого не робить (перевірено: "0 upgraded,
+                        # 0 newly installed" на повторному прогоні) — сам виклик безпечний/
+                        # ідемпотентний на рівні apt, просто не дає надійного сигналу "changed"
+
+- name: "nats CLI (адмінка черг — 09-messaging.md, перевірка стрімів/consumer-ів руками)"
+  vars:
+    nats_cli_version: "0.5.0"  # перевірено на момент написання ролі: github.com/nats-io/natscli/releases/latest
+  block:
+    - name: Завантажити nats CLI
+      ansible.builtin.get_url:
+        url: "https://github.com/nats-io/natscli/releases/download/v{{ nats_cli_version }}/nats-{{ nats_cli_version }}-linux-amd64.zip"
+        dest: /tmp/nats-cli.zip
+        mode: "0644"
+
+    - name: Розпакувати nats CLI
+      ansible.builtin.unarchive:
+        src: /tmp/nats-cli.zip
+        dest: /tmp
+        remote_src: true
+        creates: "/tmp/nats-{{ nats_cli_version }}-linux-amd64/nats"
+
+    - name: Встановити nats CLI в /usr/local/bin
+      ansible.builtin.copy:
+        src: "/tmp/nats-{{ nats_cli_version }}-linux-amd64/nats"
+        dest: /usr/local/bin/nats
+        mode: "0755"
+        remote_src: true

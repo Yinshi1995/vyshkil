@@ -37,3 +37,7 @@ date: 2026-09-27
 - [Об'єднаний `source_type='form'` для ручного вводу й імпорту таблиць](../decisions/unified-training-form-source-type.md) — одна сітка/одна чернетка на `/training-form`, `source_type` не впливає на алгоритм звірки.
 - [Щоденні агреговані підрахунки архіву (Контролька) — відкласти до Етапу 8](../decisions/archive-daily-counts-deferred.md) — нема схеми для агрегованих подань без деталізації (`reported_group` — ще Етап 8), дані лишаються еталонами на диску.
 - [Етап 8, зріз 1 — лише горизонтальна звірка](../decisions/etap8-horizontal-reconciliation-first-slice.md) — зіставлення подань + найпростіший з трьох типів звірки; вертикальна/часова/`canonical_from`/сповіщення — наступні зрізи.
+- [Брокер — NATS+JetStream](../decisions/broker-nats-jetstream.md) — замінює транспорт із `[[depersonalized-notification-outbox]]`; user/password+права, не nkeys.
+- [Нотифікатор — TypeScript/Node 22, не Rust](../decisions/notifier-ts-whatsapp-web-js.md) — `whatsapp-web.js`, рішення замовника; Bun vs Node перевірено емпірично.
+- [IaC — Ansible, не разовий скрипт](../decisions/iac-ansible.md) — ролі `base`/`docker`/`firewall` перевикористовує прод (11); `community.proxmox` 2.0.0 — актуальна назва колекції.
+- [Dev-VM: параметри](../decisions/dev-vm-parameters.md) — RAM/мережа/git-remote/source_files, зафіксовані відповідями замовника + реальною інвентаризацією хоста, не вгадані.

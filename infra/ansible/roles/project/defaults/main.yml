@@ -1,0 +1,8 @@
+---
+project_repo_name: vyshkil
+project_bare_repo_path: "/srv/git/{{ project_repo_name }}.git"
+project_checkout_path: "/home/{{ base_primary_user }}/{{ project_repo_name }}"
+# `[[dev-vm-parameters]]`: без явного "так" від замовника — НЕ монтувати (10 §1.11). Залишено
+# параметризованим, щоб увімкнути пізніше без зміни решти ролі.
+project_mount_source_files: false
+project_source_files_disk_gb: 10

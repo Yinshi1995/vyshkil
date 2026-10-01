@@ -1,0 +1,2 @@
+---
+devtools_playwright_pin: "1.48.0"  # відповідає e2e/package.json ("^1.48.0") на момент написання ролі

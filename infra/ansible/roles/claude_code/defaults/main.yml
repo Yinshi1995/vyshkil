@@ -1,0 +1,6 @@
+---
+# Канал "stable" (офіційна рекомендація — "typically about a week behind, skips releases with
+# major regressions") — "latest" не обирати без причини: dev-VM не повинна ламатись від щойно
+# випущеної регресії.
+claude_code_channel: stable
+claude_code_key_fingerprint: "31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE"

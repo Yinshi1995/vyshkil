@@ -20,3 +20,9 @@ node_modules
 # Артефакти запуску e2e-тестів (Етап 4) — репорти/трейси, не результати самих тестів.
 /e2e/test-results
 /e2e/playwright-report
+
+# Інфраструктура (docs/spec/10-dev-vm.md §4.7) — секрети Ansible Vault ніколи в git:
+# пароль vault-у, розшифрований vault.yml і будь-які .retry/.log з реальних прогонів.
+/infra/ansible/.vault-pass
+/infra/ansible/inventories/*/group_vars/vault.yml
+*.retry

@@ -5,6 +5,50 @@ date: 2026-09-30
 
 # Поточний стан проєкту
 
+## Dev-VM на Proxmox (10-dev-vm.md) — Фаза 0-1 закриті (2026-10-01)
+
+**Мета**: перенести розробку з Windows (MSVC-лінкер: LNK2019 cross-CGU, LNK1140 PDB-ліміт —
+обидва повторювались із ростом графа залежностей) на Linux dev-VM на Proxmox замовника.
+`docs/spec/11-prod-deploy.md` — ТЗ на майбутнє (прод), НЕ виконувати без явного дозволу.
+
+**Фаза 0**: параметри зафіксовані відповідями замовника + реальною інвентаризацією хоста
+(`infra/scripts/pve-inventory.sh`), не вгадані — `.claude/decisions/dev-vm-parameters.md`.
+Коротко: PVE 9.2.2 один вузол, API-токен (`ansible@pve!provision`); VM 300 на `vmbr0`
+(та сама LAN/DHCP, що й Windows-хост — замовник прямо відмовився від VyOS-сегментації для dev,
+спрощення, НЕ шаблон для проду); 6 vCPU / 8192 МБ RAM / 8 ГБ swap / 150 ГБ диск на `local-lvm`
+(усе вільне на хості, апгрейду RAM не було); git-remote — bare-репо на самій VM; `source_files/`
+НЕ копіюється (явного "так" не було). Відкрито: release+LTO + повний docker-стек одночасно на
+8 ГБ RAM не гарантовано вміщається — Фаза 4 має заміряти.
+
+**Фаза 1**: каркас `infra/ansible/` за 10 §4 — `ansible.cfg`, `requirements.yml`
+(`community.proxmox` 2.0.0 — перевірено, модулі справді переїхали з `community.general`),
+інвентар `inventories/dev/`, 2 плейбуки, 9 ролей (`provision`/`base`/`docker`/`rust_toolchain`/
+`node`/`devtools`/`claude_code`/`project`/`firewall`) з РЕАЛЬНИМИ задачами (не заглушки) —
+`claude_code`-роль написана за актуальною документацією Anthropic (apt-репо, канал stable,
+перевірка відбитку ключа), не з пам'яті. `ansible-lint` — exit 0 (профіль `min`; 52
+стилістичних зауваження під строгішими профілями, задокументовано як відкритий follow-up, не
+приховано). `ansible-playbook --syntax-check` — обидва плейбуки чисті.
+Control node — WSL2/Arch (вже був на машині, Ubuntu не переставлялась заради рекомендації).
+**Грабля**: `pacman -Sy` без `-u` лишає систему в частковому апдейті (новий python3.14 вимагав
+`GLIBC_2.44`, якого не було) — завжди `pacman -Syu`.
+
+**Побічні, але необхідні правки репозиторію цієї ж фази**:
+- `docker-compose.yml`: `db` (5432) і `app` (3000) тепер `127.0.0.1:...` — були на `0.0.0.0`,
+  що прямо суперечило 10 §4.8 ("доступ лише через SSH-тунель"); `nats` (8222) вже був правильний,
+  зразок для цього фіксу.
+- `rust-toolchain.toml` (новий, корінь репо) — `1.97.1`, щоб Windows і VM гарантовано збирали
+  одним тулчейном (10 §4.3). Тримати синхронним із `rust_toolchain_channel` у
+  `infra/ansible/inventories/dev/group_vars/all.yml`.
+- `.cargo/config.toml` (новий) — лінкер `mold` ЛИШЕ під `[target.x86_64-unknown-linux-gnu]`:
+  Windows компілює під іншим triple і цю секцію не бачить, тому файл безпечно спільний.
+- `docs/spec/11-prod-deploy.md`: додано §0.1 (хост без апгрейду RAM не вміщає прод поруч із
+  dev-VM) і §0.2 (застосунок НІКОЛИ не публікується через наявний Cloudflare tunnel `cf-connector`).
+
+**Наступне (Фаза 2, ще НЕ виконано)**: реальний прогін `provision-dev-vm.yml` проти живого PVE —
+`roles/provision` (Proxmox API: download-url імпорт cloud-образу, create/clone VM) написана за
+документацією модулів, ще НЕ перевірена проти живого pve-manager 9.2.2 — перший прогін майже
+напевно щось поправить (особливо крок `download-url` + `import-from` синтаксис диска).
+
 ## Брокер NATS+JetStream (09-messaging.md) — Фаза 0-2 закриті (2026-09-30)
 
 **Фаза 0**: нові крейти `contracts/` (Envelope+subjects+NotifySend/NotifyResult/discrepancy-події,

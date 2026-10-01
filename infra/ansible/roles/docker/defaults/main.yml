@@ -1,0 +1,7 @@
+---
+# 11 §2: "docker (прод: адміністратори не в групі docker; керування — тільки через Ansible)".
+# Dev-VM: dev-користувач у групі docker — зручність для одного розробника, group docker =
+# фактично root на хості (попередження в infra/README.md).
+docker_add_primary_user_to_group: true
+docker_log_max_size: "10m"
+docker_log_max_file: "3"

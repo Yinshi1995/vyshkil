@@ -1,0 +1,13 @@
+---
+- name: Конфігурація dev-VM
+  hosts: dev
+  become: true
+  roles:
+    - base
+    - docker
+    - rust_toolchain
+    - node
+    - devtools
+    - claude_code
+    - project
+    - firewall

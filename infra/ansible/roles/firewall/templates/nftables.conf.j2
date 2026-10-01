@@ -1,0 +1,31 @@
+#!/usr/sbin/nft -f
+# Згенеровано Ansible (infra/ansible/roles/firewall) — не редагувати вручну.
+# Веб-застосунок (3000) і NATS-монітор (8222) НЕ в цьому списку навмисно (10 §4.8) — доступ лише
+# через SSH-тунель. Docker керує власними ланцюжками (DOCKER-USER тощо) окремо від цього файлу.
+
+flush ruleset
+
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        iif "lo" accept
+        ct state established,related accept
+        ct state invalid drop
+
+        icmp type { echo-request, destination-unreachable, time-exceeded } accept
+        icmpv6 type { echo-request, destination-unreachable, time-exceeded, nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } accept
+
+{% for port in firewall_allowed_tcp_ports %}
+        tcp dport {{ port }} accept
+{% endfor %}
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy accept;
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}
