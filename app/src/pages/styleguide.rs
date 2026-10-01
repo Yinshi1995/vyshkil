@@ -11,6 +11,7 @@ use crate::components::{
     Dialog, Modal,
 };
 use crate::hooks::use_actor::use_actor;
+use crate::layout::{ContentWidth, PageContent, PageHeader};
 use crate::types::actor::Role;
 use style_macros::cx;
 
@@ -95,8 +96,9 @@ pub fn StyleguidePage() -> impl IntoView {
     let cb_many = RwSignal::new(String::new());
 
     view! {
+        <PageHeader title="Стильова система — довідник".to_string()/>
+        <PageContent width=ContentWidth::Detail>
         <Show when=is_admin fallback=|| view! { <p>"Сторінка лише для адміністратора."</p> }>
-            <h1>"Стильова система — довідник"</h1>
             <p>"Повний опис — docs/spec/08-style-system.md. Шпаргалка для агента — style/ATOMS.md."</p>
 
             <div class="eyebrow">"Тема"</div>
@@ -383,5 +385,6 @@ pub fn StyleguidePage() -> impl IntoView {
                     .collect_view()}
             </div>
         </Show>
+        </PageContent>
     }
 }

@@ -5,25 +5,26 @@ use style_macros::cx;
 
 use crate::components::{download_bytes, DatePicker};
 use crate::hooks::use_actor::use_actor;
+use crate::layout::{ContentWidth, PageContent, PageHeader};
 use crate::widgets::group_grid::OrgAutocomplete;
 use crate::widgets::ActorNotice;
 use server::{generate_d1, generate_d2, generate_d3, generate_d4};
 
-/// Генерація документів (Етап 7, 05) — D1 (щоденна зведена, один день) і D2 ("Контролька", один
-/// тиждень). D3/D4 — окремі кроки після.
 #[component]
 pub fn DocumentsPage() -> impl IntoView {
     let actor = use_actor();
 
     view! {
-        <h1>"Документи"</h1>
-        {move || {
-            if actor.get().is_none() {
-                view! { <ActorNotice/> }.into_any()
-            } else {
-                view! { <DocumentsBody/> }.into_any()
-            }
-        }}
+        <PageHeader title="Документи".to_string()/>
+        <PageContent width=ContentWidth::Detail>
+            {move || {
+                if actor.get().is_none() {
+                    view! { <ActorNotice/> }.into_any()
+                } else {
+                    view! { <DocumentsBody/> }.into_any()
+                }
+            }}
+        </PageContent>
     }
 }
 
@@ -113,7 +114,7 @@ fn D1Block() -> impl IntoView {
                     placeholder="дд.мм.рррр".to_string()
                 />
                 <button
-                    class="btn btn--primary"
+                    class="btn btn--outline"
                     disabled=move || generating.get()
                     on:click=do_generate
                 >
@@ -177,7 +178,7 @@ fn D2Block() -> impl IntoView {
                     placeholder="дд.мм.рррр".to_string()
                 />
                 <button
-                    class="btn btn--primary"
+                    class="btn btn--outline"
                     disabled=move || generating.get()
                     on:click=do_generate
                 >
@@ -241,7 +242,7 @@ fn D3Block() -> impl IntoView {
                     placeholder="дд.мм.рррр".to_string()
                 />
                 <button
-                    class="btn btn--primary"
+                    class="btn btn--outline"
                     disabled=move || generating.get()
                     on:click=do_generate
                 >
@@ -305,7 +306,7 @@ fn D4Block() -> impl IntoView {
                     placeholder="дд.мм.рррр".to_string()
                 />
                 <button
-                    class="btn btn--primary"
+                    class="btn btn--outline"
                     disabled=move || generating.get()
                     on:click=do_generate
                 >

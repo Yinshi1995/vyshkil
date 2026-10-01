@@ -5,10 +5,11 @@
 лише поточний стан на момент останнього оновлення.
 
 **Останнє оновлення**: 2026-10-01
-**Поточна ціль** (з `docs/GOALS.md`): Етап 7 — Документи D1-D4 (05) — **ЗАКРИТО**
-**Стан**: D1 ✅, D2 ✅, D3 ✅ (docx "Говорілка"), D4 ✅ (pptx "Підготовка").
-cargo test --workspace ✅, clippy ✅, e2e 24/24 ✅. GOALS.md — `[x]`.
-**10 локальних комітів** (e730653..df5caa0) чекають push — заблоковано settings.json,
-користувач має виконати `git push -u origin main` вручну.
-Відкрито: golden-тести та стилізація D4 за шаблоном потребують `source_files/` +
-LibreOffice (docs/QUESTIONS.md).
+**Поточна ціль** (з `docs/GOALS.md`): Етап 7.5 — Лейаут сторінок — **ЗАКРИТО**
+**Стан**: Усі 11 сторінок мігровано на `PageHeader`/`PageContent`. `DocumentsPage` і
+`StyleguidePage` — останні дві мігровані; кнопки D1-D4 на `/documents` переведені з
+`btn--primary` на `btn--outline` (ієрархія кнопок §5 — рівноважні дії, не одна головна).
+Spec (`docs/spec/components/layout.md` §6) оновлено таблицею з 11 сторінок.
+cargo test --workspace ✅, clippy ✅.
+**Локальні коміти** чекають push — заблоковано settings.json, користувач має виконати
+`git push -u origin main` вручну.
