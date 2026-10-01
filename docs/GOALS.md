@@ -12,9 +12,11 @@ Windows), автономна сесія лише читає й відмічає 
 - [x] **Етап 8 зріз 4 — Внутрішні сповіщення** _(2026-10-01)_: таблиця `notification` (міграція),
   запис сповіщення при відкритті розбіжності, дзвіночок у шапці з лічильником непрочитаних,
   випадайка сповіщень, позначення прочитаним. cargo test --workspace ✅, clippy ✅.
-- [ ] **Етап 9 — Документи D5-D6 + укомплектованість** (05 §D5-D6, 06): D5 — генерація
+- [x] **Етап 9 — Документи D5-D6 + укомплектованість** _(2026-10-01)_: D5 — генерація
   xlsx-додатків корпусу (Фах/БпС/КВід/ІВС/Терміни), D6 — звіт передані частини.
-  Критерій: `cargo test --workspace` ✅, clippy ✅.
+  Міграція widen CHECK (d3-d6), repo-шар (group_detail_for_corps, staffing_for_corps,
+  transferred_orgs_report), генератори d5.rs/d6.rs, server fn (6 шт.), UI блоки на /documents.
+  cargo test --workspace ✅, clippy ✅.
 - [x] **Етап 8 зріз 2 — Вертикальна + часова звірка** _(2026-10-01)_: domain-логіка
   `detect_vertical`/`detect_temporal` з 8 unit-тестами, repo-шар `refresh_temporal`/
   `refresh_vertical` з outbox-подіями, UI колонка "Тип" на `/discrepancies`, виклик із

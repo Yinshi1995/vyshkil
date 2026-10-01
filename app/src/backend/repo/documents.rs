@@ -376,6 +376,329 @@ pub async fn org_label(db: &DatabaseConnection, org_id: i32) -> Result<Option<St
     }))
 }
 
+// ---------------------------------------------------------------------------
+// D5 — detail-level queries for corps attachments (Étap 9, 05 §D5)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct GroupDetailRow {
+    pub org_label: String,
+    pub site_label: String,
+    pub vos_code: Option<String>,
+    pub position_label: Option<String>,
+    pub course_label: Option<String>,
+    pub equipment_text: Option<String>,
+    pub planned_start: String,
+    pub planned_end: String,
+    pub in_training: i64,
+    pub completed: i64,
+    pub planned_count: i64,
+}
+
+pub async fn group_detail_for_corps(
+    db: &DatabaseConnection,
+    corps_org_id: i32,
+    as_of: &str,
+    training_kind_code: &str,
+) -> Result<Vec<GroupDetailRow>, DbErr> {
+    let (main_orgs, out_of_zone_orgs) = grouped_org_ids(db, corps_org_id, as_of).await?;
+    let all_org_ids: Vec<i32> =
+        main_orgs.iter().chain(out_of_zone_orgs.iter()).map(|(id, _)| *id).collect();
+    if all_org_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+        org_label: String,
+        site_label: String,
+        vos_code: Option<String>,
+        position_label: Option<String>,
+        course_label: Option<String>,
+        equipment_text: Option<String>,
+        planned_start: String,
+        planned_end: String,
+    }
+
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        SELECT
+            tg.id,
+            COALESCE(o.short_name || COALESCE(' (' || o.number || ')', ''), '') AS org_label,
+            COALESCE(ts.name, '') AS site_label,
+            v.code AS vos_code,
+            p.name AS position_label,
+            c.name AS course_label,
+            tg.equipment_text,
+            to_char(tg.planned_start, 'DD.MM.YYYY') AS planned_start,
+            to_char(tg.planned_end, 'DD.MM.YYYY') AS planned_end
+        FROM training_group tg
+        JOIN training_kind tk ON tk.id = tg.training_kind_id
+        JOIN org o ON o.id = tg.sender_org_id
+        JOIN training_site ts ON ts.id = tg.site_id
+        LEFT JOIN vos v ON v.id = tg.vos_id
+        LEFT JOIN "position" p ON p.id = tg.position_id
+        LEFT JOIN course c ON c.id = tg.course_id
+        WHERE tg.sender_org_id = ANY($1) AND tk.code = $2
+        ORDER BY o.short_name, tg.planned_start
+        "#,
+        [all_org_ids.into(), training_kind_code.into()],
+    );
+
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+
+    let mut result = Vec::with_capacity(rows.len());
+    for r in rows {
+        let events = group_events_plain(db, r.id).await?;
+        let in_tr = in_training(&events, as_of, None);
+        let compl = events_on(&events, EventType::Completed, as_of, None);
+        result.push(GroupDetailRow {
+            org_label: r.org_label,
+            site_label: r.site_label,
+            vos_code: r.vos_code,
+            position_label: r.position_label,
+            course_label: r.course_label,
+            equipment_text: r.equipment_text,
+            planned_start: r.planned_start,
+            planned_end: r.planned_end,
+            in_training: in_tr,
+            completed: compl,
+            planned_count: in_tr + compl,
+        });
+    }
+    Ok(result)
+}
+
+pub async fn bps_vos_ids(db: &DatabaseConnection) -> Result<Vec<i32>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        vos_id: i32,
+    }
+    let rows = Row::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT DISTINCT ev.vos_id FROM equipment_vos ev",
+        [],
+    ))
+    .all(db)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.vos_id).collect())
+}
+
+pub async fn group_detail_bps(
+    db: &DatabaseConnection,
+    corps_org_id: i32,
+    as_of: &str,
+) -> Result<Vec<GroupDetailRow>, DbErr> {
+    let all = group_detail_for_corps(db, corps_org_id, as_of, "special").await?;
+    let bps_vos = bps_vos_ids(db).await?;
+    if bps_vos.is_empty() {
+        return Ok(all);
+    }
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        id: i32,
+        vos_id: Option<i32>,
+    }
+    let (main_orgs, out_of_zone_orgs) = grouped_org_ids(db, corps_org_id, as_of).await?;
+    let all_org_ids: Vec<i32> =
+        main_orgs.iter().chain(out_of_zone_orgs.iter()).map(|(id, _)| *id).collect();
+    if all_org_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        SELECT tg.id, tg.vos_id
+        FROM training_group tg
+        JOIN training_kind tk ON tk.id = tg.training_kind_id
+        WHERE tg.sender_org_id = ANY($1) AND tk.code = 'special'
+        "#,
+        [all_org_ids.into()],
+    );
+    let id_rows = Row::find_by_statement(stmt).all(db).await?;
+    let bps_group_ids: std::collections::HashSet<i32> = id_rows
+        .into_iter()
+        .filter(|r| r.vos_id.is_some_and(|v| bps_vos.contains(&v)))
+        .map(|r| r.id)
+        .collect();
+
+    Ok(all
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| bps_group_ids.contains(&(*i as i32)))
+        .map(|(_, r)| r)
+        .collect())
+}
+
+pub async fn terminy_detail(
+    db: &DatabaseConnection,
+    corps_org_id: i32,
+    as_of: &str,
+) -> Result<(Vec<GroupDetailRow>, Vec<GroupDetailRow>, Vec<GroupDetailRow>), DbErr> {
+    let bzvp = group_detail_for_corps(db, corps_org_id, as_of, "bzvp").await?;
+    let special = group_detail_for_corps(db, corps_org_id, as_of, "special").await?;
+    let adaptation = group_detail_for_corps(db, corps_org_id, as_of, "adaptation").await?;
+    Ok((bzvp, special, adaptation))
+}
+
+#[derive(Debug, Clone)]
+pub struct StaffingDetail {
+    pub org_label: String,
+    pub by_tos: i64,
+    pub by_list: i64,
+    pub present: i64,
+    pub trained: i64,
+    pub in_training: i64,
+    pub planned: i64,
+    pub need: i64,
+}
+
+pub async fn staffing_for_corps(
+    db: &DatabaseConnection,
+    corps_org_id: i32,
+    as_of: &str,
+    category: &str,
+) -> Result<Vec<StaffingDetail>, DbErr> {
+    let (main_orgs, out_of_zone_orgs) = grouped_org_ids(db, corps_org_id, as_of).await?;
+    let all: Vec<(i32, String)> = main_orgs.into_iter().chain(out_of_zone_orgs).collect();
+    if all.is_empty() {
+        return Ok(Vec::new());
+    }
+    let org_ids: Vec<i32> = all.iter().map(|(id, _)| *id).collect();
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        org_id: i32,
+        metric: String,
+        value: i64,
+    }
+
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        SELECT sm.metric, sm.value::bigint, ss.org_id
+        FROM staffing_metric sm
+        JOIN staffing_snapshot ss ON ss.id = sm.snapshot_id
+        WHERE ss.org_id = ANY($1) AND ss.category = $2
+          AND ss.as_of = (
+              SELECT MAX(s2.as_of) FROM staffing_snapshot s2
+              WHERE s2.org_id = ss.org_id AND s2.category = $2 AND s2.as_of <= $3::date
+          )
+        "#,
+        [org_ids.into(), category.into(), as_of.into()],
+    );
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+
+    let mut map: std::collections::HashMap<i32, StaffingDetail> = std::collections::HashMap::new();
+    for (org_id, org_label) in &all {
+        map.insert(
+            *org_id,
+            StaffingDetail {
+                org_label: org_label.clone(),
+                by_tos: 0,
+                by_list: 0,
+                present: 0,
+                trained: 0,
+                in_training: 0,
+                planned: 0,
+                need: 0,
+            },
+        );
+    }
+    for r in rows {
+        if let Some(detail) = map.get_mut(&r.org_id) {
+            match r.metric.as_str() {
+                "by_tos" => detail.by_tos = r.value,
+                "by_list" => detail.by_list = r.value,
+                "present" => detail.present = r.value,
+                "trained_sergeant" => detail.trained = r.value,
+                "in_training" => detail.in_training = r.value,
+                "planned_next_month" => detail.planned = r.value,
+                "need_training" => detail.need = r.value,
+                "trained_kibr" => detail.need = r.value, // reuse for IVS
+                _ => {}
+            }
+        }
+    }
+
+    Ok(all.iter().filter_map(|(id, _)| map.remove(id)).collect())
+}
+
+// ---------------------------------------------------------------------------
+// D6 — transferred orgs (Étap 9, 05 §D6)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct TransferredOrgRow {
+    pub org_label: String,
+    pub counterpart_label: Option<String>,
+    pub bzvp_count: i64,
+    pub special_count: i64,
+    pub adaptation_count: i64,
+}
+
+pub async fn transferred_orgs_report(
+    db: &DatabaseConnection,
+    as_of: &str,
+) -> Result<Vec<TransferredOrgRow>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        org_id: i32,
+        org_label: String,
+        counterpart_label: Option<String>,
+    }
+
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        r#"
+        SELECT
+            o.id AS org_id,
+            COALESCE(o.short_name || COALESCE(' (' || o.number || ')', ''), '') AS org_label,
+            co.short_name AS counterpart_label
+        FROM org_status os
+        JOIN org o ON o.id = os.org_id
+        LEFT JOIN org co ON co.id = os.counterpart_org_id
+        WHERE os.status = 'transferred'
+          AND daterange(os.valid_from, os.valid_to, '[)') @> $1::date
+          AND o.deleted_at IS NULL
+        ORDER BY o.short_name
+        "#,
+        [as_of.into()],
+    );
+
+    let rows = Row::find_by_statement(stmt).all(db).await?;
+    let mut result = Vec::with_capacity(rows.len());
+
+    for r in rows {
+        let groups = rollup_groups(db, &[r.org_id]).await?;
+        let mut bzvp: i64 = 0;
+        let mut special: i64 = 0;
+        let mut adaptation: i64 = 0;
+        for g in &groups {
+            let events = group_events_plain(db, g.id).await?;
+            let count = in_training(&events, as_of, None);
+            match g.training_kind_code.as_str() {
+                "bzvp" => bzvp += count,
+                "special" => special += count,
+                "adaptation" => adaptation += count,
+                _ => {}
+            }
+        }
+        result.push(TransferredOrgRow {
+            org_label: r.org_label,
+            counterpart_label: r.counterpart_label,
+            bzvp_count: bzvp,
+            special_count: special,
+            adaptation_count: adaptation,
+        });
+    }
+    Ok(result)
+}
+
 /// Записує рядок в `generated_document` (05 §вступ: "кожен згенерований документ зберігається") —
 /// `file_path` уже записаний на диск викликачем (`pages/documents/server.rs`) ДО цього виклику.
 pub async fn insert_generated_document(

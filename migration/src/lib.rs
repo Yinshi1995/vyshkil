@@ -43,6 +43,7 @@ mod m20260930_000040_create_discrepancy_table;
 mod m20260930_000041_attach_audit_trigger_discrepancy;
 mod m20260930_000042_create_outbox_table;
 mod m20261001_000043_create_notification_table;
+mod m20261001_000044_widen_generated_document_kind_d3_d6;
 
 pub struct Migrator;
 
@@ -110,6 +111,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20260930_000042_create_outbox_table::Migration),
             // Етап 8, зріз 4 (04 §5): внутрішні сповіщення (дзвіночок у шапці).
             Box::new(m20261001_000043_create_notification_table::Migration),
+            // Етап 9 (D5-D6): розширити CHECK на generated_document.kind (d3-d6, також
+            // виправляє баг — d3/d4 insert раніше мовчки падав на CHECK).
+            Box::new(m20261001_000044_widen_generated_document_kind_d3_d6::Migration),
         ]
     }
 }

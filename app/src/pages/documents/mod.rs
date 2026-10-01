@@ -8,7 +8,10 @@ use crate::hooks::use_actor::use_actor;
 use crate::layout::{ContentWidth, PageContent, PageHeader};
 use crate::widgets::group_grid::OrgAutocomplete;
 use crate::widgets::ActorNotice;
-use server::{generate_d1, generate_d2, generate_d3, generate_d4};
+use server::{
+    generate_d1, generate_d2, generate_d3, generate_d4, generate_d5_bps, generate_d5_fah,
+    generate_d5_ivs, generate_d5_kvid, generate_d5_terminy, generate_d6,
+};
 
 #[component]
 pub fn DocumentsPage() -> impl IntoView {
@@ -36,6 +39,12 @@ fn DocumentsBody() -> impl IntoView {
             <D2Block/>
             <D3Block/>
             <D4Block/>
+            <D5FahBlock/>
+            <D5BpsBlock/>
+            <D5KvidBlock/>
+            <D5IvsBlock/>
+            <D5TerminyBlock/>
+            <D6Block/>
         </div>
     }
 }
@@ -311,6 +320,235 @@ fn D4Block() -> impl IntoView {
                     on:click=do_generate
                 >
                     "Згенерувати D4"
+                </button>
+                <span class=cx!("fg-muted")>{move || status.get()}</span>
+            </div>
+        </div>
+    }
+}
+
+// ---------------------------------------------------------------------------
+// D5 — додатки корпусу (Étap 9, 05 §D5)
+// ---------------------------------------------------------------------------
+
+#[component]
+fn D5FahBlock() -> impl IntoView {
+    org_date_block(
+        "D5 Фах — фахова підготовка корпусу (05 §D5): аркуші \"Пройшли\" / \"Проходять\" \
+         з деталями по кожній групі. Оберіть корпус і дату.",
+        "Згенерувати D5 Фах",
+        "D5_Фах",
+        move |actor, oid, date| {
+            Box::pin(async move { generate_d5_fah(Some(actor), oid, date).await })
+        },
+    )
+}
+
+#[component]
+fn D5BpsBlock() -> impl IntoView {
+    org_date_block(
+        "D5 БпС — безпілотні системи корпусу (05 §D5): \"Завершилась\" / \"Навчаються\". \
+         Оберіть корпус і дату.",
+        "Згенерувати D5 БпС",
+        "D5_БпС",
+        move |actor, oid, date| {
+            Box::pin(async move { generate_d5_bps(Some(actor), oid, date).await })
+        },
+    )
+}
+
+#[component]
+fn D5KvidBlock() -> impl IntoView {
+    org_date_block(
+        "D5 КВід — укомплектованість командирами відділень (05 §D5). Оберіть корпус і дату.",
+        "Згенерувати D5 КВід",
+        "D5_КВід",
+        move |actor, oid, date| {
+            Box::pin(async move { generate_d5_kvid(Some(actor), oid, date).await })
+        },
+    )
+}
+
+#[component]
+fn D5IvsBlock() -> impl IntoView {
+    org_date_block(
+        "D5 ІВС — укомплектованість інструкторів (05 §D5). Оберіть корпус і дату.",
+        "Згенерувати D5 ІВС",
+        "D5_ІВС",
+        move |actor, oid, date| {
+            Box::pin(async move { generate_d5_ivs(Some(actor), oid, date).await })
+        },
+    )
+}
+
+#[component]
+fn D5TerminyBlock() -> impl IntoView {
+    org_date_block(
+        "D5 Терміни — терміни проведення підготовки (05 §D5): аркуші БЗВП / Фахова / Адаптація \
+         з кількістю, термінами, місцем. Оберіть корпус і дату.",
+        "Згенерувати D5 Терміни",
+        "D5_Терміни",
+        move |actor, oid, date| {
+            Box::pin(async move { generate_d5_terminy(Some(actor), oid, date).await })
+        },
+    )
+}
+
+// ---------------------------------------------------------------------------
+// D6 — передані частини (Étap 9, 05 §D6)
+// ---------------------------------------------------------------------------
+
+#[component]
+fn D6Block() -> impl IntoView {
+    let actor = use_actor();
+
+    let as_of = RwSignal::new(String::new());
+    let status = RwSignal::new(String::new());
+    let generating = RwSignal::new(false);
+
+    let do_generate = move |_| {
+        let Some(actor) = actor.get_untracked() else { return };
+        let date = as_of.get_untracked();
+        if date.trim().is_empty() {
+            status.set("оберіть дату".to_string());
+            return;
+        }
+        generating.set(true);
+        status.set("генерую…".to_string());
+        leptos::task::spawn_local(async move {
+            match generate_d6(Some(actor), date.clone()).await {
+                Ok(bytes) => {
+                    let filename = format!("D6_Передані_{date}.xlsx");
+                    download_bytes(
+                        &bytes,
+                        &filename,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    );
+                    status.set("готово".to_string());
+                }
+                Err(e) => status.set(format!("не вдалось згенерувати: {e}")),
+            }
+            generating.set(false);
+        });
+    };
+
+    view! {
+        <div class=cx!("flex col gap3")>
+            <p class="card__desc">
+                "D6 — передані частини (05 §D6): звіт по частинах зі статусом \"transferred\" — "
+                "кому передані, в яких заходах підготовки беруть участь. Оберіть дату."
+            </p>
+            <div class=cx!("flex items-c gap2 wrap")>
+                <DatePicker
+                    value=Signal::derive(move || {
+                        chrono::NaiveDate::parse_from_str(&as_of.get(), "%Y-%m-%d").ok()
+                    })
+                    on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                        as_of.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                    })
+                    placeholder="дд.мм.рррр".to_string()
+                />
+                <button
+                    class="btn btn--outline"
+                    disabled=move || generating.get()
+                    on:click=do_generate
+                >
+                    "Згенерувати D6"
+                </button>
+                <span class=cx!("fg-muted")>{move || status.get()}</span>
+            </div>
+        </div>
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Спільний блок "орган + дата → xlsx" для D5
+// ---------------------------------------------------------------------------
+
+use std::future::Future;
+use std::pin::Pin;
+
+fn org_date_block<F>(
+    desc: &'static str,
+    btn_label: &'static str,
+    file_prefix: &'static str,
+    generate_fn: F,
+) -> impl IntoView
+where
+    F: Fn(crate::types::actor::Actor, i32, String) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, ServerFnError>>>> + 'static + Copy,
+{
+    let actor = use_actor();
+    let org_id = RwSignal::new(None::<i32>);
+    let org_label = RwSignal::new(String::new());
+    let as_of = RwSignal::new(String::new());
+    let status = RwSignal::new(String::new());
+    let generating = RwSignal::new(false);
+
+    let do_generate = move |_| {
+        let Some(actor) = actor.get_untracked() else { return };
+        let Some(oid) = org_id.get_untracked() else {
+            status.set("оберіть частину".to_string());
+            return;
+        };
+        let date = as_of.get_untracked();
+        if date.trim().is_empty() {
+            status.set("оберіть дату".to_string());
+            return;
+        }
+        generating.set(true);
+        status.set("генерую…".to_string());
+        let label = org_label.get_untracked();
+        leptos::task::spawn_local(async move {
+            match generate_fn(actor, oid, date.clone()).await {
+                Ok(bytes) => {
+                    let filename = format!("{file_prefix}_{label}_{date}.xlsx");
+                    download_bytes(
+                        &bytes,
+                        &filename,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    );
+                    status.set("готово".to_string());
+                }
+                Err(e) => status.set(format!("не вдалось згенерувати: {e}")),
+            }
+            generating.set(false);
+        });
+    };
+
+    view! {
+        <div class=cx!("flex col gap3")>
+            <p class="card__desc">{desc}</p>
+            <div class=cx!("flex items-c gap2 wrap")>
+                <div class=cx!("w-full bg-raised bd r1")>
+                    <OrgAutocomplete
+                        id=format!("documents-{file_prefix}-org")
+                        label=Signal::derive(move || org_label.get())
+                        on_select=Callback::new(move |(id, label): (i32, String)| {
+                            org_id.set(Some(id));
+                            org_label.set(label);
+                        })
+                        on_label_input=Callback::new(move |v: String| {
+                            org_label.set(v);
+                            org_id.set(None);
+                        })
+                        on_keydown=Callback::new(|_| {})
+                    />
+                </div>
+                <DatePicker
+                    value=Signal::derive(move || {
+                        chrono::NaiveDate::parse_from_str(&as_of.get(), "%Y-%m-%d").ok()
+                    })
+                    on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                        as_of.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                    })
+                    placeholder="дд.мм.рррр".to_string()
+                />
+                <button
+                    class="btn btn--outline"
+                    disabled=move || generating.get()
+                    on:click=do_generate
+                >
+                    {btn_label}
                 </button>
                 <span class=cx!("fg-muted")>{move || status.get()}</span>
             </div>
