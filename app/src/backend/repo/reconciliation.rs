@@ -1,4 +1,5 @@
-//! Звірка подань (04 §3-4): горизонтальна (зріз 1), часова + вертикальна (зріз 2).
+//! Звірка подань (04 §3-4): горизонтальна (зріз 1), часова + вертикальна (зріз 2),
+//! workflow розбіжностей (зріз 3).
 //! Чиста логіка ("чи є незгода") — `domain::reconciliation`; тут лише SQL + запис `discrepancy`.
 
 use crate::backend::repo::outbox;
@@ -554,6 +555,41 @@ async fn auto_close_temporal(db: &impl ConnectionTrait, group_id: i32) -> Result
     }
 
     Ok(())
+}
+
+/// Зміна статусу розбіжності (04 §4, зріз 3 — workflow). Повертає org_id розбіжності
+/// (для перевірки прав викликачем) або None, якщо id не знайдено.
+pub async fn update_discrepancy_status(
+    db: &impl ConnectionTrait,
+    id: i32,
+    new_status: &str,
+    resolution_note: Option<&str>,
+) -> Result<Option<i32>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct OrgRow {
+        org_id: i32,
+    }
+    let Some(row) = OrgRow::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT org_id FROM discrepancy WHERE id = $1",
+        [id.into()],
+    ))
+    .one(db)
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "UPDATE discrepancy SET status = $1, resolution_note = COALESCE($2, resolution_note), \
+            updated_at = now() \
+         WHERE id = $3",
+        [new_status.into(), resolution_note.into(), id.into()],
+    ))
+    .await?;
+
+    Ok(Some(row.org_id))
 }
 
 /// Усі розбіжності (без фільтра прав — викликач звужує через `policy::visible_org_ids`, той

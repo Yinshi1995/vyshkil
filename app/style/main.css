@@ -979,6 +979,21 @@ tr:hover td {
   color: var(--text-secondary);
 }
 
+.status-warning {
+  color: var(--fg-accent);
+}
+
+.discrepancy-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.btn--sm {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
 /* Сітка введення (02) — training_form. Функціональний мінімум, не остаточний вигляд. */
 .training-form__as-of {
   display: flex;
