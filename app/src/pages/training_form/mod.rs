@@ -22,7 +22,6 @@ use crate::widgets::group_grid::{
 use crate::widgets::ActorNotice;
 use server::{commit_grid, get_draft, parse_bps_file, parse_fah_file, parse_terminy_file, save_draft};
 
-const CHEAT_SHEET_SEEN_KEY: &str = "training_form_cheatsheet_seen";
 
 /// Тип файлу, яким можна ДОПОВНИТИ сітку — Фах/БпС/Терміни, чисті виробники `GroupFormRow`
 /// (03, Етап 5, перенесено з `pages::import` при об'єднанні з ручним вводом —
@@ -123,20 +122,6 @@ fn FormBody() -> impl IntoView {
     };
 
     let cheat_sheet_open = RwSignal::new(false);
-    // Шпаргалка показується автоматично при першому відкритті форми (02 §2) -- "перше
-    // відкриття" per-браузер через `localStorage` (той самий підхід, що ширини колонок у
-    // `widgets/group_grid/columns.rs`), не серверний стан: суто UI-зручність, не домен.
-    Effect::new(move |_| {
-        if !cfg!(target_arch = "wasm32") {
-            return;
-        }
-        let Some(win) = web_sys::window() else { return };
-        let Ok(Some(storage)) = win.local_storage() else { return };
-        if storage.get_item(CHEAT_SHEET_SEEN_KEY).ok().flatten().is_none() {
-            cheat_sheet_open.set(true);
-            let _ = storage.set_item(CHEAT_SHEET_SEEN_KEY, "1");
-        }
-    });
     let command_palette_open = RwSignal::new(false);
     let save_status = RwSignal::new(String::new());
     let commit_error = RwSignal::new(None::<(usize, String, String)>);
@@ -408,7 +393,7 @@ fn FormBody() -> impl IntoView {
                     />
                     <ColumnsToggle columns=columns/>
                     <button class="btn btn--ghost" on:click=move |_| cheat_sheet_open.update(|v| *v = !*v)>
-                        "? Шпаргалка"
+                        "Гарячі клавіші"
                     </button>
                     <button class="btn btn--primary" on:click=move |_| do_commit()>
                         "Зберегти все (Ctrl+Enter)"
@@ -486,7 +471,7 @@ fn CheatSheet(#[prop(into)] on_close: Callback<()>) -> impl IntoView {
         ("Ctrl+Z / Ctrl+Shift+Z", "undo / redo"),
         ("Ctrl+Delete", "видалити рядок"),
         ("F2", "редагувати клітинку, не стираючи вміст"),
-        ("? / F1", "ця шпаргалка"),
+        ("? / F1", "гарячі клавіші"),
         ("Ctrl+K", "командна палітра"),
         ("Ctrl+V", "вставити блок з Excel"),
     ];

@@ -507,7 +507,7 @@ fn ImportBody() -> impl IntoView {
                 <div class="cheat-sheet__overlay">
                     <div class="cheat-sheet__panel">
                         <h2>"Гарячі клавіші"</h2>
-                        <p>"Ті самі, що у формі введення — Tab/Enter/стрілки в сітці, Ctrl+Enter фіксує, "?"/F1 ця шпаргалка."</p>
+                        <p>"Ті самі, що у формі введення — Tab/Enter/стрілки в сітці, Ctrl+Enter фіксує, "?"/F1 гарячі клавіші."</p>
                         <button class="btn btn--outline" on:click=move |_| cheat_sheet_open.set(false)>
                             "Закрити"
                         </button>

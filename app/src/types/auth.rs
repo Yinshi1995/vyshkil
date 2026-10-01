@@ -39,3 +39,9 @@ pub struct LoginResponse {
     pub display_name: Option<String>,
     pub roles: Vec<UserRoleRow>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AuthMode {
+    Dev,
+    Auth,
+}

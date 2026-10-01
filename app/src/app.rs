@@ -1,14 +1,15 @@
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
 use leptos_router::components::Router;
 use leptos_router::hooks::use_location;
 
 use crate::layout::Header;
 use crate::routes::AppRoutes;
-use crate::types::actor::Actor;
+use crate::services::auth::get_current_user;
+use crate::types::actor::{Actor, Role};
+use crate::types::auth::AuthMode;
 
-// shell() генерує повний HTML-документ навколо <App/> — його викликає і SSR (перший рендер),
-// і fallback-обробник помилок на сервері, тому він винесений окремо від самого <App/>.
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
         <!DOCTYPE html>
@@ -31,10 +32,27 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 pub fn App() -> impl IntoView {
     provide_meta_context();
 
-    // Актор (організація+роль) — dev-перемикач у шапці замість автентифікації (01 §6).
-    // None, поки нема жодної організації в довіднику (сід ще не завантажено — Етап 1, далі).
     let actor: RwSignal<Option<Actor>> = RwSignal::new(None);
     provide_context(actor);
+
+    let auth_mode: RwSignal<AuthMode> = RwSignal::new(AuthMode::Dev);
+    provide_context(auth_mode);
+
+    let auth_display_name: RwSignal<Option<String>> = RwSignal::new(None);
+    provide_context(auth_display_name);
+
+    Effect::new(move |_| {
+        spawn_local(async move {
+            if let Ok(Some(session)) = get_current_user().await {
+                auth_display_name.set(session.display_name.clone());
+                if let (Some(org_id), Some(role_str)) = (session.active_org_id, session.active_role.as_deref()) {
+                    let role = Role::parse(role_str).unwrap_or(Role::Admin);
+                    actor.set(Some(Actor { org_id, role }));
+                }
+                auth_mode.set(AuthMode::Auth);
+            }
+        });
+    });
 
     view! {
         <Stylesheet id="leptos" href="/pkg/taktoblik.css"/>

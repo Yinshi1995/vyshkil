@@ -197,6 +197,10 @@ main {
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
 }
 
 .toolbar__left,
@@ -423,6 +427,145 @@ a:hover {
   text-transform: none;
   letter-spacing: var(--track-0);
   font-family: var(--font-body);
+}
+
+.auth-mode-toggle {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--radius-1);
+  letter-spacing: 0.1em;
+  opacity: 0.5;
+  transition: opacity var(--duration-fast) ease;
+}
+.auth-mode-toggle:hover {
+  opacity: 1;
+}
+
+.auth-user {
+  position: relative;
+}
+
+.auth-user__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  color: var(--fg-main);
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: var(--text-sm-size);
+  font-weight: var(--weight-5);
+  text-transform: uppercase;
+  letter-spacing: var(--track-3);
+  transition: border-color var(--duration-fast) ease;
+}
+.auth-user__trigger:hover {
+  border-color: var(--fg-accent);
+}
+
+.auth-user__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--fg-accent);
+  color: var(--surface-base);
+  font-size: 13px;
+  font-weight: var(--weight-7);
+}
+
+.auth-user__name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-user__chevron {
+  opacity: 0.5;
+}
+
+.auth-user__menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-dropdown);
+  min-width: 220px;
+  padding: var(--space-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
+}
+
+.auth-user__roles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.auth-user__role {
+  display: block;
+  width: 100%;
+  padding: var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius-1);
+  color: var(--fg-main);
+  font-size: var(--text-sm-size);
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease;
+}
+.auth-user__role:hover {
+  background: var(--surface-panel);
+}
+.auth-user__role--active {
+  background: var(--surface-panel);
+  color: var(--fg-accent);
+  font-weight: var(--weight-6);
+}
+
+.auth-user__no-roles {
+  padding: var(--space-2);
+  font-size: var(--text-sm-size);
+  color: var(--fg-muted);
+}
+
+.auth-user__divider {
+  margin: var(--space-2) 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.auth-user__menu-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius-1);
+  color: var(--fg-main);
+  font-size: var(--text-sm-size);
+  font-family: var(--font-body);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease;
+}
+.auth-user__menu-item:hover {
+  background: var(--surface-panel);
+}
+.auth-user__logout {
+  color: var(--danger);
 }
 
 .app-header__actions {
@@ -1314,6 +1457,12 @@ tr:hover td {
 .btn--sm {
   padding: 2px 8px;
   font-size: 12px;
+}
+
+.btn--xs {
+  padding: 1px 5px;
+  font-size: 10px;
+  min-height: auto;
 }
 
 /* Сітка введення (02) — training_form. Функціональний мінімум, не остаточний вигляд. */
@@ -3670,6 +3819,7 @@ table thead th {
     --text-display-line: 1.15;
     --weight-4: 400;
     --weight-5: 500;
+    --weight-6: 600;
     --weight-7: 700;
     --shadow-0: none;
     --shadow-1: 0 2px 12px rgba(0, 0, 0, 0.5);

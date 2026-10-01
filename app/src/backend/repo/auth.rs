@@ -49,15 +49,12 @@ pub async fn find_user_by_login(db: &DatabaseConnection, login: &str) -> Result<
 pub async fn user_roles(db: &DatabaseConnection, user_id: i32) -> Result<Vec<UserRoleRow>, DbErr> {
     let rows = RoleRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
-        "SELECT ur.org_id, ur.role, COALESCE(onh.short_name, 'org#' || ur.org_id::text) AS org_label \
+        "SELECT ur.org_id, ur.role, \
+                COALESCE(o.short_name, 'org#' || ur.org_id::text) AS org_label \
          FROM user_role ur \
-         LEFT JOIN LATERAL ( \
-             SELECT short_name FROM org_name_history \
-             WHERE org_id = ur.org_id AND valid_from <= now() \
-             ORDER BY valid_from DESC LIMIT 1 \
-         ) onh ON true \
+         LEFT JOIN org o ON o.id = ur.org_id \
          WHERE ur.user_id = $1 \
-         ORDER BY ur.org_id, ur.role",
+         ORDER BY o.short_name, ur.role",
         [user_id.into()],
     ))
     .all(db)

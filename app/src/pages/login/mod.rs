@@ -2,6 +2,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::services::auth::auth_login;
+use crate::types::actor::{Actor, Role};
+use crate::types::auth::AuthMode;
 
 #[component]
 pub fn LoginPage() -> impl IntoView {
@@ -23,6 +25,18 @@ pub fn LoginPage() -> impl IntoView {
         spawn_local(async move {
             match auth_login(login_val, password_val).await {
                 Ok(resp) if resp.success => {
+                    if let Some(auth_mode) = use_context::<RwSignal<AuthMode>>() {
+                        auth_mode.set(AuthMode::Auth);
+                    }
+                    if let Some(display_name_signal) = use_context::<RwSignal<Option<String>>>() {
+                        display_name_signal.set(resp.display_name);
+                    }
+                    if let Some(actor_signal) = use_context::<RwSignal<Option<Actor>>>() {
+                        if let Some(first) = resp.roles.first() {
+                            let role = Role::parse(&first.role).unwrap_or(Role::Admin);
+                            actor_signal.set(Some(Actor { org_id: first.org_id, role }));
+                        }
+                    }
                     if cfg!(target_arch = "wasm32") {
                         let _ = window().location().set_href("/");
                     }
