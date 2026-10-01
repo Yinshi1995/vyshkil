@@ -17,6 +17,9 @@ fn metric_label(metric: &str) -> &'static str {
         "planned_start" => "Термін з",
         "planned_end" => "Термін по",
         "site_id" => "Місце",
+        "total" => "Всього (навчаються)",
+        "finishing" => "Закінчують",
+        "started" => "Почали",
         _ => "?",
     }
 }
@@ -215,6 +218,186 @@ pub async fn refresh_horizontal(db: &impl ConnectionTrait, group_id: i32) -> Res
             )
             .await?;
         }
+    }
+
+    Ok(())
+}
+
+/// Часова звірка (04 §3, decision §4): нове подання суперечить попередньому від того самого
+/// джерела без події-пояснення. Викликається для кожної зачепленої `group_id` після фіксації
+/// подання (той самий цикл, що й `refresh_horizontal`).
+pub async fn refresh_temporal(db: &impl ConnectionTrait, group_id: i32) -> Result<(), DbErr> {
+    use crate::domain::reconciliation::{detect_temporal, TemporalSnapshot};
+
+    #[derive(FromQueryResult)]
+    struct GroupCtx {
+        sender_org_id: i32,
+        planned_start: String,
+    }
+    let Some(ctx) = GroupCtx::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT sender_org_id, to_char(planned_start, 'YYYY-MM-DD') AS planned_start \
+         FROM training_group WHERE id = $1",
+        [group_id.into()],
+    ))
+    .one(db)
+    .await?
+    else {
+        return Ok(());
+    };
+
+    #[derive(FromQueryResult)]
+    struct SubmissionRow {
+        submission_id: i32,
+        as_of: String,
+        total: i64,
+    }
+    let snapshots = SubmissionRow::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT DISTINCT ON (s.reporting_org_id) \
+                rg.submission_id, \
+                to_char(s.as_of_date, 'YYYY-MM-DD') AS as_of, \
+                rg.in_training_count::bigint AS total \
+         FROM reported_group rg \
+         JOIN submission s ON s.id = rg.submission_id \
+         WHERE rg.matched_group_id = $1 AND s.status = 'committed' \
+         ORDER BY s.reporting_org_id, rg.created_at DESC, rg.id DESC",
+        [group_id.into()],
+    ))
+    .all(db)
+    .await?;
+
+    if snapshots.len() < 2 {
+        auto_close_temporal(db, group_id).await?;
+        return Ok(());
+    }
+
+    let mut sorted: Vec<_> = snapshots
+        .into_iter()
+        .map(|s| TemporalSnapshot {
+            submission_id: s.submission_id,
+            as_of: s.as_of,
+            total: s.total,
+        })
+        .collect();
+    sorted.sort_by(|a, b| a.as_of.cmp(&b.as_of));
+
+    let mut found_temporal = false;
+    for pair in sorted.windows(2) {
+        let prev = &pair[0];
+        let curr = &pair[1];
+
+        #[derive(FromQueryResult)]
+        struct EventSum {
+            total_decrease: i64,
+        }
+        let explained = EventSum::find_by_statement(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            "SELECT COALESCE(SUM(ge.count), 0)::bigint AS total_decrease \
+             FROM group_event ge \
+             WHERE ge.group_id = $1 \
+               AND ge.event_type IN ('attrition', 'completed') \
+               AND ge.occurred_on > $2::date AND ge.occurred_on <= $3::date",
+            [group_id.into(), prev.as_of.clone().into(), curr.as_of.clone().into()],
+        ))
+        .one(db)
+        .await?
+        .map(|e| e.total_decrease)
+        .unwrap_or(0);
+
+        if let Some(_disc) = detect_temporal(prev, curr, explained) {
+            found_temporal = true;
+            let values_json = serde_json::to_string(&vec![
+                (prev.submission_id, prev.total.to_string()),
+                (curr.submission_id, curr.total.to_string()),
+            ])
+            .map_err(|e| DbErr::Custom(format!("серіалізація temporal values: {e}")))?;
+
+            #[derive(FromQueryResult)]
+            struct Existing {
+                id: i32,
+            }
+            let existing = Existing::find_by_statement(Statement::from_sql_and_values(
+                db.get_database_backend(),
+                "SELECT id FROM discrepancy \
+                 WHERE group_id = $1 AND kind = 'temporal' AND status = 'open'",
+                [group_id.into()],
+            ))
+            .one(db)
+            .await?;
+
+            if let Some(row) = existing {
+                db.execute(Statement::from_sql_and_values(
+                    db.get_database_backend(),
+                    "UPDATE discrepancy SET values = $1::jsonb, updated_at = now() WHERE id = $2",
+                    [values_json.into(), row.id.into()],
+                ))
+                .await?;
+            } else {
+                #[derive(FromQueryResult)]
+                struct NewId {
+                    id: i32,
+                }
+                let new_row = NewId::find_by_statement(Statement::from_sql_and_values(
+                    db.get_database_backend(),
+                    "INSERT INTO discrepancy (kind, org_id, group_id, as_of, metric, values, status) \
+                     VALUES ('temporal', $1, $2, $3::date, 'total', $4::jsonb, 'open') RETURNING id",
+                    [
+                        ctx.sender_org_id.into(),
+                        group_id.into(),
+                        ctx.planned_start.clone().into(),
+                        values_json.into(),
+                    ],
+                ))
+                .one(db)
+                .await?
+                .ok_or_else(|| DbErr::Custom("INSERT temporal discrepancy не повернув id".into()))?;
+                publish_event(
+                    db,
+                    subjects::DISCREPANCY_OPENED_V1,
+                    "vyshkil.discrepancy.opened.v1",
+                    DiscrepancyOpened {
+                        discrepancy_id: new_row.id,
+                        org_id: ctx.sender_org_id,
+                        group_id: Some(group_id),
+                        metric: DiscrepancyMetric::InTrainingCount,
+                    },
+                )
+                .await?;
+            }
+        }
+    }
+
+    if !found_temporal {
+        auto_close_temporal(db, group_id).await?;
+    }
+
+    Ok(())
+}
+
+async fn auto_close_temporal(db: &impl ConnectionTrait, group_id: i32) -> Result<(), DbErr> {
+    #[derive(FromQueryResult)]
+    struct OpenRow {
+        id: i32,
+    }
+    let open_now = OpenRow::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT id FROM discrepancy \
+         WHERE group_id = $1 AND kind = 'temporal' AND status = 'open'",
+        [group_id.into()],
+    ))
+    .all(db)
+    .await?;
+
+    for row in open_now {
+        db.execute(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            "UPDATE discrepancy SET status = 'resolved', \
+                resolution_note = 'автоматично: часову розбіжність усунуто', updated_at = now() \
+             WHERE id = $1",
+            [row.id.into()],
+        ))
+        .await?;
     }
 
     Ok(())

@@ -3,7 +3,7 @@
 //! (02 §5 — уся сітка зберігається одним усе-або-нічого записом).
 //! Сама арифметика воронки — в `domain::counting` (чиста, без БД); тут лише SQL і перетворення типів.
 
-use super::reconciliation::refresh_horizontal;
+use super::reconciliation::{refresh_horizontal, refresh_temporal};
 use crate::domain::counting::{EventType, GroupEventRecord};
 use crate::domain::dates::{parse_date, parse_end_date, parse_maybe_range, validate_period, DateError};
 use crate::domain::normalize::normalize;
@@ -529,8 +529,9 @@ pub async fn commit_group_rows(
         affected_groups.insert(group_id);
     }
 
-    for group_id in affected_groups {
-        refresh_horizontal(db, group_id).await?;
+    for group_id in &affected_groups {
+        refresh_horizontal(db, *group_id).await?;
+        refresh_temporal(db, *group_id).await?;
     }
 
     Ok(group_ids)

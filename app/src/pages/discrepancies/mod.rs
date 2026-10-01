@@ -9,6 +9,17 @@ use crate::types::reconciliation::DiscrepancyRow;
 use crate::widgets::ActorNotice;
 use server::get_discrepancies;
 
+fn kind_label(kind: &str) -> &'static str {
+    match kind {
+        "horizontal" => "Горизонтальна",
+        "vertical" => "Вертикальна",
+        "temporal" => "Часова",
+        "duplicate" => "Дублікат",
+        "data_quality" => "Якість даних",
+        _ => "?",
+    }
+}
+
 /// Екран розбіжностей (04 §4, Етап 8 зріз 1 — `.claude/decisions/
 /// etap8-horizontal-reconciliation-first-slice.md`): лише перегляд, без workflow "взяти в
 /// роботу"/"закрити вручну" — відкриття/автозакриття відбувається саме при фіксації сітки
@@ -78,6 +89,7 @@ fn DiscrepancyTable(rows: Vec<DiscrepancyRow>) -> impl IntoView {
         <table>
             <thead>
                 <tr>
+                    <th>"Тип"</th>
                     <th>"Частина"</th>
                     <th>"Група"</th>
                     <th>"Метрик"</th>
@@ -97,8 +109,10 @@ fn DiscrepancyTable(rows: Vec<DiscrepancyRow>) -> impl IntoView {
                             .collect::<Vec<_>>()
                             .join(" · ");
                         let status_class = if r.status == "open" { "status-error" } else { "status-ok" };
+                        let kind_label = kind_label(&r.kind);
                         view! {
                             <tr>
+                                <td>{kind_label}</td>
                                 <td>{r.org_label}</td>
                                 <td>{r.group_label.unwrap_or_else(|| "—".to_string())}</td>
                                 <td>{r.metric_label}</td>
