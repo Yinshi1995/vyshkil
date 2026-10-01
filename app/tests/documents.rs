@@ -12,6 +12,8 @@ mod common;
 
 use app::backend::documents::d1::build_day_sheet;
 use app::backend::documents::d2::{build_week_sheet, DayBlock};
+use app::backend::documents::d3;
+use app::backend::documents::d4;
 use app::backend::repo::documents::daily_training_rollup;
 use calamine::{Data, Reader, Xlsx};
 use chrono::Datelike;
@@ -333,4 +335,50 @@ async fn document_generation_covers_d1_daily_and_d2_weekly_rollups() {
         "підсумок тижня — несуміжна сума клітинок, не SUM(range): {week_formula:?}"
     );
     assert!(week_formula.contains('+'), "має сумувати 2 дні: {week_formula:?}");
+
+    // --- D3 ("Говорілка", 05 §D3): docx з текстом доповіді, підстановки у шаблоні ---
+    let rollup_today = daily_training_rollup(&db, ak17, DAY0).await.unwrap();
+    let rollup_yesterday = daily_training_rollup(&db, ak17, "2026-07-19").await.unwrap();
+    let corps_days = vec![d3::CorpsDay {
+        label: "17 АК".to_string(),
+        today: rollup_today,
+        yesterday: rollup_yesterday,
+    }];
+    let paragraphs = d3::render_paragraphs(d3::DEFAULT_TEMPLATE, day0, &corps_days);
+    assert!(!paragraphs.is_empty(), "D3 має генерувати абзаци");
+    assert!(paragraphs.iter().any(|(bold, _)| *bold), "D3 має мати жирні заголовки слайдів");
+    let all_text: String = paragraphs.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>().join("\n");
+    assert!(all_text.contains("20.07.2026"), "D3 має містити дату");
+    assert!(!all_text.contains("{{"), "усі плейсхолдери мають бути підставлені");
+
+    let docx_bytes = d3::build_docx(&paragraphs).unwrap();
+    let mut docx_archive = zip::ZipArchive::new(Cursor::new(&docx_bytes)).unwrap();
+    assert!(docx_archive.by_name("word/document.xml").is_ok(), "docx має word/document.xml");
+    let mut doc_xml = String::new();
+    std::io::Read::read_to_string(&mut docx_archive.by_name("word/document.xml").unwrap(), &mut doc_xml).unwrap();
+    assert!(doc_xml.contains("<w:b/>"), "жирні заголовки мають <w:b/> тег");
+
+    // --- D4 ("Підготовка", 05 §D4): pptx з KPI-плитками ---
+    let rollup_today_d4 = daily_training_rollup(&db, ak17, DAY0).await.unwrap();
+    let rollup_yesterday_d4 = daily_training_rollup(&db, ak17, "2026-07-19").await.unwrap();
+    let corps_slides = vec![d4::CorpsSlide {
+        label: "17 АК".to_string(),
+        today: rollup_today_d4,
+        yesterday: rollup_yesterday_d4,
+    }];
+    let pptx_bytes = d4::build_pptx(day0, &corps_slides).unwrap();
+    let pptx_archive = zip::ZipArchive::new(Cursor::new(&pptx_bytes)).unwrap();
+    let pptx_names: Vec<_> = pptx_archive.file_names().collect();
+    assert!(pptx_names.contains(&"ppt/slides/slide1.xml"), "pptx: титульний слайд");
+    assert!(pptx_names.contains(&"ppt/slides/slide2.xml"), "pptx: огляд");
+    assert!(pptx_names.contains(&"ppt/slides/slide3.xml"), "pptx: слайд корпусу 17 АК");
+
+    // --- Золоті тести (порівняння з source_files/Зразок/) — skip за відсутності файлів ---
+    let source_dir = std::path::Path::new("source_files/Зразок");
+    if !source_dir.exists() {
+        eprintln!(
+            "SKIP golden tests: source_files/Зразок/ не існує на цій машині \
+             (docs/QUESTIONS.md, обраний варіант B)"
+        );
+    }
 }
