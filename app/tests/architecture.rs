@@ -353,6 +353,7 @@ fn sanity_the_tree_walk_actually_found_pages() {
         "documents".to_string(),
         "home".to_string(),
         "import".to_string(),
+        "login".to_string(),
         "org_detail".to_string(),
         "settings".to_string(),
         "training_form".to_string(),

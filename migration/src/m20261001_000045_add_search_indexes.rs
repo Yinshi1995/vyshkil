@@ -14,13 +14,13 @@ impl MigrationTrait for Migration {
 
         db.get_connection()
             .execute_unprepared(
-                "CREATE INDEX IF NOT EXISTS idx_subordination_child_id ON subordination (child_id)",
+                "CREATE INDEX IF NOT EXISTS idx_subordination_child_org_id ON subordination (child_org_id)",
             )
             .await?;
 
         db.get_connection()
             .execute_unprepared(
-                "CREATE INDEX IF NOT EXISTS idx_training_group_org_id ON training_group (org_id)",
+                "CREATE INDEX IF NOT EXISTS idx_training_group_sender_org_id ON training_group (sender_org_id)",
             )
             .await?;
 
@@ -78,8 +78,8 @@ impl MigrationTrait for Migration {
     async fn down(&self, db: &SchemaManager) -> Result<(), DbErr> {
         for idx in [
             "idx_org_name_history_org_id",
-            "idx_subordination_child_id",
-            "idx_training_group_org_id",
+            "idx_subordination_child_org_id",
+            "idx_training_group_sender_org_id",
             "idx_submission_reporting_org_id",
             "idx_submission_status",
             "idx_discrepancy_status",

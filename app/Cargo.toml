@@ -57,6 +57,11 @@ uuid = { version = "1", features = ["v7"], optional = true }
 bus = { path = "../bus", optional = true }
 # Адмін-сторінка /admin/queues (09 §5, Фаза 4) -- (де)кодування payload DLQ-записів.
 base64 = { version = "0.23", optional = true }
+# Автентифікація (12-auth.md) -- argon2id хешування паролів, лише сервер.
+argon2 = { version = "0.5", optional = true }
+# Автентифікація (12-auth.md) -- cookie/request через leptos_axum контекст, лише сервер.
+leptos_axum = { workspace = true, optional = true }
+http = { version = "1", optional = true }
 # docx-генератор (Етап 7, 05 §D3 "Говорілка") -- лише сервер: zip/XML підстановка в шаблоні.
 zip = { version = "8", optional = true }
 # Стильова система (Фаза 2, docs/spec/08-style-system.md) -- style без рантайм-залежностей
@@ -90,4 +95,7 @@ ssr = [
     "dep:bus",
     "dep:base64",
     "dep:zip",
+    "dep:argon2",
+    "dep:leptos_axum",
+    "dep:http",
 ]

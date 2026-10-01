@@ -9,6 +9,7 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `orgs.rs` | `list_orgs`, `search_orgs`, `resolve_org` (Етап 5-6: суворіше за `search_orgs` — ведучий номер частини в запиті МАЄ збігтись у кандидата, інакше `None`, бо pg_trgm-схожість сама не розрізняє "17 овмбр"/"128 овмбр"), `subordination_tree`, `org_detail` — SQL по `org`/`alias`/`subordination_closure`/`org_name_history`/`org_status` | `services/orgs.rs`, `pages/home/server.rs`, `pages/org_detail/server.rs`, `repo/imports_*.rs`, `app/tests/orgs.rs`, `app/tests/policy.rs` |
+| `auth.rs` | `find_user_by_login`, `user_roles`, `create_session`/`find_session`/`delete_session`/`update_session_actor` — SQL для автентифікації (12-auth.md) | `services/auth.rs` |
 | `dictionaries.rs` | `equipment_vos_hint`, `dictionaries_overview`, `learned_aliases`, `confirm_learned_alias`, `reject_learned_alias`, `resolve_vos_by_code`/`resolve_position`/`resolve_course`/`training_kind_id_by_code` (Етап 5) | `pages/settings/server.rs`, `services/dictionaries.rs`, `repo/imports_*.rs` |
 | `groups.rs` | `group_events` (читання), `search_vos_position_course`/`training_site_options` (02 §3, §1), `validate_row`/`commit_group_rows` (фіксація сітки, 02 §5), `find_or_create_training_site` (Етап 5) | `services/groups.rs`, `repo/imports_*.rs`, `app/tests/groups.rs` |
 | `submissions.rs` | `latest_draft_for_org`/`save_draft`/`mark_committed` — чернетки (`submission`, 02 §6), `source_type` параметром (`'form'`/`'table'`) | `services/submission_grid.rs` |

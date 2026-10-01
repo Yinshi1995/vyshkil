@@ -45,6 +45,8 @@ mod m20260930_000042_create_outbox_table;
 mod m20261001_000043_create_notification_table;
 mod m20261001_000044_widen_generated_document_kind_d3_d6;
 mod m20261001_000045_add_search_indexes;
+mod m20261001_000046_create_user_account_table;
+mod m20261001_000047_seed_admin_account;
 
 pub struct Migrator;
 
@@ -116,6 +118,9 @@ impl MigratorTrait for Migrator {
             // виправляє баг — d3/d4 insert раніше мовчки падав на CHECK).
             Box::new(m20261001_000044_widen_generated_document_kind_d3_d6::Migration),
             Box::new(m20261001_000045_add_search_indexes::Migration),
+            // Етап 10a (12-auth.md): автентифікація логін/пароль.
+            Box::new(m20261001_000046_create_user_account_table::Migration),
+            Box::new(m20261001_000047_seed_admin_account::Migration),
         ]
     }
 }

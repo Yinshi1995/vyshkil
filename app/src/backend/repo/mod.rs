@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod dictionaries;
 pub mod documents;
 pub mod groups;

@@ -9,6 +9,7 @@
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
+| `auth.rs` | `auth_login`/`auth_logout`/`get_current_user`/`get_user_roles`/`switch_actor` — автентифікація, cookie-сесія (12-auth.md) | `pages/login`, `layout` |
 | `health.rs` | `health_check` — пінг БД, smoke-test | `pages/home` |
 | `orgs.rs` | `list_orgs` (без прав), `search_orgs` (нечіткий пошук, звужений до видимого піддерева) | `layout::ActorSwitcher`, `pages/home`, `widgets/group_grid` |
 | `dictionaries.rs` | `get_dictionaries_overview` — усі прості довідники Етапу 2 одним викликом | `widgets/group_grid` |

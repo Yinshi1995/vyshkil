@@ -1,4 +1,5 @@
 pub mod actor;
+pub mod auth;
 pub mod dashboard;
 pub mod dictionaries;
 pub mod notification;
