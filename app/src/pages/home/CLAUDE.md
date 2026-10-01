@@ -8,6 +8,6 @@
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
-| `mod.rs` | `HomePage` — лічильники + `<OrgSearch/>` + `<SubordinationTree/>` | `pages/CLAUDE.md` → `routes.rs` |
-| `server.rs` | `get_subordination_tree` — потрібен лише цій сторінці (`search_orgs` переїхав у `services/orgs.rs`, потрібен ще й `training_form`) | `components/` |
+| `mod.rs` | `HomePage` — дашборд: статистика + швидкі дії + останні подання + `<OrgSearch/>` + `<SubordinationTree/>` | `pages/CLAUDE.md` → `routes.rs` |
+| `server.rs` | `get_subordination_tree`, `get_dashboard_stats`, `get_recent_submissions` — потрібні лише цій сторінці | `mod.rs`, `components/` |
 | `components/` | `OrgSearch`, `SubordinationTree` (своя карта) | `mod.rs` |

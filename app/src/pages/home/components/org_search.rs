@@ -4,64 +4,72 @@ use crate::hooks::use_actor::use_actor;
 use crate::services::orgs::search_orgs;
 use crate::widgets::ActorNotice;
 
-/// Нечіткий пошук організацій (02 §3): стійкий до опечаток/розкладки/скорочень
-/// ("152НЦ", "а4896", "польша" — усі знаходять канонічну організацію). Результат звужений до
-/// видимого поточному актору піддерева (backend::policy) — без обраного актора показуємо
-/// `<ActorNotice/>`, а не мовчазне "нічого не знайдено".
 #[component]
 pub fn OrgSearch() -> impl IntoView {
     let actor = use_actor();
     let query = RwSignal::new(String::new());
+    let show_list = RwSignal::new(false);
+
     let results = Resource::new(
         move || (actor.get(), query.get()),
-        |(actor, q)| async move {
-            if q.trim().is_empty() {
-                Ok(Vec::new())
-            } else {
-                search_orgs(actor, q).await
-            }
-        },
+        |(actor, q)| async move { search_orgs(actor, q).await },
     );
 
     view! {
-        <div class="eyebrow">"Пошук організацій"</div>
+        <div class="eyebrow">"Пошук частин"</div>
         <div class="card">
             <input
                 type="text"
                 class="org-search__input"
-                placeholder="152НЦ, а4896, польша…"
+                placeholder="Номер, назва або синонім частини…"
                 prop:value=move || query.get()
-                on:input=move |ev| query.set(event_target_value(&ev))
+                on:input=move |ev| {
+                    query.set(event_target_value(&ev));
+                    show_list.set(true);
+                }
+                on:focus=move |_| show_list.set(true)
             />
-            <Suspense fallback=|| view! { <p>"…"</p> }>
+            <Suspense fallback=|| view! { <p class="card__desc">"…"</p> }>
                 {move || {
                     if actor.get().is_none() {
                         return Some(view! { <ActorNotice/> }.into_any());
                     }
+                    if !show_list.get() {
+                        return Some(().into_any());
+                    }
                     results
                         .get()
                         .map(|res| match res {
-                            Ok(_) if query.get().trim().is_empty() => {
-                                view! { <p class="card__desc">"Почніть вводити номер, назву або синонім."</p> }
-                                    .into_any()
-                            }
-                            Ok(list) if list.is_empty() => {
+                            Ok(list) if list.is_empty() && !query.get().trim().is_empty() => {
                                 view! { <p class="card__desc">"Нічого не знайдено."</p> }.into_any()
                             }
+                            Ok(list) if list.is_empty() => {
+                                ().into_any()
+                            }
                             Ok(list) => {
+                                let has_query = !query.get().trim().is_empty();
                                 view! {
                                     <ul class="org-search__results">
                                         {list
                                             .into_iter()
                                             .map(|r| {
+                                                let matched = r.matched_raw.clone();
                                                 view! {
                                                     <li class="org-search__result">
-                                                        <span class="org-search__label">{r.label}</span>
-                                                        <span class="org-search__matched">
-                                                            "збіг: \""{r.matched_raw}"\""
-                                                        </span>
-                                                        <a href=format!("/org/{}", r.org_id) class="org-search__link">
-                                                            "картка →"
+                                                        <a
+                                                            href=format!("/org/{}", r.org_id)
+                                                            class="org-search__result-link"
+                                                        >
+                                                            <span class="org-search__label">{r.label}</span>
+                                                            {if has_query {
+                                                                Some(
+                                                                    view! {
+                                                                        <span class="org-search__matched">{matched}</span>
+                                                                    },
+                                                                )
+                                                            } else {
+                                                                None
+                                                            }}
                                                         </a>
                                                     </li>
                                                 }

@@ -7,23 +7,48 @@ use crate::types::notification::NotificationRow;
 
 #[component]
 pub fn Header() -> impl IntoView {
+    let menu_open = RwSignal::new(false);
+
     view! {
         <header class="app-header">
-            <div class="app-header__brand">
-                <span class="app-header__mark">"Т"</span>
-                <span class="app-header__title">"Taktoblik"</span>
+            <div class="app-header__left">
+                <button
+                    class="app-header__burger"
+                    on:click=move |_| menu_open.update(|v| *v = !*v)
+                    aria-label="Меню"
+                >
+                    <span class=move || if menu_open.get() { "burger-icon burger-icon--open" } else { "burger-icon" }></span>
+                </button>
+                <a href="/" class="app-header__brand">
+                    <span class="app-header__mark">"Т"</span>
+                    <span class="app-header__title">"Taktoblik"</span>
+                </a>
             </div>
             <nav class="app-header__nav">
-                <a href="/">"Головна"</a>
-                <a href="/vos-lookup">"ВОС за ОВТ"</a>
-                <a href="/dictionaries">"Довідники"</a>
+                <a href="/training-form">"Навчання"</a>
                 <a href="/discrepancies">"Розбіжності"</a>
+                <a href="/documents">"Документи"</a>
+                <a href="/import">"Імпорт"</a>
             </nav>
             <div class="app-header__actions">
                 <NotificationBell/>
                 <ActorSwitcher/>
             </div>
         </header>
+        <Show when=move || menu_open.get()>
+            <div class="mobile-menu" on:click=move |_| menu_open.set(false)>
+                <nav class="mobile-menu__nav">
+                    <a href="/" class="mobile-menu__link">"Головна"</a>
+                    <a href="/training-form" class="mobile-menu__link">"Навчання"</a>
+                    <a href="/discrepancies" class="mobile-menu__link">"Розбіжності"</a>
+                    <a href="/documents" class="mobile-menu__link">"Документи"</a>
+                    <a href="/import" class="mobile-menu__link">"Імпорт"</a>
+                    <div class="mobile-menu__divider"></div>
+                    <a href="/dictionaries" class="mobile-menu__link mobile-menu__link--secondary">"Довідники"</a>
+                    <a href="/vos-lookup" class="mobile-menu__link mobile-menu__link--secondary">"ВОС за ОВТ"</a>
+                </nav>
+            </div>
+        </Show>
     }
 }
 
@@ -63,7 +88,7 @@ fn NotificationBell() -> impl IntoView {
                 on:click=move |_| open.update(|v| *v = !*v)
                 title="Сповіщення"
             >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                     <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
                 </svg>

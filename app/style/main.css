@@ -93,12 +93,17 @@ body {
    оголошує тип через `layout::PageContent`. Сторінки, що ще не мігрували (лише 2 пілотні цього
    проходу) — тимчасово без обмеження, очікувана регресія до завершення розкатки. */
 main {
-  padding: 40px 32px 64px;
+  padding: var(--space-7) var(--space-6) var(--space-8);
   min-height: calc(100vh - 60px);
 }
 
 .page-content--detail {
-  max-width: 1200px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.page-content--data {
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -116,13 +121,17 @@ main {
 
 .page-content--reading {
   max-width: 720px;
+  width: 100%;
   margin: 0 auto;
 }
 
 /* PageHeader (layout::PageHeader, Етап 7.5) — компактний, не той самий розмір, що h1 величезний
    деінде (styleguide/головна лишаються на голому h1 — не мігрували в цьому проході). */
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-7);
+  max-width: 960px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .page-header__breadcrumbs {
@@ -164,10 +173,11 @@ main {
 }
 
 .page-header__subtitle {
-  margin: 4px 0 0;
+  margin: var(--space-2) 0 0;
   color: var(--text-muted);
-  font-size: 13px;
-  max-width: none;
+  font-size: 14px;
+  max-width: 600px;
+  line-height: 1.5;
 }
 
 .page-header__actions {
@@ -267,7 +277,12 @@ a:hover {
   letter-spacing: var(--track-6);
   text-transform: uppercase;
   color: var(--fg-accent);
-  margin-bottom: var(--space-2);
+  margin-top: var(--space-7);
+  margin-bottom: var(--space-4);
+}
+
+.eyebrow:first-child {
+  margin-top: 0;
 }
 
 .eyebrow::before,
@@ -858,7 +873,7 @@ a:hover {
   background: linear-gradient(145deg, rgba(31, 34, 23, 0.8), rgba(23, 25, 18, 0.95));
   border: 1px solid var(--border);
   border-radius: var(--radius-2);
-  padding: var(--space-5);
+  padding: var(--space-6);
   box-shadow: var(--shadow-2);
   flex: 1 1 240px;
   min-width: 220px;
@@ -2884,19 +2899,448 @@ table thead th {
   background: rgba(201, 168, 76, 0.3);
 }
 
-/* ── Responsive touch targets */
+/* ── Hamburger button ── */
+.app-header__burger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  margin: -8px;
+  margin-right: 4px;
+}
+
+.app-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  color: inherit;
+}
+
+.app-header__brand:hover {
+  text-decoration: none;
+  color: inherit;
+}
+
+.burger-icon {
+  display: block;
+  width: 20px;
+  height: 14px;
+  position: relative;
+}
+
+.burger-icon::before,
+.burger-icon::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--fg-accent);
+  border-radius: 1px;
+  transition: transform var(--duration-fast) ease, top var(--duration-fast) ease;
+}
+
+.burger-icon::before { top: 0; }
+.burger-icon::after { top: 12px; }
+
+.burger-icon--open::before {
+  top: 6px;
+  transform: rotate(45deg);
+}
+
+.burger-icon--open::after {
+  top: 6px;
+  transform: rotate(-45deg);
+}
+
+/* ── Mobile menu overlay ── */
+.mobile-menu {
+  position: fixed;
+  top: 52px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 12, 8, 0.95);
+  backdrop-filter: blur(16px);
+  z-index: 9;
+  animation: fade-in-up var(--duration-fast) ease;
+}
+
+.mobile-menu__nav {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5) var(--space-4);
+  gap: var(--space-1);
+}
+
+.mobile-menu__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4);
+  font-family: var(--font-heading);
+  font-size: var(--text-lg-size);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-main);
+  text-decoration: none;
+  border-radius: var(--radius-2);
+  transition: background var(--duration-fast) ease;
+}
+
+.mobile-menu__link:hover,
+.mobile-menu__link:active {
+  background: rgba(201, 168, 76, 0.08);
+  text-decoration: none;
+  color: var(--fg-accent);
+}
+
+.mobile-menu__link--secondary {
+  font-size: var(--text-md-size);
+  color: var(--fg-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.mobile-menu__divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 168, 76, 0.2), transparent);
+  margin: var(--space-3) 0;
+}
+
+/* ── Responsive ── */
 @media (max-width: 768px) {
   .app-header {
     padding: var(--space-3) var(--space-3);
     gap: var(--space-2);
   }
 
+  .app-header__burger {
+    display: block;
+  }
+
   .app-header__nav {
     display: none;
   }
 
+  .app-header__title {
+    display: none;
+  }
+
+  .app-header__actions {
+    gap: var(--space-2);
+  }
+
+  .actor-switcher select,
+  .actor-switcher .select__trigger {
+    font-size: 12px;
+    padding: var(--space-2) var(--space-3);
+    min-width: 0;
+    max-width: 120px;
+  }
+
   main {
-    padding: var(--space-5) var(--space-3) var(--space-7);
+    padding: var(--space-4) var(--space-3) var(--space-7);
+  }
+
+  .card-row {
+    flex-direction: column;
+  }
+
+  .page-header__title {
+    font-size: 20px;
+  }
+
+  .empty-state {
+    min-height: 30vh;
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .empty-state__icon {
+    width: 64px;
+    height: 64px;
+  }
+
+  table {
+    font-size: 13px;
+  }
+
+  th, td {
+    padding: 8px 10px;
+  }
+
+  .notification-bell__dropdown {
+    position: fixed;
+    left: var(--space-3);
+    right: var(--space-3);
+    top: 52px;
+    width: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  main {
+    padding: var(--space-3) var(--space-2) var(--space-6);
+  }
+
+  .page-header__title {
+    font-size: 18px;
+  }
+
+  .card {
+    padding: var(--space-4);
+  }
+
+  .eyebrow {
+    font-size: 10px;
+  }
+}
+
+/* Dashboard — 8px grid, Material Design spacing principles */
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-7);
+}
+
+.dash-stat {
+  background: linear-gradient(145deg, rgba(31, 34, 23, 0.8), rgba(23, 25, 18, 0.95));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  transition: border-color var(--duration-base) ease;
+}
+
+.dash-stat:hover {
+  border-color: var(--accent);
+}
+
+.dash-stat__value {
+  font-family: var(--font-heading);
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--fg-accent);
+  line-height: 1.2;
+}
+
+.dash-stat__label {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dash-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-7);
+}
+
+.dash-action {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  background: linear-gradient(145deg, rgba(31, 34, 23, 0.7), rgba(23, 25, 18, 0.85));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  padding: var(--space-5);
+  text-decoration: none;
+  color: var(--fg-main);
+  transition: border-color var(--duration-base) ease, background var(--duration-base) ease, transform 0.15s ease;
+}
+
+.dash-action:hover {
+  border-color: var(--accent);
+  background: linear-gradient(145deg, rgba(40, 44, 30, 0.8), rgba(30, 33, 24, 0.95));
+  transform: translateY(-2px);
+}
+
+.dash-action__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  background: rgba(201, 168, 76, 0.12);
+  border-radius: var(--radius-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-accent);
+}
+
+.dash-action__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.dash-action__title {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg-main);
+  margin-bottom: var(--space-1);
+}
+
+.dash-action__desc {
+  font-size: 13px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dash-table thead th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.dash-table tbody td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--fg-main);
+}
+
+.dash-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-1);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.badge--ok {
+  background: rgba(76, 175, 80, 0.15);
+  color: #81c784;
+}
+
+.badge--warn {
+  background: rgba(255, 183, 77, 0.15);
+  color: #ffb74d;
+}
+
+.dash-empty {
+  text-align: center;
+  padding: var(--space-7) var(--space-5);
+  color: var(--fg-muted);
+}
+
+.dash-empty .btn {
+  margin-top: var(--space-4);
+}
+
+.org-search__result-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: var(--fg-main);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-1);
+  transition: background var(--duration-base) ease;
+}
+
+.org-search__result-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.org-search__result-link .org-search__label {
+  flex: 1;
+}
+
+.org-search__result-link .org-search__matched {
+  font-size: 12px;
+  color: var(--fg-subtle);
+}
+
+@media (max-width: 768px) {
+  .dash-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
+
+  .dash-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-stat__value {
+    font-size: 24px;
+  }
+
+  .dash-table {
+    font-size: 13px;
+  }
+
+  .dash-table thead th,
+  .dash-table tbody td {
+    padding: var(--space-2) var(--space-3);
+  }
+}
+
+@media (max-width: 480px) {
+  .dash-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-2);
+  }
+
+  .dash-stat {
+    padding: var(--space-4) var(--space-3);
+  }
+
+  .dash-stat__value {
+    font-size: 22px;
+  }
+
+  .dash-stat__label {
+    font-size: 10px;
+  }
+
+  .dash-action {
+    padding: var(--space-4);
+  }
+
+  .dash-action__icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .dash-action__icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .dash-action__title {
+    font-size: 14px;
+  }
+
+  .dash-action__desc {
+    font-size: 12px;
   }
 }
 
