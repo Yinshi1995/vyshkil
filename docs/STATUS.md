@@ -17,5 +17,9 @@
   (group_detail_for_corps, staffing_for_corps, transferred_orgs_report), генератори
   d5.rs/d6.rs, 6 server fn, 6 UI блоків на /documents. ✅
 
-**Локальні коміти** (21 шт.) чекають push — заблоковано settings.json, користувач має виконати
+- **UI дизайн** — комплексне покращення: sticky header, gradient cards, custom radio/checkbox,
+  empty state з іконкою, custom scrollbar, footer gold-лінія, status badges, animations.
+  cargo test ✅, clippy ✅.
+
+**Локальні коміти** (22 шт.) чекають push — заблоковано settings.json, користувач має виконати
 `git push -u origin main` вручну.
