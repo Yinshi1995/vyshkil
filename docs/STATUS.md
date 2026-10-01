@@ -31,5 +31,11 @@
   admin/whatsapp, admin/queues) — функціонал перенесено в Settings. Міграція 045: B-tree індекси
   на FK-колонки. cargo test ✅ (95), clippy ✅.
 
-**Локальні коміти** (28 шт.) чекають push — заблоковано settings.json, користувач має виконати
+- **Étap 10a: автентифікація логін/пароль** — spec 12-auth.md, decision auth-architecture.md,
+  міграції 046-047 (user_account/user_role/user_session + admin seed argon2id), types/auth.rs,
+  backend/repo/auth.rs, services/auth.rs (login/logout/session/switch), pages/login/ (форма),
+  CSS login-card. Виправлено індекси міграції 045 (child_id→child_org_id, org_id→sender_org_id).
+  cargo test ✅ (9/9 architecture).
+
+**Локальні коміти** (29 шт.) чекають push — заблоковано settings.json, користувач має виконати
 `git push -u origin main` вручну.
