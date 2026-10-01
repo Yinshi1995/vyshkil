@@ -1,0 +1,13 @@
+# Один запуск за ніч о {{ autonomy_night_window_start }} — `run.sh`'s власний TimeoutStartSec
+# (3г) і resource-guard тримають прогін усередині вікна {{ autonomy_night_window_start }}-
+# {{ autonomy_night_window_end }}, повноцінний крон-вікна systemd-таймери не підтримують просто.
+[Unit]
+Description=Щонічний запуск vyshkil night-runner
+
+[Timer]
+OnCalendar=*-*-* {{ autonomy_night_window_start }}:00
+Persistent=false
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

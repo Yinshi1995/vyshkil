@@ -1,0 +1,80 @@
+---
+# Автономний режим (docs/spec/10-dev-vm.md, брифи про tmux Remote Control + нічний раннер):
+# systemd USER-сервіси (не system-рівня — Claude Code/tmux мають жити в сесії `base_primary_user`,
+# не root), тому все нижче йде під `become_user: {{ base_primary_user }}` + lingering, щоб вижило
+# без активного SSH-логіну. "Enable Remote Control" (підтвердження y/n при першому запуску) і
+# саме з'єднання з телефону — НЕ автоматизується тут (10 §5, ручний чекпоінт користувача).
+
+- name: "Lingering для {{ base_primary_user }} — user-сервіси живуть без активної сесії"
+  ansible.builtin.command: "loginctl enable-linger {{ base_primary_user }}"
+  changed_when: true # loginctl не повідомляє "уже увімкнено" через stdout; ідемпотентно за суттю
+
+- name: Каталог systemd user-юнітів
+  ansible.builtin.file:
+    path: "/home/{{ base_primary_user }}/.config/systemd/user"
+    state: directory
+    owner: "{{ base_primary_user }}"
+    group: "{{ base_primary_user }}"
+    mode: "0755"
+
+- name: "tmux+Remote Control user-сервіс"
+  ansible.builtin.template:
+    src: vyshkil-tmux.service.j2
+    dest: "/home/{{ base_primary_user }}/.config/systemd/user/vyshkil-tmux.service"
+    owner: "{{ base_primary_user }}"
+    group: "{{ base_primary_user }}"
+    mode: "0644"
+  register: autonomy_tmux_unit
+
+- name: "Нічний раннер — виконуваний"
+  ansible.builtin.file:
+    path: "{{ project_checkout_path }}/infra/night-runner/run.sh"
+    mode: "0755"
+  when: project_checkout_path is defined
+
+- name: "Нічний раннер — systemd user-сервіс+таймер"
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/home/{{ base_primary_user }}/.config/systemd/user/{{ item }}"
+    owner: "{{ base_primary_user }}"
+    group: "{{ base_primary_user }}"
+    mode: "0644"
+  loop:
+    - vyshkil-night-runner.service
+    - vyshkil-night-runner.timer
+  register: autonomy_night_units
+
+- name: "UID {{ base_primary_user }} (для XDG_RUNTIME_DIR у systemd --user викликах)"
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ base_primary_user }}"
+
+- name: Перезавантажити systemd --user daemon
+  ansible.builtin.systemd:
+    scope: user
+    daemon_reload: true
+  become: true
+  become_user: "{{ base_primary_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.getent_passwd[base_primary_user][1] }}"
+  when: autonomy_tmux_unit.changed or autonomy_night_units.changed
+
+- name: Увімкнути+перезапустити нічний таймер (сам сервіс запускає таймер, не ручний старт)
+  ansible.builtin.systemd:
+    name: vyshkil-night-runner.timer
+    scope: user
+    enabled: true
+    state: started
+  become: true
+  become_user: "{{ base_primary_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.getent_passwd[base_primary_user][1] }}"
+
+- name: "tmux+Remote Control сервіс — НЕ автозапускати тут (потребує /login вже зробленого й Enable Remote Control від користувача)"
+  ansible.builtin.debug:
+    msg: >-
+      vyshkil-tmux.service встановлено, але НЕ запущено й НЕ enabled автоматично — перший
+      запуск (`systemctl --user start vyshkil-tmux.service`, тоді `tmux attach -t
+      {{ autonomy_tmux_session }}`) має зробити користувач сам по SSH, щоб відповісти
+      "Enable Remote Control? (y/n)" і відсканувати QR на телефоні. Після цього
+      `systemctl --user enable vyshkil-tmux.service` — переживе reboot/relogin.

@@ -1,0 +1,14 @@
+[Unit]
+Description=Vyshkil Claude Code — tmux-сесія "{{ autonomy_tmux_session }}" (Remote Control)
+
+[Service]
+Type=forking
+WorkingDirectory={{ project_checkout_path }}
+ExecStart=/usr/bin/tmux new-session -d -s {{ autonomy_tmux_session }} -c {{ project_checkout_path }} "claude remote-control --permission-mode auto"
+ExecStop=/usr/bin/tmux kill-session -t {{ autonomy_tmux_session }}
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

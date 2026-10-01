@@ -34,3 +34,4 @@
 | `roles/claude_code` | Claude Code CLI з офіційного apt-репо (канал stable), вхід — замовник сам | `dev-vm.yml` |
 | `roles/project` | Bare-репо, робоча копія, `.env`, `data/` (source_files/ вимкнено за замовчуванням) | `dev-vm.yml` |
 | `roles/firewall` | nftables: вхідні лише SSH; перевірка, що docker-compose.yml нічого не публікує на 0.0.0.0 | `dev-vm.yml` |
+| `roles/autonomy` | systemd user-сервіси: tmux+`claude remote-control` (НЕ автозапускається — чекає ручного "Enable Remote Control" від користувача), нічний раннер (`infra/night-runner/run.sh`) + таймер | `dev-vm.yml` (останньою, після `project`) |

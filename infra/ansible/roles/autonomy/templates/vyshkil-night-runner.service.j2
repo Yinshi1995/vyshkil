@@ -1,0 +1,9 @@
+[Unit]
+Description=Vyshkil нічний раннер — одна ціль з docs/GOALS.md, ізольований git-worktree
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ project_checkout_path }}
+Environment=VYSHKIL_REPO={{ project_checkout_path }}
+ExecStart={{ project_checkout_path }}/infra/night-runner/run.sh
+TimeoutStartSec=3h
