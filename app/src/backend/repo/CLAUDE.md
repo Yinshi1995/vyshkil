@@ -9,7 +9,7 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `orgs.rs` | `list_orgs`, `search_orgs`, `resolve_org` (Етап 5-6: суворіше за `search_orgs` — ведучий номер частини в запиті МАЄ збігтись у кандидата, інакше `None`, бо pg_trgm-схожість сама не розрізняє "17 овмбр"/"128 овмбр"), `subordination_tree`, `org_detail` — SQL по `org`/`alias`/`subordination_closure`/`org_name_history`/`org_status` | `services/orgs.rs`, `pages/home/server.rs`, `pages/org_detail/server.rs`, `repo/imports_*.rs`, `app/tests/orgs.rs`, `app/tests/policy.rs` |
-| `dictionaries.rs` | `equipment_vos_hint`, `dictionaries_overview`, `learned_aliases`, `confirm_learned_alias`, `reject_learned_alias`, `resolve_vos_by_code`/`resolve_position`/`resolve_course`/`training_kind_id_by_code` (Етап 5) | `pages/vos_lookup/server.rs`, `pages/dictionaries/server.rs`, `repo/imports_*.rs` |
+| `dictionaries.rs` | `equipment_vos_hint`, `dictionaries_overview`, `learned_aliases`, `confirm_learned_alias`, `reject_learned_alias`, `resolve_vos_by_code`/`resolve_position`/`resolve_course`/`training_kind_id_by_code` (Етап 5) | `pages/settings/server.rs`, `services/dictionaries.rs`, `repo/imports_*.rs` |
 | `groups.rs` | `group_events` (читання), `search_vos_position_course`/`training_site_options` (02 §3, §1), `validate_row`/`commit_group_rows` (фіксація сітки, 02 §5), `find_or_create_training_site` (Етап 5) | `services/groups.rs`, `repo/imports_*.rs`, `app/tests/groups.rs` |
 | `submissions.rs` | `latest_draft_for_org`/`save_draft`/`mark_committed` — чернетки (`submission`, 02 §6), `source_type` параметром (`'form'`/`'table'`) | `services/submission_grid.rs` |
 | `imports_fah.rs` | `resolve_rows` — `RawFahRow` → `GroupFormRow`, резолюція org/vos/посада/місце через довідники (Етап 5) | `pages/training_form/server.rs` |
@@ -21,5 +21,5 @@
 | `staffing.rs` | `insert_snapshot`/`insert_instructor_snapshot` — `staffing_snapshot`+`staffing_metric` (01 §4, різні набори метрик КВід/ІВС) | `pages/import/server.rs` |
 | `documents.rs` | `daily_training_rollup` — правило групування (01 §1) + БЗВП/Фахова/Адаптація rollup по органу/дню; `top_level_orgs`/`root_org_id` (Етап 7, D2 — корпуси без хардкоду назв); `org_label`/`insert_generated_document` | `pages/documents/server.rs` |
 | `reconciliation.rs` | `refresh_horizontal`/`refresh_temporal`/`refresh_vertical` (перерахунок `discrepancy` після фіксації, 04 §3-4, усі три пишуть `DiscrepancyOpened`/`.Resolved` в outbox), `list_discrepancies` (Етап 8 зрізи 1-2) | `repo::groups::commit_group_rows`, `services/reconciliation.rs` |
-| `outbox.rs` | `insert` — транзакційний outbox (09-messaging.md §3.1, Фаза 1); `backlog` — відставання для адмін-екрана "Черги" (§5, Фаза 4) | `repo::reconciliation` (перший продюсер), `pages::admin_queues::server` |
+| `outbox.rs` | `insert` — транзакційний outbox (09-messaging.md §3.1, Фаза 1); `backlog` — відставання для адмін-екрана "Черги" (§5, Фаза 4) | `repo::reconciliation` (перший продюсер), `pages::settings::server` |
 | `notifications.rs` | Сповіщення (Етап 8 зріз 4, 04 §5) — CRUD для внутрішніх повідомлень | `services/notifications.rs`, `layout` |

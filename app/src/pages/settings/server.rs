@@ -1,23 +1,128 @@
-//! Адмін-екран "Черги" (09-messaging.md §5, Фаза 4) — відставання outbox, стан стрімів, DLQ з
-//! повторною відправкою. Лише `admin`.
-
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::types::actor::Actor;
 
-// `#[cfg(feature = "ssr")]` явно — плоска допоміжна функція, не сама `#[server(...)]`-функція
-// (той самий принцип, що `admin_whatsapp/server.rs::require_admin` — макрос сам вирізає тіло
-// #[server] fn під non-ssr, звичайні helper-функції так не вміють).
+// ---------------------------------------------------------------------------
+// Спільний helper — require_admin
+// ---------------------------------------------------------------------------
+
 #[cfg(feature = "ssr")]
 fn require_admin(actor: Option<Actor>) -> Result<Actor, ServerFnError> {
     use crate::backend::policy;
     let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
     if !policy::is_admin(actor) {
-        return Err(ServerFnError::new("лише адміністратор бачить черги"));
+        return Err(ServerFnError::new("лише адміністратор має доступ до цієї функції"));
     }
     Ok(actor)
 }
+
+// ---------------------------------------------------------------------------
+// Learned-синоніми (ex pages/dictionaries/server.rs)
+// ---------------------------------------------------------------------------
+
+#[server(GetLearnedAliases, "/api")]
+pub async fn get_learned_aliases(
+    actor: Option<Actor>,
+) -> Result<Vec<crate::types::dictionaries::LearnedAlias>, ServerFnError> {
+    use crate::backend::repo;
+    require_admin(actor)?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    repo::dictionaries::learned_aliases(&db)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[server(ConfirmLearnedAlias, "/api")]
+pub async fn confirm_learned_alias(actor: Option<Actor>, alias_id: i32) -> Result<(), ServerFnError> {
+    use crate::backend::{db, repo};
+    require_admin(actor)?;
+    let txn = db::actor_transaction(actor.unwrap()).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    repo::dictionaries::confirm_learned_alias(&txn, alias_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    txn.commit().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok(())
+}
+
+#[server(RejectLearnedAlias, "/api")]
+pub async fn reject_learned_alias(actor: Option<Actor>, alias_id: i32) -> Result<(), ServerFnError> {
+    use crate::backend::{db, repo};
+    require_admin(actor)?;
+    let txn = db::actor_transaction(actor.unwrap()).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    repo::dictionaries::reject_learned_alias(&txn, alias_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    txn.commit().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// WhatsApp (ex pages/admin_whatsapp/server.rs)
+// ---------------------------------------------------------------------------
+
+const SUBJECT_PAIR_CODE: &str = "vyshkil.notifier.whatsapp.pair.code";
+const SUBJECT_LOGOUT: &str = "vyshkil.notifier.whatsapp.logout";
+const SUBJECT_TEST: &str = "vyshkil.notifier.whatsapp.test";
+
+#[cfg(feature = "ssr")]
+async fn nats_request(subject: &str, payload_json: String) -> Result<String, ServerFnError> {
+    let shared = expect_context::<bus::SharedNatsClient>();
+    let client = { shared.lock().map_err(|_| ServerFnError::new("NATS mutex отруєний"))?.clone() };
+    let client = client.ok_or_else(|| ServerFnError::new("NATS недоступний"))?;
+    let reply = bus::request(&client, subject, payload_json.into_bytes())
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    String::from_utf8(reply).map_err(|e| ServerFnError::new(format!("невалідна відповідь: {e}")))
+}
+
+#[derive(Deserialize)]
+struct ErrorReply {
+    error: Option<String>,
+}
+
+fn check_error(raw: &str) -> Result<(), ServerFnError> {
+    if let Ok(ErrorReply { error: Some(e) }) = serde_json::from_str::<ErrorReply>(raw) {
+        return Err(ServerFnError::new(e));
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct PairCodeReply {
+    pairing_code: Option<String>,
+}
+
+#[server(RequestPairingCode, "/api")]
+pub async fn request_pairing_code(actor: Option<Actor>, phone: String) -> Result<String, ServerFnError> {
+    require_admin(actor)?;
+    let payload = serde_json::json!({ "phone": phone }).to_string();
+    let raw = nats_request(SUBJECT_PAIR_CODE, payload).await?;
+    check_error(&raw)?;
+    let reply: PairCodeReply =
+        serde_json::from_str(&raw).map_err(|e| ServerFnError::new(format!("невалідна відповідь: {e}")))?;
+    reply.pairing_code.ok_or_else(|| ServerFnError::new("notifier не повернув pairing-код"))
+}
+
+#[server(LogoutWhatsapp, "/api")]
+pub async fn logout_whatsapp(actor: Option<Actor>) -> Result<(), ServerFnError> {
+    require_admin(actor)?;
+    let raw = nats_request(SUBJECT_LOGOUT, "{}".to_string()).await?;
+    check_error(&raw)
+}
+
+#[server(SendTestNotification, "/api")]
+pub async fn send_test_notification(actor: Option<Actor>, org_id: i32) -> Result<String, ServerFnError> {
+    require_admin(actor)?;
+    let payload = serde_json::json!({ "org_id": org_id }).to_string();
+    let raw = nats_request(SUBJECT_TEST, payload).await?;
+    check_error(&raw)?;
+    Ok(raw)
+}
+
+// ---------------------------------------------------------------------------
+// Черги (ex pages/admin_queues/server.rs)
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutboxBacklogDto {
@@ -108,9 +213,6 @@ pub async fn get_queue_status(actor: Option<Actor>) -> Result<QueueStatusDto, Se
     Ok(QueueStatusDto { outbox, streams, dlq, nats_connected: true })
 }
 
-/// Повторна відправка DLQ-запису (09 §5: "DLQ з кнопкою «повторити»") — декодує збережений
-/// payload, публікує назад у `original_subject` з НОВИМ `Nats-Msg-Id` (не той самий, що оригінал
-/// — інакше брокер міг би відкинути як дублікат), видаляє запис із DLQ, щойно republish вдався.
 #[server(RetryDlqEntry, "/api")]
 pub async fn retry_dlq_entry(actor: Option<Actor>, seq: u64) -> Result<(), ServerFnError> {
     use base64::engine::general_purpose::STANDARD as BASE64;

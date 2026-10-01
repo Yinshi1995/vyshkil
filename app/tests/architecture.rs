@@ -349,16 +349,13 @@ fn every_css_var_reference_in_main_css_is_defined() {
 #[test]
 fn sanity_the_tree_walk_actually_found_pages() {
     let pages = BTreeSet::from([
-        "admin_queues".to_string(),
-        "admin_whatsapp".to_string(),
-        "dictionaries".to_string(),
         "discrepancies".to_string(),
         "documents".to_string(),
         "home".to_string(),
         "import".to_string(),
         "org_detail".to_string(),
+        "settings".to_string(),
         "training_form".to_string(),
-        "vos_lookup".to_string(),
     ]);
     let found: BTreeSet<String> = fs::read_dir(src_dir().join("pages"))
         .unwrap()

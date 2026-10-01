@@ -431,6 +431,17 @@ a:hover {
   gap: var(--space-3);
 }
 
+.app-header__settings {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+
+.app-header__settings:hover {
+  color: var(--fg-accent);
+}
+
 .notification-bell {
   position: relative;
 }
@@ -3341,6 +3352,113 @@ table thead th {
 
   .dash-action__desc {
     font-size: 12px;
+  }
+}
+
+/* --- Settings page (/settings) — tabs + panels --- */
+
+.settings-tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: var(--space-6);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-tabs__tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: none;
+  color: var(--fg-muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.settings-tabs__tab:hover {
+  color: var(--fg-main);
+}
+
+.settings-tabs__tab--active {
+  color: var(--fg-accent);
+  border-bottom-color: var(--fg-accent);
+}
+
+.settings-tabs__icon {
+  flex-shrink: 0;
+}
+
+.settings-panel {
+  min-height: 200px;
+}
+
+.settings-hint {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: var(--space-2) 0;
+  line-height: 1.5;
+}
+
+.settings-theme-grid {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.settings-theme-btn {
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-2);
+  background: var(--surface-panel);
+  color: var(--fg-main);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.settings-theme-btn:hover {
+  background: var(--surface-raised);
+}
+
+.settings-theme-btn--active {
+  border-color: var(--fg-accent);
+  background: rgba(201, 168, 76, 0.12);
+}
+
+.settings-form-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.settings-form-row input[type="text"] {
+  flex: 1;
+  min-width: 120px;
+}
+
+@media (max-width: 768px) {
+  .settings-tabs {
+    gap: 0;
+  }
+
+  .settings-tabs__tab {
+    padding: var(--space-2) var(--space-3);
+    font-size: 13px;
+  }
+
+  .settings-tabs__icon {
+    display: none;
   }
 }
 
