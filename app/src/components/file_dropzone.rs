@@ -11,6 +11,8 @@
 //! лічильник dragenter/dragleave (не булевий прапорець) — стандартний захист від фліку, коли
 //! курсор перетинає дочірні елементи всередині зони.
 
+#![allow(unused_parens)] // Необхідно для rstml view!-макроса, дужки не зайві
+
 use leptos::ev;
 use leptos::leptos_dom::helpers::window_event_listener;
 use leptos::portal::Portal;
@@ -78,7 +80,6 @@ pub enum FileStage {
 }
 
 #[component]
-#[allow(unused_parens)] // `(drag_depth.get() > 0)` нижче -- дужки потрібні для rstml, не для rustc
 pub fn FileDropzone(
     #[prop(into)] on_file: Callback<web_sys::File>,
     #[prop(optional, into)] accept: String,

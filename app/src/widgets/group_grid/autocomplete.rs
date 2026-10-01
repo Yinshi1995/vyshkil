@@ -114,7 +114,7 @@ pub fn OrgAutocomplete(
             id=id
             mode=ComboboxMode::Input
             variant=variant
-            value=Signal::derive(|| String::new())
+            value=Signal::derive(String::new)
             items=items
             label=label
             placeholder="Частина…".to_string()
@@ -147,7 +147,7 @@ pub fn VosPositionCourseAutocomplete(
 ) -> impl IntoView {
     let actor = use_actor();
     let query = RwSignal::new(String::new());
-    let results = Resource::new(move || query.get(), |q| search_vos_position_course(q));
+    let results = Resource::new(move || query.get(), search_vos_position_course);
     let hints = RwSignal::new(Vec::<VosPositionCourseHint>::new());
     Effect::new(move |_| {
         hints.set(results.get().and_then(|r| r.ok()).unwrap_or_default());
@@ -187,7 +187,7 @@ pub fn VosPositionCourseAutocomplete(
             id=id
             mode=ComboboxMode::Input
             variant=ComboboxVariant::InCell
-            value=Signal::derive(|| String::new())
+            value=Signal::derive(String::new)
             items=items
             label=label
             placeholder="ВОС / посада / курс…".to_string()

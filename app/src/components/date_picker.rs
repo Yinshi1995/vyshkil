@@ -87,7 +87,7 @@ pub fn DatePicker(
     #[prop(optional, into)] placeholder: String,
 ) -> impl IntoView {
     let open = RwSignal::new(false);
-    let view_month = RwSignal::new(value.get_untracked().unwrap_or_else(|| today()));
+    let view_month = RwSignal::new(value.get_untracked().unwrap_or_else(today));
     let root: NodeRef<leptos::html::Div> = NodeRef::new();
     let (flip_up, align_end) = use_floating_position(root, open.into());
 
@@ -156,7 +156,7 @@ pub fn DatePicker(
         let was_open = open.get_untracked();
         open.set(!was_open);
         if !was_open {
-            view_month.set(value.get_untracked().unwrap_or_else(|| today()));
+            view_month.set(value.get_untracked().unwrap_or_else(today));
         }
     };
 

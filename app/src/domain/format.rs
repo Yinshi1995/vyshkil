@@ -11,7 +11,7 @@ pub fn thousands(n: i64) -> String {
         out.push(MINUS);
     }
     for (i, ch) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
             out.push(NBSP);
         }
         out.push(ch);

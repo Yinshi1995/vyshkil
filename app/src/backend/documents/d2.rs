@@ -120,7 +120,7 @@ fn write_org_row(
 ) -> Result<(), XlsxError> {
     worksheet.write_string(row, COL_ORG, &org.org_label)?;
     for (kind_col, counts) in
-        KIND_COLS.iter().zip([&org.bzvp, &org.special, &org.adaptation].into_iter())
+        KIND_COLS.iter().zip([&org.bzvp, &org.special, &org.adaptation])
     {
         worksheet.write_number(row, *kind_col, counts.total as f64)?;
         worksheet.write_number(row, kind_col + 1, counts.finishing_today as f64)?;

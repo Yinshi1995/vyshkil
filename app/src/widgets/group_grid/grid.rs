@@ -116,7 +116,7 @@ pub fn Grid(
     Effect::new(move |_| {
         columns.widths.get();
         columns.visible.get();
-        request_animation_frame(move || recompute_shadows());
+        request_animation_frame(recompute_shadows);
     });
 
     let fresh_row = move || {

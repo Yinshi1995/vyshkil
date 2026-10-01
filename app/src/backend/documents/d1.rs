@@ -284,7 +284,7 @@ fn three_d_formula(daily_col: u16, daily_row: u32) -> String {
 fn write_org_row(worksheet: &mut Worksheet, row: u32, org: &OrgRollupRow) -> Result<(), XlsxError> {
     worksheet.write_string(row, COL_ORG, &org.org_label)?;
     for (kind_col, counts) in
-        KIND_COLS.iter().zip([&org.bzvp, &org.special, &org.adaptation].into_iter())
+        KIND_COLS.iter().zip([&org.bzvp, &org.special, &org.adaptation])
     {
         worksheet.write_number(row, *kind_col, counts.total as f64)?;
         worksheet.write_number(row, kind_col + 1, counts.finishing_today as f64)?;
