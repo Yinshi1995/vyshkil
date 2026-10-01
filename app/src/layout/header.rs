@@ -43,9 +43,6 @@ pub fn Header() -> impl IntoView {
                     <a href="/discrepancies" class="mobile-menu__link">"Розбіжності"</a>
                     <a href="/documents" class="mobile-menu__link">"Документи"</a>
                     <a href="/import" class="mobile-menu__link">"Імпорт"</a>
-                    <div class="mobile-menu__divider"></div>
-                    <a href="/dictionaries" class="mobile-menu__link mobile-menu__link--secondary">"Довідники"</a>
-                    <a href="/vos-lookup" class="mobile-menu__link mobile-menu__link--secondary">"ВОС за ОВТ"</a>
                 </nav>
             </div>
         </Show>
