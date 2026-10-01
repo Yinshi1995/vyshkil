@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use leptos::prelude::*;
 
 use crate::components::DatePicker;
@@ -6,10 +8,6 @@ use crate::pages::home::server::get_subordination_tree;
 use crate::types::org::OrgTreeRow;
 use crate::widgets::ActorNotice;
 
-/// Дерево підпорядкування з перемикачем осі й дати. За замовчуванням — сьогодні; щоб побачити
-/// сценарій переходу (142/154/61/5/92/225 омбр/ошбр з 17 АК → 7 КШР, серпень 2026), можна
-/// підставити 2026-07-20 і 2026-09-20. Дерево обрізане до видимого поточному актору піддерева
-/// (backend::policy) — без обраного актора показуємо `<ActorNotice/>`, а не порожнє дерево.
 #[component]
 pub fn SubordinationTree() -> impl IntoView {
     let actor = use_actor();
@@ -64,7 +62,10 @@ pub fn SubordinationTree() -> impl IntoView {
                     }
                     tree.get()
                         .map(|res| match res {
-                            Ok(rows) => render_tree(&rows, None).into_any(),
+                            Ok(rows) => {
+                                let collapsed: RwSignal<HashSet<i32>> = RwSignal::new(HashSet::new());
+                                view! { <CollapsibleTree rows=rows collapsed=collapsed/> }.into_any()
+                            }
                             Err(e) => {
                                 view! { <p class="card__desc status-error">{e.to_string()}</p> }.into_any()
                             }
@@ -75,27 +76,87 @@ pub fn SubordinationTree() -> impl IntoView {
     }
 }
 
-/// Рекурсивно рендерить дітей вузла `parent_id` (None = корені — органи без батька на цю дату+вісь).
-fn render_tree(rows: &[OrgTreeRow], parent_id: Option<i32>) -> impl IntoView {
+#[component]
+fn CollapsibleTree(rows: Vec<OrgTreeRow>, collapsed: RwSignal<HashSet<i32>>) -> impl IntoView {
+    render_level(&rows, None, 0, collapsed)
+}
+
+fn render_level(
+    rows: &[OrgTreeRow],
+    parent_id: Option<i32>,
+    depth: usize,
+    collapsed: RwSignal<HashSet<i32>>,
+) -> impl IntoView {
     let children: Vec<_> = rows.iter().filter(|r| r.parent_id == parent_id).collect();
     if children.is_empty() {
         return ().into_any();
     }
-    view! {
-        <ul class="org-tree">
-            {children
-                .into_iter()
-                .map(|node| {
-                    let sub = render_tree(rows, Some(node.id));
-                    view! {
-                        <li class="org-tree__node">
-                            <a href=format!("/org/{}", node.id)>{node.label.clone()}</a>
-                            {sub}
-                        </li>
+    let nodes: Vec<_> = children
+        .into_iter()
+        .map(|node| {
+            let node_id = node.id;
+            let has_children = rows.iter().any(|r| r.parent_id == Some(node_id));
+            let child_rows: Vec<OrgTreeRow> = rows.to_vec();
+            let label = node.label.clone();
+            let is_collapsed = Signal::derive(move || collapsed.get().contains(&node_id));
+            let child_depth = depth + 1;
+
+            let toggle = move |_: web_sys::MouseEvent| {
+                collapsed.update(|set| {
+                    if !set.remove(&node_id) {
+                        set.insert(node_id);
                     }
-                })
-                .collect_view()}
+                });
+            };
+
+            let depth_class = match depth {
+                0 => " org-tree__node--root",
+                1 => " org-tree__node--l1",
+                _ => "",
+            };
+
+            view! {
+                <li class=format!("org-tree__node{depth_class}")>
+                    <span class="org-tree__row">
+                        {if has_children {
+                            view! {
+                                <button
+                                    class="org-tree__toggle"
+                                    on:click=toggle
+                                    aria-expanded=move || (!is_collapsed.get()).to_string()
+                                    aria-label="Розгорнути/згорнути"
+                                >
+                                    <svg
+                                        class="org-tree__chevron"
+                                        class:org-tree__chevron--collapsed=is_collapsed
+                                        width="12" height="12" viewBox="0 0 12 12"
+                                    >
+                                        <path d="M4 2 L8 6 L4 10" fill="none" stroke="currentColor"
+                                              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </button>
+                            }.into_any()
+                        } else {
+                            view! { <span class="org-tree__leaf-indent"></span> }.into_any()
+                        }}
+                        <a href=format!("/org/{node_id}") class="org-tree__label">{label}</a>
+                    </span>
+                    {move || {
+                        if is_collapsed.get() {
+                            ().into_any()
+                        } else {
+                            render_level(&child_rows, Some(node_id), child_depth, collapsed).into_any()
+                        }
+                    }}
+                </li>
+            }
+        })
+        .collect();
+
+    view! {
+        <ul class=if parent_id.is_none() { "org-tree org-tree--root" } else { "org-tree" }>
+            {nodes}
         </ul>
     }
-        .into_any()
+    .into_any()
 }
