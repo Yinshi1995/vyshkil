@@ -57,6 +57,8 @@ uuid = { version = "1", features = ["v7"], optional = true }
 bus = { path = "../bus", optional = true }
 # Адмін-сторінка /admin/queues (09 §5, Фаза 4) -- (де)кодування payload DLQ-записів.
 base64 = { version = "0.23", optional = true }
+# docx-генератор (Етап 7, 05 §D3 "Говорілка") -- лише сервер: zip/XML підстановка в шаблоні.
+zip = { version = "8", optional = true }
 # Стильова система (Фаза 2, docs/spec/08-style-system.md) -- style без рантайм-залежностей
 # (компілюється в wasm так само, як на сервері); style_macros -- proc-macro, компілюється
 # для host незалежно від таргету консюмера.
@@ -71,7 +73,8 @@ migration = { path = "../migration" }
 # Лише тест app/tests/import_fah.rs: розпаковує тестову фікстуру "17 АК 6 додатків.zip"
 # (source_files/, ДСК) -- сам продукт zip не читає, користувач завантажує окремі xlsx.
 # Ім'я файлу в zip у CP866 (не UTF-8/CP437) -- розпаковуємо за позицією запису, не за іменем.
-zip = "8"
+# zip вже є як optional dep для ssr — тут просто re-export для тестів.
+zip = { version = "8" }
 
 [features]
 hydrate = ["leptos/hydrate"]
@@ -86,4 +89,5 @@ ssr = [
     "dep:uuid",
     "dep:bus",
     "dep:base64",
+    "dep:zip",
 ]

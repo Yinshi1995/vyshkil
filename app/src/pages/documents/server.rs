@@ -159,3 +159,160 @@ pub async fn generate_d2(
 
     Ok(bytes)
 }
+
+/// Генерує D3 "Говорілка" (05 §D3) — docx з текстом доповіді за один день.
+#[server(GenerateD3, "/api")]
+pub async fn generate_d3(
+    actor: Option<Actor>,
+    as_of_date: String,
+) -> Result<Vec<u8>, ServerFnError> {
+    use crate::backend::{documents, policy, repo};
+
+    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+
+    let today = chrono::NaiveDate::parse_from_str(&as_of_date, "%Y-%m-%d")
+        .map_err(|_| ServerFnError::new("оберіть дату"))?;
+    let yesterday = today - chrono::Duration::days(1);
+
+    let corps = repo::documents::top_level_orgs(&db, &as_of_date)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    for (corps_id, _) in &corps {
+        if !policy::can_view_org(&db, actor, *corps_id)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?
+        {
+            return Err(ServerFnError::new("немає права переглядати дані одного з корпусів"));
+        }
+    }
+
+    let today_str = today.format("%Y-%m-%d").to_string();
+    let yesterday_str = yesterday.format("%Y-%m-%d").to_string();
+    let mut corps_days = Vec::with_capacity(corps.len());
+    for (corps_id, corps_label) in &corps {
+        let rollup_today = repo::documents::daily_training_rollup(&db, *corps_id, &today_str)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let rollup_yesterday = repo::documents::daily_training_rollup(&db, *corps_id, &yesterday_str)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        corps_days.push(documents::d3::CorpsDay {
+            label: corps_label.clone(),
+            today: rollup_today,
+            yesterday: rollup_yesterday,
+        });
+    }
+
+    let template_path = std::env::var("DOCUMENTS_D3_TEMPLATE").ok();
+    let template_text = template_path
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok());
+    let template = template_text.as_deref().unwrap_or(documents::d3::DEFAULT_TEMPLATE);
+
+    let paragraphs = documents::d3::render_paragraphs(template, today, &corps_days);
+    let bytes = documents::d3::build_docx(&paragraphs)
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let root_id = repo::documents::root_org_id(&db, &as_of_date)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    if let Some(root_id) = root_id {
+        let dir = std::env::var("DOCUMENTS_DIR").unwrap_or_else(|_| "data/generated_documents".into());
+        let dir_path = std::path::Path::new(&dir).join("d3");
+        if std::fs::create_dir_all(&dir_path).is_ok() {
+            let suffix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default();
+            let file_path = dir_path.join(format!("{as_of_date}_{suffix}.docx"));
+            if std::fs::write(&file_path, &bytes).is_ok() {
+                let _ = repo::documents::insert_generated_document(
+                    &db,
+                    "d3",
+                    root_id,
+                    &as_of_date,
+                    &file_path.to_string_lossy(),
+                )
+                .await;
+            }
+        }
+    }
+
+    Ok(bytes)
+}
+
+/// Генерує D4 "Підготовка" (05 §D4) — pptx презентація.
+#[server(GenerateD4, "/api")]
+pub async fn generate_d4(
+    actor: Option<Actor>,
+    as_of_date: String,
+) -> Result<Vec<u8>, ServerFnError> {
+    use crate::backend::{documents, policy, repo};
+
+    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+
+    let today = chrono::NaiveDate::parse_from_str(&as_of_date, "%Y-%m-%d")
+        .map_err(|_| ServerFnError::new("оберіть дату"))?;
+    let yesterday = today - chrono::Duration::days(1);
+
+    let corps = repo::documents::top_level_orgs(&db, &as_of_date)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    for (corps_id, _) in &corps {
+        if !policy::can_view_org(&db, actor, *corps_id)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?
+        {
+            return Err(ServerFnError::new("немає права переглядати дані одного з корпусів"));
+        }
+    }
+
+    let today_str = today.format("%Y-%m-%d").to_string();
+    let yesterday_str = yesterday.format("%Y-%m-%d").to_string();
+    let mut corps_slides = Vec::with_capacity(corps.len());
+    for (corps_id, corps_label) in &corps {
+        let rollup_today = repo::documents::daily_training_rollup(&db, *corps_id, &today_str)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let rollup_yesterday = repo::documents::daily_training_rollup(&db, *corps_id, &yesterday_str)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        corps_slides.push(documents::d4::CorpsSlide {
+            label: corps_label.clone(),
+            today: rollup_today,
+            yesterday: rollup_yesterday,
+        });
+    }
+
+    let bytes = documents::d4::build_pptx(today, &corps_slides)
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let root_id = repo::documents::root_org_id(&db, &as_of_date)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    if let Some(root_id) = root_id {
+        let dir = std::env::var("DOCUMENTS_DIR").unwrap_or_else(|_| "data/generated_documents".into());
+        let dir_path = std::path::Path::new(&dir).join("d4");
+        if std::fs::create_dir_all(&dir_path).is_ok() {
+            let suffix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default();
+            let file_path = dir_path.join(format!("{as_of_date}_{suffix}.pptx"));
+            if std::fs::write(&file_path, &bytes).is_ok() {
+                let _ = repo::documents::insert_generated_document(
+                    &db,
+                    "d4",
+                    root_id,
+                    &as_of_date,
+                    &file_path.to_string_lossy(),
+                )
+                .await;
+            }
+        }
+    }
+
+    Ok(bytes)
+}

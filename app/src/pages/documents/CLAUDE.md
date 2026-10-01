@@ -19,11 +19,16 @@
   сам компонент рендерить голий `.cell__input` (`background: transparent`, майже без рамки) — у
   `Grid` видимість дає хром сітки (межі клітинок), поза нею інпут без обгортки виглядає порожнім
   місцем, не полем вводу (саме так і сталось при першій версії сторінки).
-- D3 (docx)/D4 (pptx-за-шаблоном) — окремі кроки після. `docs/templates/presentation-style.pptx`
-  для D4 — файл ІСНУЄ в репо з базового коміту (`b07161a`), просто був недоступний агенту через
-  `permissions.deny` (`Read(*.pptx)`/`Read(docs/templates/**)`, прибрано 2026-09-29).
+- **D3** (docx "Говорілка"): дата → rollup усіх корпусів (сьогодні + вчора для дельт) →
+  `d3::render_paragraphs` (шаблон `{{placeholder}}`, `@corps` для ітерації) → `d3::build_docx`
+  (zip/XML). Шаблон за замовчуванням вбудований; адмін може підмінити файлом через env
+  `DOCUMENTS_D3_TEMPLATE`. MIME: `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
+- **D4** (pptx "Підготовка"): дата → ті ж rollup дані → `d4::build_pptx` (zip/XML від scratch,
+  KPI-плитки + таблиця по корпусах). Стиль за 05 §D4 spec (фон `#0E0C08`, акцент `#F39200`).
+  Шаблонний підхід із іменованими фігурами потребує `source_files/Підготовка_26.09.2026.pptx`
+  (docs/QUESTIONS.md). `docs/templates/presentation-style.pptx` — лише стильовий еталон.
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
-| `mod.rs` | `DocumentsPage`/`DocumentsBody` (`D1Block`+`D2Block`) — вибір органу/дати, виклик генерації, тригер скачування | `pages/CLAUDE.md` → `routes.rs` |
-| `server.rs` | `generate_d1`/`generate_d2` — `policy::can_view_org` → `repo::documents::daily_training_rollup`(+`top_level_orgs`/`root_org_id` для D2) → `backend::documents::d1`/`d2` → байти + запис на диск/`generated_document` | `mod.rs` |
+| `mod.rs` | `DocumentsPage`/`DocumentsBody` (`D1Block`+`D2Block`+`D3Block`+`D4Block`) — вибір органу/дати, виклик генерації, тригер скачування | `pages/CLAUDE.md` → `routes.rs` |
+| `server.rs` | `generate_d1`/`generate_d2`/`generate_d3`/`generate_d4` — `policy::can_view_org` → `repo::documents::daily_training_rollup`(+`top_level_orgs`/`root_org_id`) → `backend::documents::d1`-`d4` → байти + запис на диск/`generated_document` | `mod.rs` |

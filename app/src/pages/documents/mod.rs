@@ -7,7 +7,7 @@ use crate::components::{download_bytes, DatePicker};
 use crate::hooks::use_actor::use_actor;
 use crate::widgets::group_grid::OrgAutocomplete;
 use crate::widgets::ActorNotice;
-use server::{generate_d1, generate_d2};
+use server::{generate_d1, generate_d2, generate_d3, generate_d4};
 
 /// Генерація документів (Етап 7, 05) — D1 (щоденна зведена, один день) і D2 ("Контролька", один
 /// тиждень). D3/D4 — окремі кроки після.
@@ -33,6 +33,8 @@ fn DocumentsBody() -> impl IntoView {
         <div class=cx!("flex col gap3")>
             <D1Block/>
             <D2Block/>
+            <D3Block/>
+            <D4Block/>
         </div>
     }
 }
@@ -180,6 +182,134 @@ fn D2Block() -> impl IntoView {
                     on:click=do_generate
                 >
                     "Згенерувати D2 (тиждень)"
+                </button>
+                <span class=cx!("fg-muted")>{move || status.get()}</span>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn D3Block() -> impl IntoView {
+    let actor = use_actor();
+
+    let as_of = RwSignal::new(String::new());
+    let status = RwSignal::new(String::new());
+    let generating = RwSignal::new(false);
+
+    let do_generate = move |_| {
+        let Some(actor) = actor.get_untracked() else { return };
+        let date = as_of.get_untracked();
+        if date.trim().is_empty() {
+            status.set("оберіть дату".to_string());
+            return;
+        }
+        generating.set(true);
+        status.set("генерую…".to_string());
+        leptos::task::spawn_local(async move {
+            match generate_d3(Some(actor), date.clone()).await {
+                Ok(bytes) => {
+                    let filename = format!("D3_Говорілка_{date}.docx");
+                    download_bytes(
+                        &bytes,
+                        &filename,
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    );
+                    status.set("готово".to_string());
+                }
+                Err(e) => status.set(format!("не вдалось згенерувати: {e}")),
+            }
+            generating.set(false);
+        });
+    };
+
+    view! {
+        <div class=cx!("flex col gap3")>
+            <p class="card__desc">
+                "D3 — \"Говорілка\" (05 §D3): текст доповіді за один день, абзаци по слайдах "
+                "презентації. Числа з пробілом-розділювачем тисяч, відсотки цілі, зміни за добу "
+                "зі справжнім мінусом. Оберіть дату."
+            </p>
+            <div class=cx!("flex items-c gap2 wrap")>
+                <DatePicker
+                    value=Signal::derive(move || {
+                        chrono::NaiveDate::parse_from_str(&as_of.get(), "%Y-%m-%d").ok()
+                    })
+                    on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                        as_of.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                    })
+                    placeholder="дд.мм.рррр".to_string()
+                />
+                <button
+                    class="btn btn--primary"
+                    disabled=move || generating.get()
+                    on:click=do_generate
+                >
+                    "Згенерувати D3"
+                </button>
+                <span class=cx!("fg-muted")>{move || status.get()}</span>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn D4Block() -> impl IntoView {
+    let actor = use_actor();
+
+    let as_of = RwSignal::new(String::new());
+    let status = RwSignal::new(String::new());
+    let generating = RwSignal::new(false);
+
+    let do_generate = move |_| {
+        let Some(actor) = actor.get_untracked() else { return };
+        let date = as_of.get_untracked();
+        if date.trim().is_empty() {
+            status.set("оберіть дату".to_string());
+            return;
+        }
+        generating.set(true);
+        status.set("генерую…".to_string());
+        leptos::task::spawn_local(async move {
+            match generate_d4(Some(actor), date.clone()).await {
+                Ok(bytes) => {
+                    let filename = format!("D4_Підготовка_{date}.pptx");
+                    download_bytes(
+                        &bytes,
+                        &filename,
+                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    );
+                    status.set("готово".to_string());
+                }
+                Err(e) => status.set(format!("не вдалось згенерувати: {e}")),
+            }
+            generating.set(false);
+        });
+    };
+
+    view! {
+        <div class=cx!("flex col gap3")>
+            <p class="card__desc">
+                "D4 — \"Підготовка\" (05 §D4): презентація pptx з KPI-плитками та "
+                "таблицями по корпусах. Стиль за spec (фон #0E0C08, акцент #F39200). "
+                "Оберіть дату."
+            </p>
+            <div class=cx!("flex items-c gap2 wrap")>
+                <DatePicker
+                    value=Signal::derive(move || {
+                        chrono::NaiveDate::parse_from_str(&as_of.get(), "%Y-%m-%d").ok()
+                    })
+                    on_change=Callback::new(move |d: Option<chrono::NaiveDate>| {
+                        as_of.set(d.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default());
+                    })
+                    placeholder="дд.мм.рррр".to_string()
+                />
+                <button
+                    class="btn btn--primary"
+                    disabled=move || generating.get()
+                    on:click=do_generate
+                >
+                    "Згенерувати D4"
                 </button>
                 <span class=cx!("fg-muted")>{move || status.get()}</span>
             </div>

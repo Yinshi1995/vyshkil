@@ -23,3 +23,5 @@
 |---|---|---|
 | `d1.rs` | `build_day_sheet` — один денний аркуш "Зведена таблиця" (05 §D1) з готового `repo::documents::DailyRollup`, ВСЬОГО-рядок формулою SUM | `pages/documents/server.rs` |
 | `d2.rs` | `build_week_sheet`/`DayBlock` — один тижневий аркуш "Контролька" (05 §D2), тиждень→день→корпус→підрозділ, трирівневі формули (суміжні й несуміжні) | `pages/documents/server.rs` |
+| `d3.rs` | `render_paragraphs`/`build_docx` — "Говорілка" (05 §D3): шаблон `{{placeholder}}` → абзаци docx, `@corps` для ітерації по корпусах, адмін може підмінити шаблон файлом через `DOCUMENTS_D3_TEMPLATE` env | `pages/documents/server.rs` |
+| `d4.rs` | `build_pptx`/`CorpsSlide` — "Підготовка" (05 §D4): від-scratch pptx (zip/XML), титульний + загальна динаміка (KPI-плитки) + по корпусах; стиль за 05 §D4 spec; шаблонний підхід потребує `source_files/Підготовка_26.09.2026.pptx` (QUESTIONS.md) | `pages/documents/server.rs` |
