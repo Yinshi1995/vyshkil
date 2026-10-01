@@ -15,8 +15,14 @@ Postgres (`notifier`/`notifier_test`, не бачить таблиць заст�
   вручну, перезаписується). Рантайм-перевірка вхідних повідомлень — окремо, вручну підтримувані
   zod-схеми в `schemas.ts` (мають описувати ТУ САМУ форму — розсинхрон ловиться лише вручну).
 - Тести — вбудований `node:test` (`npm test`), без окремого фреймворку. Інтеграційні
-  (`delivery.test.ts`) — проти реального Postgres, `FakeChannel` замість реального WhatsApp
-  (потребують `NOTIFIER_DATABASE_URL`, інакше пропускаються — той самий підхід, що Rust-бік).
+  (`delivery.test.ts`, `consumer.test.ts`) — проти реального Postgres, `FakeChannel` замість
+  реального WhatsApp (потребують `NOTIFIER_DATABASE_URL`, інакше пропускаються — той самий
+  підхід, що Rust-бік).
+- **`ChannelNotReadyError`** (`whatsapp/channel.ts`) — реальна пастка, спіймана при написанні
+  §6-сценаріїв: `WhatsAppChannel.send` МАЄ кинути цю помилку (не повернути `{status:'failed'}`),
+  коли клієнт ще не прив'язаний — звичайний `{status:'failed'}` термінальний (ack, запис у
+  delivery_log), тоді як needs_pairing МАЄ чекати (nak, 09 §3). Якщо колись додаси інший `Channel`
+  — тримай цю різницю: "спробував надіслати, провалилось" ≠ "ще не готовий слати".
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
@@ -27,12 +33,14 @@ Postgres (`notifier`/`notifier_test`, не бачить таблиць заст�
 | `schemas.ts` | zod-схеми (валідація вхідних `NotifySend`) | `delivery.ts` |
 | `templates.ts` | Єдиний знеособлений шаблон (04 §5) | `delivery.ts`, `commands.ts` (test-надсилання) |
 | `mask.ts` | Маскування номера перед журналом/логами | `delivery.ts`, `pairing.ts` |
-| `delivery.ts` | `processNotifySend` — валідація→inbox→рендер→надсилання→журнал, одна транзакція | `index.ts` |
+| `delivery.ts` | `processNotifySend` — валідація→inbox→рендер→надсилання→журнал, одна транзакція | `consumer.ts` |
+| `consumer.ts` | `handleOneMessage` — nak/term/DLQ-рішення для одного повідомлення (винесено з `index.ts` заради тестованості, `ConsumableMessage` — легкий fake-інтерфейс) | `index.ts`, тести |
+| `dlq.ts` | `publishToDlq` — запис мертвого листа (невалідне/вичерпане повідомлення) | `consumer.ts` |
 | `pairing.ts` | `PairingStateMachine` — стан прив'язки WhatsApp, публікує в NATS KV | `index.ts`, `commands.ts` |
 | `commands.ts` | 4 NATS request-reply команди адмінки (`pair.qr`/`pair.code`/`logout`/`test`) | `index.ts` |
 | `health.ts` | `/healthz`/`/readyz` | `index.ts` |
 | `whatsapp/client.ts` | `createWhatsAppClient` — реальний `whatsapp-web.js` Client, `LocalAuth`, системний Chromium | `index.ts` |
-| `whatsapp/channel.ts` | `Channel`/`WhatsAppChannel`/`FakeChannel` (тести) | `delivery.ts`, `commands.ts`, тести |
-| `index.ts` | Точка входу — з'єднує все, consumer-цикл із watchdog | — |
+| `whatsapp/channel.ts` | `Channel`/`WhatsAppChannel`/`FakeChannel`/`ChannelNotReadyError` | `consumer.ts` (через `delivery.ts`), `commands.ts`, тести |
+| `index.ts` | Точка входу — з'єднує все, цикл `fetch`→`handleOneMessage` із watchdog | — |
 | `migrations/*.sql` | Схема нотифікатора (`org_contact`/`delivery_log`/`inbox`) | `migrate.ts` |
 | `src/generated/*.d.ts` | Згенеровані TS-типи з `contracts/schema/*.json` — НЕ редагувати вручну | усі модулі, що працюють з конвертами |

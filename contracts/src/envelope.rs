@@ -70,4 +70,32 @@ mod tests {
         assert_eq!(back.type_, "test.event.v1");
         assert_eq!(back.version, 1);
     }
+
+    /// Сумісність версій (09 §3.4: "Споживач ігнорує невідомі поля"): конверт від НОВІШОГО
+    /// продюсера, що додав поле (і в payload, і на верхньому рівні самого Envelope), МАЄ
+    /// десеріалізуватись старим споживачем без помилки — інакше додавання поля стало б breaking
+    /// change, а не `v2`-сумісним розширенням. Жоден тип тут не має
+    /// `#[serde(deny_unknown_fields)]` — цей тест ловить, якщо хтось його колись додасть.
+    #[test]
+    fn unknown_fields_from_a_newer_producer_are_ignored_not_rejected() {
+        let json = serde_json::json!({
+            "id": Uuid::now_v7().to_string(),
+            "type": "test.event.v1",
+            "version": 1,
+            "occurred_at": Utc::now().to_rfc3339(),
+            "producer": "future-producer",
+            "correlation_id": Uuid::now_v7().to_string(),
+            "causation_id": null,
+            "future_envelope_field": "щось, чого стара версія ще не знає",
+            "payload": {
+                "n": 7,
+                "future_payload_field": { "nested": true },
+            },
+        })
+        .to_string();
+
+        let back: Envelope<Payload> =
+            serde_json::from_str(&json).expect("невідомі поля НЕ мають ламати десеріалізацію");
+        assert_eq!(back.payload, Payload { n: 7 });
+    }
 }

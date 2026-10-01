@@ -176,6 +176,70 @@ async fn relay_publishes_real_outbox_row_and_a_subscriber_receives_it() {
 
     // Стрім НЕ видаляємо (спільний з продакшен-relay, §вище) -- лише свій durable consumer,
     // щоб повторні прогони тесту не накопичували їх на реальному EVENTS-стрімі.
-    let mut stream = js.get_stream(subjects::stream::EVENTS).await.expect("отримати стрім назад");
+    let stream = js.get_stream(subjects::stream::EVENTS).await.expect("отримати стрім назад");
     stream.delete_consumer("test-relay-consumer").await.expect("прибрати consumer");
+}
+
+/// 09-messaging.md §6: "NATS вимкнено → outbox копиться → увімкнено → усе доставлено рівно раз".
+/// Тут симулюємо не розрив самого з'єднання (те вже покриває `relay::run`'s ретрай-цикл,
+/// окремий від `relay_batch`), а конкретний СПОСІБ, яким публікація реально провалюється в
+/// проді: subject, для якого ще нема стріму ("no responders"/"no stream matches subject") --
+/// той самий `relay_batch`, що й у "щасливому" тесті вище, викликається ДВІЧІ: спершу без
+/// стріму (провал, рядок лишається неопублікованим, attempts++), потім зі стрімом (успіх).
+#[tokio::test]
+async fn outbox_row_survives_publish_failure_and_delivers_once_nats_catches_up() {
+    let Some(db) = fresh_test_db().await else { return };
+    let Some(url) = nats_url() else { return };
+
+    let client = bus::connect(&url).await.expect("з'єднання з NATS");
+    let js = bus::jetstream(&client);
+
+    // Унікальний subject (НЕ реальний `vyshkil.discrepancy.>` -- той уже покритий спільним
+    // EVENTS-стрімом з попередніх тестів/розробки, тому публікація туди завжди "випадково"
+    // вдається; тут навмисно потрібен subject, для якого стріму ТОЧНО ще нема).
+    let subject = format!("vyshkil.test-retry.{}.v1", Uuid::now_v7().simple());
+    let payload_json = "{\"hello\":\"retry\"}".to_string();
+    let id = outbox::insert(&db, &subject, &payload_json, "{}").await.expect("insert в outbox");
+
+    // Спроба 1: стріму для цього subject-а ще нема -- публікація провалюється, рядок лишається
+    // неопублікованим.
+    relay_batch(&db, &js).await.expect("relay_batch (navіть при невдалій публікації не падає)");
+
+    #[derive(sea_orm::FromQueryResult)]
+    struct Row {
+        published: bool,
+        attempts: i32,
+    }
+    let after_failure = Row::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT published_at IS NOT NULL AS published, attempts FROM outbox WHERE id = $1::uuid",
+        [id.to_string().into()],
+    ))
+    .one(&db)
+    .await
+    .expect("прочитати рядок")
+    .expect("рядок мав існувати");
+    assert!(!after_failure.published, "без стріму публікація мала провалитись, не позначитись");
+    assert_eq!(after_failure.attempts, 1, "невдала спроба мала інкрементувати attempts");
+
+    // "NATS/стрім стає доступним" -- створюємо стрім для цього subject-а (той самий idempotent
+    // get-or-create виклик, що робить продакшен-код при відновленні з'єднання).
+    js.get_or_create_stream(StreamConfig { name: format!("TEST_RETRY_{}", Uuid::now_v7().simple()), subjects: vec![subject.clone()], ..Default::default() })
+        .await
+        .expect("стрім для retry-subject-а");
+
+    // Спроба 2: тепер публікація має вдатись.
+    relay_batch(&db, &js).await.expect("relay_batch");
+
+    let after_recovery = Row::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT published_at IS NOT NULL AS published, attempts FROM outbox WHERE id = $1::uuid",
+        [id.to_string().into()],
+    ))
+    .one(&db)
+    .await
+    .expect("прочитати рядок")
+    .expect("рядок мав існувати")
+    .published;
+    assert!(after_recovery, "після появи стріму повторна спроба мала опублікувати рядок");
 }
