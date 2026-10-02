@@ -125,8 +125,7 @@ test("5 рядків з клавіатури — цілий рядок без м
 });
 
 test("? показує шпаргалку гарячих клавіш", async ({ page }) => {
-  // НЕ через selectActor() — той навмисно закриває шпаргалку в кінці (Escape) для решти тестів,
-  // а саме відкриту-одразу шпаргалку й перевіряє цей тест.
+  // Auto-popup прибрано — перевіряємо, що `?` відкриває шпаргалку.
   await page.goto("/training-form");
   const button = page.getByRole("button", { name: "Оберіть частину" });
   const option = page.getByRole("option", { name: ORG_LABEL });
@@ -138,14 +137,12 @@ test("? показує шпаргалку гарячих клавіш", async ({
     await option.click();
   }
 
-  // Шпаргалка відкрита сама при першому вході (02 §2: "показується автоматично при першому
-  // відкритті") -- перевіряємо це, тоді закриваємо і перевіряємо, що `?` відкриває знову.
-  await expect(page.getByRole("heading", { name: "Гарячі клавіші" })).toBeVisible();
-  await page.getByRole("button", { name: "Закрити" }).click();
   await expect(page.getByRole("heading", { name: "Гарячі клавіші" })).toBeHidden();
 
   await page.locator("body").press("?");
   await expect(page.getByRole("heading", { name: "Гарячі клавіші" })).toBeVisible();
+  await page.getByRole("button", { name: "Закрити" }).click();
+  await expect(page.getByRole("heading", { name: "Гарячі клавіші" })).toBeHidden();
 });
 
 test("помилкова дата не зберігається — Ctrl+Enter показує помилку і не комітить", async ({
