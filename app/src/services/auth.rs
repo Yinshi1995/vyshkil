@@ -6,6 +6,16 @@ use crate::types::auth::{LoginResponse, UserRoleRow};
 pub async fn auth_login(login: String, password: String) -> Result<LoginResponse, ServerFnError> {
     use crate::backend::repo;
 
+    let client_ip = extract_client_ip().await.unwrap_or_default();
+    if !check_rate_limit(&client_ip) {
+        return Ok(LoginResponse {
+            success: false,
+            error: Some("Забагато спроб входу. Спробуйте через 15 хвилин.".to_string()),
+            display_name: None,
+            roles: vec![],
+        });
+    }
+
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let user = repo::auth::find_user_by_login(&db, &login)
@@ -13,6 +23,7 @@ pub async fn auth_login(login: String, password: String) -> Result<LoginResponse
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let Some(user) = user else {
+        record_failed_attempt(&client_ip);
         return Ok(LoginResponse {
             success: false,
             error: Some("Невірний логін або пароль".to_string()),
@@ -32,6 +43,7 @@ pub async fn auth_login(login: String, password: String) -> Result<LoginResponse
 
     let password_valid = verify_password(&password, &user.password_hash);
     if !password_valid {
+        record_failed_attempt(&client_ip);
         return Ok(LoginResponse {
             success: false,
             error: Some("Невірний логін або пароль".to_string()),
@@ -187,6 +199,59 @@ pub async fn require_auth() -> Result<crate::types::auth::AuthUser, ServerFnErro
         actor,
         display_name: session.display_name,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Rate limiting (12-auth.md §6: 5 спроб / 15 хв на IP)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "ssr")]
+const MAX_LOGIN_ATTEMPTS: usize = 5;
+#[cfg(feature = "ssr")]
+const RATE_LIMIT_WINDOW_SECS: u64 = 900; // 15 хвилин
+
+#[cfg(feature = "ssr")]
+fn rate_limiter() -> &'static std::sync::Mutex<std::collections::HashMap<String, Vec<std::time::Instant>>> {
+    use std::sync::OnceLock;
+    static LIMITER: OnceLock<std::sync::Mutex<std::collections::HashMap<String, Vec<std::time::Instant>>>> = OnceLock::new();
+    LIMITER.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+#[cfg(feature = "ssr")]
+fn check_rate_limit(ip: &str) -> bool {
+    let mut map = rate_limiter().lock().unwrap_or_else(|e| e.into_inner());
+    let now = std::time::Instant::now();
+    let window = std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS);
+    if let Some(attempts) = map.get_mut(ip) {
+        attempts.retain(|t| now.duration_since(*t) < window);
+        attempts.len() < MAX_LOGIN_ATTEMPTS
+    } else {
+        true
+    }
+}
+
+#[cfg(feature = "ssr")]
+fn record_failed_attempt(ip: &str) {
+    let mut map = rate_limiter().lock().unwrap_or_else(|e| e.into_inner());
+    let now = std::time::Instant::now();
+    let window = std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS);
+    let attempts = map.entry(ip.to_string()).or_default();
+    attempts.retain(|t| now.duration_since(*t) < window);
+    attempts.push(now);
+}
+
+#[cfg(feature = "ssr")]
+async fn extract_client_ip() -> Option<String> {
+    let req = use_context::<http::request::Parts>()?;
+    if let Some(forwarded) = req.headers.get("x-forwarded-for") {
+        if let Ok(s) = forwarded.to_str() {
+            return s.split(',').next().map(|ip| ip.trim().to_string());
+        }
+    }
+    if let Some(real_ip) = req.headers.get("x-real-ip") {
+        return real_ip.to_str().ok().map(|s| s.to_string());
+    }
+    None
 }
 
 /// Визначає актора: якщо є валідна auth-сесія — бере з неї (серверне забезпечення),
