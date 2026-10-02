@@ -9,8 +9,9 @@ use crate::types::org::OrgDetail;
 #[server(GetOrgDetail, "/api")]
 pub async fn get_org_detail(actor: Option<Actor>, org_id: i32) -> Result<OrgDetail, ServerFnError> {
     use crate::backend::{policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let allowed = policy::can_view_org(&db, actor, org_id)

@@ -14,9 +14,10 @@ pub async fn generate_d1(
     any_day_in_week: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
     use chrono::Datelike;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     if !policy::can_view_org(&db, actor, org_id)
@@ -86,9 +87,10 @@ pub async fn generate_d2(
     any_day_in_week: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
     use chrono::Datelike;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let any_day = chrono::NaiveDate::parse_from_str(&any_day_in_week, "%Y-%m-%d")
@@ -167,8 +169,9 @@ pub async fn generate_d3(
     as_of_date: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let today = chrono::NaiveDate::parse_from_str(&as_of_date, "%Y-%m-%d")
@@ -253,8 +256,9 @@ pub async fn generate_d5_fah(
     as_of_date: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     if !policy::can_view_org(&db, actor, org_id)
@@ -289,8 +293,9 @@ pub async fn generate_d5_bps(
     as_of_date: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     if !policy::can_view_org(&db, actor, org_id)
@@ -325,8 +330,9 @@ pub async fn generate_d5_kvid(
     as_of_date: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     if !policy::can_view_org(&db, actor, org_id)
@@ -361,8 +367,9 @@ pub async fn generate_d5_ivs(
     as_of_date: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     if !policy::can_view_org(&db, actor, org_id)
@@ -397,8 +404,9 @@ pub async fn generate_d5_terminy(
     as_of_date: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     if !policy::can_view_org(&db, actor, org_id)
@@ -437,8 +445,9 @@ pub async fn generate_d6(
     as_of_date: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let corps = repo::documents::top_level_orgs(&db, &as_of_date)
@@ -512,8 +521,9 @@ pub async fn generate_d4(
     as_of_date: String,
 ) -> Result<Vec<u8>, ServerFnError> {
     use crate::backend::{documents, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let today = chrono::NaiveDate::parse_from_str(&as_of_date, "%Y-%m-%d")

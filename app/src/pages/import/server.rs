@@ -22,8 +22,9 @@ pub async fn parse_kvid_file(
     bytes: Vec<u8>,
 ) -> Result<Vec<StaffingRow>, ServerFnError> {
     use crate::backend::{import, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     if actor.role == policy::Role::Viewer {
         return Err(ServerFnError::new("перегляд не імпортує дані"));
     }
@@ -54,8 +55,9 @@ pub async fn parse_ivs_file(
     bytes: Vec<u8>,
 ) -> Result<(Vec<InstructorStaffingRow>, Vec<GroupFormRow>), ServerFnError> {
     use crate::backend::{import, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     if actor.role == policy::Role::Viewer {
         return Err(ServerFnError::new("перегляд не імпортує дані"));
     }
@@ -86,8 +88,9 @@ pub async fn parse_vch_archive_file(
     bytes: Vec<u8>,
 ) -> Result<Vec<GroupFormRow>, ServerFnError> {
     use crate::backend::{import, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     if actor.role == policy::Role::Viewer {
         return Err(ServerFnError::new("перегляд не імпортує дані"));
     }
@@ -151,9 +154,10 @@ pub async fn commit_staffing(
     rows: Vec<StaffingRow>,
 ) -> Result<usize, ServerFnError> {
     use crate::backend::{db, policy, repo};
+    use crate::services::auth::resolve_actor;
     use sea_orm::FromQueryResult;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     if actor.role == policy::Role::Viewer {
         return Err(ServerFnError::new("перегляд не зберігає дані"));
     }
@@ -217,9 +221,10 @@ pub async fn commit_instructor_staffing(
     rows: Vec<InstructorStaffingRow>,
 ) -> Result<usize, ServerFnError> {
     use crate::backend::{db, policy, repo};
+    use crate::services::auth::resolve_actor;
     use sea_orm::FromQueryResult;
 
-    let actor = actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))?;
+    let actor = resolve_actor(actor).await?;
     if actor.role == policy::Role::Viewer {
         return Err(ServerFnError::new("перегляд не зберігає дані"));
     }

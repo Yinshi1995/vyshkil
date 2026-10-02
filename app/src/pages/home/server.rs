@@ -11,8 +11,9 @@ pub async fn get_subordination_tree(
     axis: String,
 ) -> Result<Vec<OrgTreeRow>, ServerFnError> {
     use crate::backend::{policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let Some(actor) = actor else { return Ok(Vec::new()) };
+    let Ok(actor) = resolve_actor(actor).await else { return Ok(Vec::new()) };
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let visible = policy::visible_org_ids(&db, actor)
@@ -32,9 +33,10 @@ pub async fn get_subordination_tree(
 pub async fn get_dashboard_stats(
     actor: Option<Actor>,
 ) -> Result<DashboardStats, ServerFnError> {
+    use crate::services::auth::resolve_actor;
     use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
 
-    let Some(_actor) = actor else {
+    let Ok(_actor) = resolve_actor(actor).await else {
         return Ok(DashboardStats {
             org_count: 0,
             training_group_count: 0,
@@ -96,9 +98,10 @@ pub async fn get_recent_submissions(
     actor: Option<Actor>,
 ) -> Result<Vec<RecentSubmission>, ServerFnError> {
     use crate::backend::policy;
+    use crate::services::auth::resolve_actor;
     use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
 
-    let Some(actor) = actor else { return Ok(Vec::new()) };
+    let Ok(actor) = resolve_actor(actor).await else { return Ok(Vec::new()) };
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let visible = policy::visible_org_ids(&db, actor)

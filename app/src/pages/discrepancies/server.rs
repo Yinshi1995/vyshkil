@@ -9,8 +9,9 @@ pub async fn get_discrepancies(
     status: Option<String>,
 ) -> Result<Vec<DiscrepancyRow>, ServerFnError> {
     use crate::backend::{policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let Some(actor) = actor else { return Ok(Vec::new()) };
+    let Ok(actor) = resolve_actor(actor).await else { return Ok(Vec::new()) };
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let visible = policy::visible_org_ids(&db, actor)
@@ -35,10 +36,9 @@ pub async fn update_discrepancy_status(
     resolution_note: Option<String>,
 ) -> Result<(), ServerFnError> {
     use crate::backend::{db, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let Some(actor) = actor else {
-        return Err(ServerFnError::new("актора не обрано"));
-    };
+    let actor = resolve_actor(actor).await?;
 
     let valid_statuses = ["in_progress", "resolved", "dismissed"];
     if !valid_statuses.contains(&new_status.as_str()) {
