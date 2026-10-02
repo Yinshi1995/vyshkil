@@ -37,5 +37,11 @@
   CSS login-card. Виправлено індекси міграції 045 (child_id→child_org_id, org_id→sender_org_id).
   cargo test ✅ (9/9 architecture).
 
-**Локальні коміти** (29 шт.) чекають push — заблоковано settings.json, користувач має виконати
+- **Auth flow + UI polish** — робочий login → cookie → auto-detect; AuthSwitcher (аватар +
+  ім'я + меню ролей + logout); DevSwitcher (два дропдауни); ModeToggle DEV/AUTH.
+  Toolbar отримав панельний вигляд (background + border). "Шпаргалка" → "Гарячі клавіші",
+  auto-popup прибрано. full_name у дереві підпорядкування (secondary text).
+  cargo test --workspace ✅ (99 тестів), clippy ✅.
+
+**Локальні коміти** (36 шт.) чекають push — заблоковано settings.json, користувач має виконати
 `git push -u origin main` вручну.

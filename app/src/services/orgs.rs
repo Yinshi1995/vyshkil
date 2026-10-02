@@ -26,8 +26,9 @@ pub async fn search_orgs(
     query: String,
 ) -> Result<Vec<OrgSearchResult>, ServerFnError> {
     use crate::backend::{policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let Some(actor) = actor else { return Ok(Vec::new()) };
+    let Ok(actor) = resolve_actor(actor).await else { return Ok(Vec::new()) };
     let db = expect_context::<sea_orm::DatabaseConnection>();
 
     let visible = policy::visible_org_ids(&db, actor)

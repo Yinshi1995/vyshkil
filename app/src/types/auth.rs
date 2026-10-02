@@ -1,5 +1,16 @@
 use serde::{Deserialize, Serialize};
 
+use super::actor::Actor;
+
+/// Автентифікований користувач — результат перевірки cookie-сесії на сервері (12-auth.md §3).
+/// Провайдиться як Leptos-контекст `Option<AuthUser>` — `None` якщо запит без валідної сесії.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthUser {
+    pub user_id: i32,
+    pub actor: Option<Actor>,
+    pub display_name: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAccount {
     pub id: i32,
@@ -38,6 +49,14 @@ pub struct LoginResponse {
     pub error: Option<String>,
     pub display_name: Option<String>,
     pub roles: Vec<UserRoleRow>,
+}
+
+/// DTO зареєстрованого passkey для UI в /settings (12-auth.md §1.3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PasskeyInfo {
+    pub id: i32,
+    pub name: Option<String>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

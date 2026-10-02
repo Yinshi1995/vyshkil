@@ -47,6 +47,7 @@ mod m20261001_000044_widen_generated_document_kind_d3_d6;
 mod m20261001_000045_add_search_indexes;
 mod m20261001_000046_create_user_account_table;
 mod m20261001_000047_seed_admin_account;
+mod m20261002_000048_create_passkey_credential_table;
 
 pub struct Migrator;
 
@@ -121,6 +122,8 @@ impl MigratorTrait for Migrator {
             // Етап 10a (12-auth.md): автентифікація логін/пароль.
             Box::new(m20261001_000046_create_user_account_table::Migration),
             Box::new(m20261001_000047_seed_admin_account::Migration),
+            // Étap 10b (12-auth.md §1.3): FIDO2/WebAuthn passkey credentials.
+            Box::new(m20261002_000048_create_passkey_credential_table::Migration),
         ]
     }
 }

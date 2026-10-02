@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::types::actor::Actor;
+use crate::types::auth::PasskeyInfo;
 
 // ---------------------------------------------------------------------------
 // Спільний helper — require_admin
@@ -248,4 +249,41 @@ pub async fn retry_dlq_entry(actor: Option<Actor>, seq: u64) -> Result<(), Serve
         .map_err(|e| ServerFnError::new(format!("видалення запису {seq}: {e}")))?;
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Passkey / FIDO2 (12-auth.md §1.3, Étap 10b)
+// ---------------------------------------------------------------------------
+
+#[server(ListPasskeys, "/api")]
+pub async fn list_passkeys() -> Result<Vec<PasskeyInfo>, ServerFnError> {
+    use crate::backend::repo;
+    use crate::services::auth::require_auth;
+
+    let auth_user = require_auth().await?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    let creds = repo::passkeys::credentials_for_user(&db, auth_user.user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(creds
+        .into_iter()
+        .map(|c| PasskeyInfo {
+            id: c.id,
+            name: c.name,
+            created_at: String::new(),
+        })
+        .collect())
+}
+
+#[server(DeletePasskey, "/api")]
+pub async fn delete_passkey(credential_id: i32) -> Result<bool, ServerFnError> {
+    use crate::backend::repo;
+    use crate::services::auth::require_auth;
+
+    let auth_user = require_auth().await?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    repo::passkeys::delete_credential(&db, auth_user.user_id, credential_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
 }

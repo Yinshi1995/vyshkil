@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod dictionaries;
+pub mod passkeys;
 pub mod documents;
 pub mod groups;
 pub mod imports_bps;

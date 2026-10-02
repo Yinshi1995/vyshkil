@@ -12,8 +12,11 @@ pub async fn get_draft_impl(
     source_type: &str,
 ) -> Result<Option<DraftState>, String> {
     use crate::backend::repo;
+    use crate::services::auth::resolve_actor;
 
-    let Some(actor) = actor else { return Ok(None) };
+    let Ok(actor) = resolve_actor(actor).await.map_err(|e| e.to_string()) else {
+        return Ok(None);
+    };
     let db = leptos::prelude::expect_context::<sea_orm::DatabaseConnection>();
     repo::submissions::latest_draft_for_org(&db, actor.org_id, source_type)
         .await
@@ -27,8 +30,9 @@ pub async fn save_draft_impl(
     payload: DraftPayload,
 ) -> Result<i32, String> {
     use crate::backend::{db, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| "оберіть актора вгорі".to_string())?;
+    let actor = resolve_actor(actor).await.map_err(|e| e.to_string())?;
     if actor.role == policy::Role::Viewer {
         return Err("перегляд не зберігає чернетки".to_string());
     }
@@ -48,8 +52,9 @@ pub async fn commit_grid_impl(
     payload: DraftPayload,
 ) -> Result<CommitOutcome, String> {
     use crate::backend::{db, policy, repo};
+    use crate::services::auth::resolve_actor;
 
-    let actor = actor.ok_or_else(|| "оберіть актора вгорі".to_string())?;
+    let actor = resolve_actor(actor).await.map_err(|e| e.to_string())?;
     if actor.role == policy::Role::Viewer {
         return Err("перегляд не зберігає дані".to_string());
     }

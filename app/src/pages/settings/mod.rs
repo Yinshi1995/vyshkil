@@ -8,15 +8,18 @@ use wasm_bindgen::JsCast;
 use crate::hooks::use_actor::use_actor;
 use crate::layout::{ContentWidth, PageContent, PageHeader};
 use crate::types::actor::Role;
+use crate::types::auth::AuthMode;
 use crate::widgets::ActorNotice;
 use server::{
-    confirm_learned_alias, get_learned_aliases, get_queue_status, logout_whatsapp, reject_learned_alias,
-    request_pairing_code, retry_dlq_entry, send_test_notification,
+    confirm_learned_alias, delete_passkey, get_learned_aliases, get_queue_status, list_passkeys,
+    logout_whatsapp, reject_learned_alias, request_pairing_code, retry_dlq_entry,
+    send_test_notification,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SettingsTab {
     Appearance,
+    Security,
     Whatsapp,
     Queues,
     Aliases,
@@ -26,6 +29,7 @@ impl SettingsTab {
     fn label(self) -> &'static str {
         match self {
             Self::Appearance => "Вигляд",
+            Self::Security => "Безпека",
             Self::Whatsapp => "WhatsApp",
             Self::Queues => "Черги",
             Self::Aliases => "Синоніми",
@@ -35,6 +39,7 @@ impl SettingsTab {
     fn icon_path(self) -> &'static str {
         match self {
             Self::Appearance => "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z",
+            Self::Security => "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z",
             Self::Whatsapp => "M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z",
             Self::Queues => "M4 6h16M4 12h16M4 18h16",
             Self::Aliases => "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
@@ -42,15 +47,17 @@ impl SettingsTab {
     }
 
     fn all() -> &'static [SettingsTab] {
-        &[Self::Appearance, Self::Whatsapp, Self::Queues, Self::Aliases]
+        &[Self::Appearance, Self::Security, Self::Whatsapp, Self::Queues, Self::Aliases]
     }
 }
 
 #[component]
 pub fn SettingsPage() -> impl IntoView {
     let actor = use_actor();
+    let auth_mode = expect_context::<RwSignal<AuthMode>>();
     let active_tab = RwSignal::new(SettingsTab::Appearance);
     let is_admin = move || actor.get().map(|a| a.role == Role::Admin).unwrap_or(false);
+    let is_authenticated = move || auth_mode.get() == AuthMode::Auth;
 
     view! {
         <PageHeader title="Налаштування".to_string()/>
@@ -66,8 +73,9 @@ pub fn SettingsPage() -> impl IntoView {
                             .map(|&tab| {
                                 let is_active = move || active_tab.get() == tab;
                                 let admin_only = matches!(tab, SettingsTab::Whatsapp | SettingsTab::Queues | SettingsTab::Aliases);
+                        let auth_only = matches!(tab, SettingsTab::Security);
                                 view! {
-                                    <Show when=move || !admin_only || is_admin()>
+                                    <Show when=move || (!admin_only && !auth_only) || (admin_only && is_admin()) || (auth_only && is_authenticated())>
                                         <button
                                             class=move || {
                                                 if is_active() {
@@ -91,6 +99,9 @@ pub fn SettingsPage() -> impl IntoView {
                     <div class="settings-panel">
                         <Show when=move || active_tab.get() == SettingsTab::Appearance>
                             <AppearanceSection/>
+                        </Show>
+                        <Show when=move || active_tab.get() == SettingsTab::Security && is_authenticated()>
+                            <SecuritySection/>
                         </Show>
                         <Show when=move || active_tab.get() == SettingsTab::Whatsapp && is_admin()>
                             <WhatsappSection/>
@@ -152,6 +163,91 @@ fn AppearanceSection() -> impl IntoView {
                 })
                 .collect_view()}
         </div>
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Безпека (Passkeys / FIDO2) — 12-auth.md §1.3, Étap 10b
+// ---------------------------------------------------------------------------
+
+#[component]
+fn SecuritySection() -> impl IntoView {
+    let refresh = RwSignal::new(0u32);
+    let passkeys = Resource::new(move || refresh.get(), |_| list_passkeys());
+    let action_status = RwSignal::new(String::new());
+
+    let do_delete = move |id: i32| {
+        spawn_local(async move {
+            match delete_passkey(id).await {
+                Ok(true) => {
+                    action_status.set("Ключ видалено.".to_string());
+                    refresh.update(|n| *n += 1);
+                }
+                Ok(false) => action_status.set("Ключ не знайдено.".to_string()),
+                Err(e) => action_status.set(format!("Помилка: {e}")),
+            }
+        });
+    };
+
+    view! {
+        <div class="eyebrow">"Апаратні ключі (Passkey / FIDO2)"</div>
+        <p class="settings-hint">"Апаратний ключ дозволяє входити без пароля — через USB-ключ, телефон або біометрію пристрою."</p>
+        <div class="card">
+            <Suspense fallback=|| view! { <p>"…"</p> }>
+                {move || {
+                    passkeys.get().map(|res| match res {
+                        Ok(list) if list.is_empty() => {
+                            view! { <p class="card__desc">"Немає зареєстрованих ключів."</p> }.into_any()
+                        }
+                        Ok(list) => {
+                            view! {
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>"Назва"</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {list.into_iter().map(|pk| {
+                                            let id = pk.id;
+                                            let name = pk.name.unwrap_or_else(|| "Без назви".to_string());
+                                            view! {
+                                                <tr>
+                                                    <td>{name}</td>
+                                                    <td>
+                                                        <button
+                                                            class="btn btn--outline btn--sm"
+                                                            on:click=move |_| do_delete(id)
+                                                        >
+                                                            "Видалити"
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }).collect_view()}
+                                    </tbody>
+                                </table>
+                            }.into_any()
+                        }
+                        Err(e) => view! { <p class="status-error">{e.to_string()}</p> }.into_any(),
+                    })
+                }}
+            </Suspense>
+        </div>
+
+        <div class="card">
+            <button
+                class="btn btn--primary"
+                disabled=true
+                title="Потребує webauthn-rs (Étap 10b, ще не реалізовано)"
+            >
+                "Додати апаратний ключ"
+            </button>
+            <p class="settings-hint">"Реєстрація нового ключа буде доступна після інтеграції WebAuthn."</p>
+        </div>
+
+        <p class="settings-hint">{move || action_status.get()}</p>
     }
 }
 

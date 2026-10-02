@@ -144,7 +144,7 @@ fn verify_password(password: &str, hash: &str) -> bool {
 }
 
 #[cfg(feature = "ssr")]
-async fn extract_session_cookie() -> Option<String> {
+pub async fn extract_session_cookie() -> Option<String> {
     let req = use_context::<http::request::Parts>()?;
     let cookies = req.headers.get(http::header::COOKIE)?.to_str().ok()?;
     for part in cookies.split(';') {
@@ -156,4 +156,50 @@ async fn extract_session_cookie() -> Option<String> {
         }
     }
     None
+}
+
+/// Перевіряє cookie-сесію і повертає автентифікованого користувача (12-auth.md §3).
+/// Використовувати у server functions замість довіри клієнтському `actor`.
+#[cfg(feature = "ssr")]
+pub async fn require_auth() -> Result<crate::types::auth::AuthUser, ServerFnError> {
+    use crate::backend::repo;
+    use crate::types::actor::{Actor, Role};
+    use crate::types::auth::AuthUser;
+
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    let session_id = extract_session_cookie()
+        .await
+        .ok_or_else(|| ServerFnError::new("не автентифіковано"))?;
+    let session = repo::auth::find_session(&db, &session_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .ok_or_else(|| ServerFnError::new("сесія прострочена"))?;
+
+    let actor = match (session.active_org_id, session.active_role.as_deref()) {
+        (Some(org_id), Some(role_str)) => {
+            Role::parse(role_str).map(|role| Actor { org_id, role })
+        }
+        _ => None,
+    };
+
+    Ok(AuthUser {
+        user_id: session.user_id,
+        actor,
+        display_name: session.display_name,
+    })
+}
+
+/// Визначає актора: якщо є валідна auth-сесія — бере з неї (серверне забезпечення),
+/// інакше — фолбек на клієнтського актора (dev-режим). Для поступової міграції
+/// з клієнтського довірчого контракту на серверний.
+#[cfg(feature = "ssr")]
+pub async fn resolve_actor(
+    client_actor: Option<crate::types::actor::Actor>,
+) -> Result<crate::types::actor::Actor, ServerFnError> {
+    if let Ok(auth_user) = require_auth().await {
+        if let Some(actor) = auth_user.actor {
+            return Ok(actor);
+        }
+    }
+    client_actor.ok_or_else(|| ServerFnError::new("оберіть актора вгорі"))
 }
