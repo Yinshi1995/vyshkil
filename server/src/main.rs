@@ -61,8 +61,6 @@ async fn run(config: config::Config) {
         .await
         .expect("failed to apply pending migrations");
 
-    // get_configuration(None) — рекомендований для cargo-leptos спосіб: налаштування (адреса, шлях сайту)
-    // запікаються в бінарник на етапі збірки й переопределяються env-змінними LEPTOS_*, а не читанням Cargo.toml у рантаймі.
     let conf = get_configuration(None).unwrap();
     let leptos_options = conf.leptos_options;
     let addr = leptos_options.site_addr;

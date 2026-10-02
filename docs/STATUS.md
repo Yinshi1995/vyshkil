@@ -4,7 +4,7 @@
 ЗАРАЗ і що щойно завершено. Не лог усіх подій (те — в git-історії й `.claude/memory/MEMORY.md`),
 лише поточний стан на момент останнього оновлення.
 
-**Останнє оновлення**: 2026-10-01
+**Останнє оновлення**: 2026-10-02
 **Поточна ціль**: усі пункти GOALS.md закриті — **DONE**
 
 ## Закриті цілі (ця сесія)
@@ -43,5 +43,11 @@
   auto-popup прибрано. full_name у дереві підпорядкування (secondary text).
   cargo test --workspace ✅ (99 тестів), clippy ✅.
 
-**Локальні коміти** (36 шт.) чекають push — заблоковано settings.json, користувач має виконати
+- **Étap 10b: FIDO2 інфраструктура + серверне забезпечення прав** — міграція 048
+  (passkey_credential), repo passkeys.rs (CRUD), вкладка "Безпека" в /settings (список
+  ключів + видалення), rate limiting на login (5/15хв, in-memory), resolve_actor() в усіх
+  24 page-level server functions, require_auth(). WebAuthn протокол (webauthn-rs) — TODO.
+  cargo test --workspace ✅ (95 тестів), clippy ✅.
+
+**Локальні коміти** (~40 шт.) чекають push — заблоковано settings.json, користувач має виконати
 `git push -u origin main` вручну.
