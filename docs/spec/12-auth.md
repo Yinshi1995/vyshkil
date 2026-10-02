@@ -88,13 +88,18 @@ status: чернетка (потребує підтвердження замов
 
 `POST /api/auth/logout` — видаляє `user_session`, клієнт чистить cookie. Перенаправити на `/login`.
 
-## 3. Middleware (Axum)
+## 3. Серверне забезпечення прав
 
-Extractor `AuthUser` (Axum `FromRequestParts`):
-- Читає cookie `session`.
-- Знаходить `user_session` (не прострочена, `user_account.is_active`).
-- Повертає `AuthUser { user_id, actor: Actor { org_id, role } }`.
-- Сторінки крім `/login` — `AuthUser` обов'язковий (redirect на `/login`).
+Тип `AuthUser { user_id, actor: Option<Actor>, display_name }` (types/auth.rs).
+
+Хелпери (services/auth.rs, `#[cfg(feature = "ssr")]`):
+- `require_auth()` → читає cookie `session`, знаходить `user_session` (не прострочена,
+  `user_account.is_active`), повертає `AuthUser` або `ServerFnError`.
+- `resolve_actor(client_actor)` → якщо є валідна auth-сесія, бере актора з неї;
+  інакше — фолбек на клієнтського актора (dev-режим).
+- Кожна server function, що потребує актора, викликає `resolve_actor()` замість
+  прямої довіри клієнтському `actor: Option<Actor>` параметру.
+- Сторінки крім `/login` — перенаправлення на `/login` (в Auth-режимі, клієнтське).
 
 ## 4. Бібліотеки
 
@@ -124,14 +129,18 @@ Extractor `AuthUser` (Axum `FromRequestParts`):
 
 ## 7. Етапність
 
-**Етап 10a** (логін/пароль):
-- Міграції: `user_account`, `user_role`, `user_session`.
-- Сторінка `/login`.
-- Axum middleware `AuthUser`.
-- Seed admin-акаунт.
-- Перемикач актора: список з `user_role` замість вільного.
+**Étap 10a** (логін/пароль) — **реалізовано**:
+- Міграції: `user_account`, `user_role`, `user_session` (046-047).
+- Сторінка `/login` (argon2id, cookie HttpOnly/SameSite=Strict).
+- `require_auth()`/`resolve_actor()` — серверне забезпечення прав.
+- Rate limiting: 5 спроб / 15 хв на IP (in-memory).
+- Seed admin-акаунт (`admin` / `admin123`).
+- Перемикач актора: AuthSwitcher (аватар + меню ролей + logout) / DevSwitcher
+  (два дропдауни) + ModeToggle DEV/AUTH.
 
-**Етап 10b** (FIDO2):
-- Міграція: `passkey_credential`.
-- Реєстрація ключа в `/settings` (нова вкладка "Безпека").
-- Автентифікація через passkey.
+**Étap 10b** (FIDO2) — **інфраструктура готова, WebAuthn протокол — TODO**:
+- Міграція 048: `passkey_credential`.
+- Repo `passkeys.rs`: CRUD (store/find/update_sign_count/delete).
+- Вкладка "Безпека" в `/settings`: список ключів + видалення.
+- **TODO**: `webauthn-rs` інтеграція (challenge/verify), кнопка реєстрації,
+  автентифікація через passkey на `/login`.
