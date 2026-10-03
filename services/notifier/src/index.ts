@@ -6,8 +6,8 @@
 import { config } from "./config.ts";
 import { sql } from "./db.ts";
 import { runMigrations } from "./migrate.ts";
-import { bindNotifyCmdConsumer, connectNats, type NatsHandles } from "./nats.ts";
-import { createWhatsAppClient } from "./whatsapp/client.ts";
+import { bindNotifyCmdConsumer, connectNats, publishStatus, type NatsHandles } from "./nats.ts";
+import { createWhatsAppClient, purgeSession } from "./whatsapp/client.ts";
 import { WhatsAppChannel } from "./whatsapp/channel.ts";
 import { PairingStateMachine } from "./pairing.ts";
 import { startHealthServer } from "./health.ts";
@@ -29,12 +29,42 @@ async function main() {
   const waClient = createWhatsAppClient();
   const pairing = new PairingStateMachine(waClient, nats);
   const channel = new WhatsAppChannel(waClient);
+
+  await publishStatus(nats, { state: "starting" });
+
+  // Watchdog: якщо за 90с жодного івенту від whatsapp-web.js (qr/ready/auth_failure) —
+  // сесія зависла (зіпсовані дані, Chromium не може стартувати). Видаляємо сесію і
+  // виходимо — Docker автоматично перезапустить контейнер з чистим станом.
+  const WATCHDOG_MS = 90_000;
+  const watchdog = setTimeout(() => {
+    console.error(
+      `notifier: watchdog — жодного івенту за ${WATCHDOG_MS / 1000}с, ` +
+        "видаляю сесію і завершую процес для перезапуску",
+    );
+    purgeSession();
+    process.exit(1);
+  }, WATCHDOG_MS);
+
+  pairing.onFirstEvent = () => {
+    clearTimeout(watchdog);
+    console.log("notifier: watchdog скасовано — WhatsApp відповів");
+  };
+
   waClient.initialize().catch((e: unknown) => {
     console.error("notifier: WhatsApp Client.initialize() провалився:", e);
+    purgeSession();
+    process.exit(1);
   });
 
   startHealthServer(config.healthPort, () => nats);
   wireAdminCommands(nats.nc, pairing, channel);
+
+  // KV TTL 60с — без heartbeat запис протухає і SSE показує "not_running".
+  setInterval(async () => {
+    try {
+      await publishStatus(nats, pairing.getStatusSnapshot());
+    } catch {}
+  }, 45_000);
 
   const consumer = await bindNotifyCmdConsumer(nats);
   console.log("notifier: consumer NOTIFY_CMD прив'язаний, готовий");

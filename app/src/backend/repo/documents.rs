@@ -52,7 +52,6 @@ async fn grouped_org_ids(
     struct Row {
         id: i32,
         short_name: String,
-        number: Option<String>,
         out_of_zone: bool,
     }
 
@@ -78,7 +77,7 @@ async fn grouped_org_ids(
             ORDER BY os.org_id, os.valid_from DESC
         )
         SELECT
-            o.id, o.short_name, o.number,
+            o.id, o.short_name,
             (
                 sf.id IS NOT NULL
                 AND (
@@ -102,14 +101,10 @@ async fn grouped_org_ids(
     let mut main = Vec::new();
     let mut out_of_zone = Vec::new();
     for r in rows {
-        let label = match r.number {
-            Some(n) => format!("{} ({n})", r.short_name),
-            None => r.short_name,
-        };
         if r.out_of_zone {
-            out_of_zone.push((r.id, label));
+            out_of_zone.push((r.id, r.short_name));
         } else {
-            main.push((r.id, label));
+            main.push((r.id, r.short_name));
         }
     }
     Ok((main, out_of_zone))
@@ -326,12 +321,11 @@ pub async fn top_level_orgs(db: &DatabaseConnection, as_of: &str) -> Result<Vec<
     struct Row {
         id: i32,
         short_name: String,
-        number: Option<String>,
     }
     let stmt = Statement::from_sql_and_values(
         db.get_database_backend(),
         r#"
-        SELECT o.id, o.short_name, o.number
+        SELECT o.id, o.short_name
         FROM org o
         JOIN subordination_closure sc ON sc.descendant_id = o.id
             AND sc.axis = 'staff' AND sc.depth = 1
@@ -344,36 +338,24 @@ pub async fn top_level_orgs(db: &DatabaseConnection, as_of: &str) -> Result<Vec<
     let rows = Row::find_by_statement(stmt).all(db).await?;
     Ok(rows
         .into_iter()
-        .map(|r| {
-            let label = match r.number {
-                Some(n) => format!("{} ({n})", r.short_name),
-                None => r.short_name,
-            };
-            (r.id, label)
-        })
+        .map(|r| (r.id, r.short_name))
         .collect())
 }
 
-/// "<short_name> (<номер>)" органу, для якого генерується документ (заголовок аркуша) — `None`,
-/// якщо `org_id` не існує/видалено (сторінка не мала б дозволити такий виклик, але сервер не
-/// вірить клієнту на слово).
+/// Назва органу для заголовків документів — лише short_name (без номеру, ДСК).
 pub async fn org_label(db: &DatabaseConnection, org_id: i32) -> Result<Option<String>, DbErr> {
     #[derive(FromQueryResult)]
     struct Row {
         short_name: String,
-        number: Option<String>,
     }
     let row = Row::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
-        "SELECT short_name, number FROM org WHERE id = $1 AND deleted_at IS NULL",
+        "SELECT short_name FROM org WHERE id = $1 AND deleted_at IS NULL",
         [org_id.into()],
     ))
     .one(db)
     .await?;
-    Ok(row.map(|r| match r.number {
-        Some(n) => format!("{} ({n})", r.short_name),
-        None => r.short_name,
-    }))
+    Ok(row.map(|r| r.short_name))
 }
 
 // ---------------------------------------------------------------------------
@@ -426,7 +408,7 @@ pub async fn group_detail_for_corps(
         r#"
         SELECT
             tg.id,
-            COALESCE(o.short_name || COALESCE(' (' || o.number || ')', ''), '') AS org_label,
+            COALESCE(o.short_name, '') AS org_label,
             COALESCE(ts.name, '') AS site_label,
             v.code AS vos_code,
             p.name AS position_label,
@@ -657,7 +639,7 @@ pub async fn transferred_orgs_report(
         r#"
         SELECT
             o.id AS org_id,
-            COALESCE(o.short_name || COALESCE(' (' || o.number || ')', ''), '') AS org_label,
+            COALESCE(o.short_name, '') AS org_label,
             co.short_name AS counterpart_label
         FROM org_status os
         JOIN org o ON o.id = os.org_id

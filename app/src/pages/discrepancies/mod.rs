@@ -136,7 +136,7 @@ fn DiscrepancyTable(rows: Vec<DiscrepancyRow>, on_refresh: RwSignal<u32>) -> imp
                         let values_text = r
                             .values
                             .iter()
-                            .map(|(sid, v)| format!("подання №{sid}: {v}"))
+                            .map(|dv| format!("{}: {}", dv.source_label, dv.value))
                             .collect::<Vec<_>>()
                             .join(" · ");
                         let st_class = status_class(&r.status);

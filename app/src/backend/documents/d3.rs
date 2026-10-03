@@ -21,19 +21,12 @@ use crate::domain::format::{percent, signed_delta, thousands};
 
 pub const DEFAULT_TEMPLATE: &str = "\
 # Слайд 1. Загальна динаміка
-Станом на {{date}} у підготовці: БЗВП — {{bzvp_total}} ({{bzvp_delta}} за добу, {{bzvp_yesterday}} → {{bzvp_total}}), \
-фахова — {{special_total}} ({{special_delta}} за добу, {{special_yesterday}} → {{special_total}}), \
-адаптація — {{adaptation_total}} ({{adaptation_delta}} за добу, {{adaptation_yesterday}} → {{adaptation_total}}).
+Станом на {{date}} у підготовці: {{summary_kinds}}.
 Загалом залучено {{all_total}} ({{all_delta}} за добу). Рейтинг органів за часткою: {{ranking}}.
 # Слайд 2. Огляд
-Фахова підготовка: {{special_leaders}}.
-Адаптація: {{adaptation_leaders}}.
-БЗВП: {{bzvp_leaders}}.
+{{overview_kinds}}
 # Далі — по органах
-@corps {{corps}}: БЗВП — {{bzvp_total}} (завершують {{bzvp_finishing}}, розпочинають {{bzvp_started}}); \
-фахова — {{special_total}} (завершують {{special_finishing}}, розпочинають {{special_started}}); \
-адаптація — {{adaptation_total}} (завершують {{adaptation_finishing}}, розпочинають {{adaptation_started}}). \
-Загалом {{all_total}}.
+@corps {{corps}}: {{corps_kinds}}. Загалом {{all_total}}.
 ";
 
 /// Дані одного корпусу: rollup на дату й на попередню дату (для зміни за добу).
@@ -87,6 +80,14 @@ fn kind_of(s: &Sums, key: &str) -> KindCounts {
 
 const KINDS: [&str; 3] = ["bzvp", "special", "adaptation"];
 
+fn kind_name_ua(key: &str) -> &'static str {
+    match key {
+        "bzvp" => "БЗВП",
+        "special" => "фахова",
+        _ => "адаптація",
+    }
+}
+
 fn fill_scope(vars: &mut HashMap<String, String>, today: &Sums, yesterday: &Sums) {
     for key in KINDS {
         let t = kind_of(today, key);
@@ -99,6 +100,51 @@ fn fill_scope(vars: &mut HashMap<String, String>, today: &Sums, yesterday: &Sums
     }
     vars.insert("all_total".into(), thousands(today.all_total()));
     vars.insert("all_delta".into(), signed_delta(today.all_total() - yesterday.all_total()));
+
+    let mut parts = Vec::new();
+    for key in KINDS {
+        let t = kind_of(today, key);
+        let y = kind_of(yesterday, key);
+        if t.total == 0 && y.total == 0 { continue; }
+        parts.push(format!(
+            "{} — {} ({} за добу, {} → {})",
+            kind_name_ua(key), thousands(t.total), signed_delta(t.total - y.total),
+            thousands(y.total), thousands(t.total),
+        ));
+    }
+    vars.insert("summary_kinds".into(), if parts.is_empty() { "немає даних".into() } else { parts.join(", ") });
+
+    let mut corps_parts = Vec::new();
+    for key in KINDS {
+        let t = kind_of(today, key);
+        if t.total == 0 && t.finishing_today == 0 && t.started_today == 0 { continue; }
+        corps_parts.push(format!(
+            "{} — {} (завершують {}, розпочинають {})",
+            kind_name_ua(key), thousands(t.total),
+            thousands(t.finishing_today), thousands(t.started_today),
+        ));
+    }
+    vars.insert("corps_kinds".into(), if corps_parts.is_empty() { "немає даних".into() } else { corps_parts.join("; ") });
+}
+
+fn fill_overview(vars: &mut HashMap<String, String>, today: &Sums, per_corps: &[(&CorpsDay, Sums, Sums)]) {
+    let mut lines = Vec::new();
+    for key in KINDS {
+        let t = kind_of(today, key);
+        if t.total == 0 { continue; }
+        let name = match key {
+            "bzvp" => "БЗВП",
+            "special" => "Фахова підготовка",
+            _ => "Адаптація",
+        };
+        let shares: Vec<(String, i64)> = per_corps
+            .iter()
+            .map(|(c, ct, _)| (c.label.clone(), kind_of(ct, key).total))
+            .collect();
+        let ldrs = leaders(&shares, t.total);
+        lines.push(format!("{name}: {ldrs}."));
+    }
+    vars.insert("overview_kinds".into(), if lines.is_empty() { "Немає даних для огляду.".into() } else { lines.join("\n") });
 }
 
 /// "ОТУ «Одеса» — 41%, 30 КМП — 22%, …" — топ-4 за часткою; корпуси з нулем пропускаються.
@@ -164,6 +210,7 @@ pub fn render_paragraphs(
     let mut globals = HashMap::new();
     globals.insert("date".to_string(), date.format("%d.%m.%Y").to_string());
     fill_scope(&mut globals, &total_today, &total_yesterday);
+    fill_overview(&mut globals, &total_today, &per_corps);
     for key in KINDS {
         let shares: Vec<(String, i64)> = per_corps
             .iter()
@@ -185,6 +232,9 @@ pub fn render_paragraphs(
             out.push((true, substitute(rest, &globals)));
         } else if let Some(rest) = line.strip_prefix("@corps ") {
             for (c, t, y) in &per_corps {
+                if t.all_total() == 0 && y.all_total() == 0 {
+                    continue;
+                }
                 let mut vars = globals.clone();
                 vars.insert("corps".into(), c.label.clone());
                 fill_scope(&mut vars, t, y);
@@ -203,30 +253,153 @@ fn xml_escape(s: &str) -> String {
 
 pub fn build_docx(paragraphs: &[(bool, String)]) -> Result<Vec<u8>, zip::result::ZipError> {
     let mut body = String::new();
+
+    // Title block: "ДОПОВІДЬ" with orange accent bar
+    body.push_str(
+        "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr>\
+         <w:r><w:rPr/><w:t>ДОПОВІДЬ</w:t></w:r></w:p>"
+    );
+    body.push_str(
+        "<w:p><w:pPr><w:pStyle w:val=\"Subtitle\"/></w:pPr>\
+         <w:r><w:rPr/><w:t>Угруповання військ (сил) \"Південь\" — динаміка підготовки</w:t></w:r></w:p>"
+    );
+
     for (bold, text) in paragraphs {
-        let rpr = if *bold { "<w:rPr><w:b/></w:rPr>" } else { "" };
-        body.push_str(&format!(
-            "<w:p><w:r>{rpr}<w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>",
-            xml_escape(text)
-        ));
+        if *bold {
+            body.push_str(&format!(
+                "<w:p>\
+                 <w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr>\
+                 <w:r><w:rPr/>\
+                 <w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>",
+                xml_escape(text)
+            ));
+        } else {
+            body.push_str(&format!(
+                "<w:p>\
+                 <w:pPr><w:pStyle w:val=\"Normal\"/></w:pPr>\
+                 <w:r><w:rPr/>\
+                 <w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>",
+                xml_escape(text)
+            ));
+        }
     }
+
     let document = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
-<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
-<w:body>{body}<w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/>\
-<w:pgMar w:top=\"1134\" w:right=\"850\" w:bottom=\"1134\" w:left=\"1701\" w:header=\"709\" w:footer=\"709\" w:gutter=\"0\"/>\
+<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" \
+xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
+<w:body>{body}<w:sectPr>\
+<w:headerReference w:type=\"default\" r:id=\"rId2\"/>\
+<w:footerReference w:type=\"default\" r:id=\"rId3\"/>\
+<w:pgSz w:w=\"11906\" w:h=\"16838\"/>\
+<w:pgMar w:top=\"1418\" w:right=\"850\" w:bottom=\"1134\" w:left=\"1701\" w:header=\"567\" w:footer=\"567\" w:gutter=\"0\"/>\
 </w:sectPr></w:body></w:document>"
     );
+
+    const STYLES: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+<w:styles xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+<w:docDefaults><w:rPrDefault><w:rPr>\
+<w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\" w:cs=\"Arial\"/>\
+<w:sz w:val=\"22\"/><w:szCs w:val=\"22\"/>\
+<w:color w:val=\"2A2620\"/>\
+</w:rPr></w:rPrDefault>\
+<w:pPrDefault><w:pPr>\
+<w:spacing w:after=\"100\" w:line=\"288\" w:lineRule=\"auto\"/>\
+</w:pPr></w:pPrDefault>\
+</w:docDefaults>\
+<w:style w:type=\"paragraph\" w:default=\"1\" w:styleId=\"Normal\">\
+<w:name w:val=\"Normal\"/>\
+<w:pPr><w:spacing w:after=\"120\" w:line=\"288\" w:lineRule=\"auto\"/></w:pPr>\
+<w:rPr><w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/>\
+<w:sz w:val=\"22\"/><w:color w:val=\"2A2620\"/></w:rPr>\
+</w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"Title\">\
+<w:name w:val=\"Title\"/>\
+<w:pPr>\
+<w:spacing w:before=\"0\" w:after=\"40\"/>\
+<w:jc w:val=\"center\"/>\
+</w:pPr>\
+<w:rPr><w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/>\
+<w:b/><w:caps/><w:sz w:val=\"36\"/><w:szCs w:val=\"36\"/>\
+<w:color w:val=\"453F2E\"/>\
+<w:spacing w:val=\"60\"/></w:rPr>\
+</w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"Subtitle\">\
+<w:name w:val=\"Subtitle\"/>\
+<w:pPr>\
+<w:spacing w:before=\"0\" w:after=\"200\"/>\
+<w:jc w:val=\"center\"/>\
+<w:pBdr><w:bottom w:val=\"single\" w:sz=\"12\" w:space=\"8\" w:color=\"F39200\"/></w:pBdr>\
+</w:pPr>\
+<w:rPr><w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/>\
+<w:sz w:val=\"22\"/><w:szCs w:val=\"22\"/>\
+<w:color w:val=\"7A6F55\"/>\
+<w:i/></w:rPr>\
+</w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"Heading1\">\
+<w:name w:val=\"heading 1\"/>\
+<w:pPr>\
+<w:spacing w:before=\"320\" w:after=\"120\"/>\
+<w:pBdr><w:bottom w:val=\"single\" w:sz=\"8\" w:space=\"4\" w:color=\"E7DDBA\"/></w:pBdr>\
+<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"F5F2EC\"/>\
+<w:ind w:left=\"113\" w:right=\"113\"/>\
+</w:pPr>\
+<w:rPr><w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/>\
+<w:b/><w:caps/><w:sz w:val=\"26\"/><w:szCs w:val=\"26\"/>\
+<w:color w:val=\"453F2E\"/>\
+<w:spacing w:val=\"30\"/></w:rPr>\
+</w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"Header\">\
+<w:name w:val=\"header\"/>\
+<w:pPr><w:spacing w:after=\"0\" w:line=\"240\" w:lineRule=\"auto\"/>\
+<w:jc w:val=\"right\"/></w:pPr>\
+<w:rPr><w:sz w:val=\"16\"/><w:color w:val=\"9C947F\"/></w:rPr>\
+</w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"Footer\">\
+<w:name w:val=\"footer\"/>\
+<w:pPr><w:spacing w:after=\"0\" w:line=\"240\" w:lineRule=\"auto\"/>\
+<w:pBdr><w:top w:val=\"single\" w:sz=\"4\" w:space=\"4\" w:color=\"C7C1B0\"/></w:pBdr>\
+</w:pPr>\
+<w:rPr><w:sz w:val=\"16\"/><w:color w:val=\"9C947F\"/></w:rPr>\
+</w:style>\
+</w:styles>";
+
+    const HEADER_XML: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+<w:hdr xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+<w:p><w:pPr><w:pStyle w:val=\"Header\"/></w:pPr>\
+<w:r><w:rPr><w:caps/></w:rPr>\
+<w:t>Для службового користування</w:t></w:r></w:p>\
+</w:hdr>";
+
+    const FOOTER_XML: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+<w:ftr xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+<w:p><w:pPr><w:pStyle w:val=\"Footer\"/><w:jc w:val=\"center\"/></w:pPr>\
+<w:r><w:rPr/><w:t xml:space=\"preserve\">УВ(с) \"Південь\" — </w:t></w:r>\
+<w:r><w:rPr/><w:fldChar w:fldCharType=\"begin\"/></w:r>\
+<w:r><w:rPr/><w:instrText> PAGE </w:instrText></w:r>\
+<w:r><w:rPr/><w:fldChar w:fldCharType=\"end\"/></w:r>\
+</w:p></w:ftr>";
 
     const CONTENT_TYPES: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
 <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
 <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
 <Default Extension=\"xml\" ContentType=\"application/xml\"/>\
 <Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>\
+<Override PartName=\"/word/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/>\
+<Override PartName=\"/word/header1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml\"/>\
+<Override PartName=\"/word/footer1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml\"/>\
 </Types>";
+
     const ROOT_RELS: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
 <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
 <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>\
+</Relationships>";
+
+    const DOC_RELS: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>\
+<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/header\" Target=\"header1.xml\"/>\
+<Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer\" Target=\"footer1.xml\"/>\
 </Relationships>";
 
     let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
@@ -234,7 +407,11 @@ pub fn build_docx(paragraphs: &[(bool, String)]) -> Result<Vec<u8>, zip::result:
     for (name, content) in [
         ("[Content_Types].xml", CONTENT_TYPES),
         ("_rels/.rels", ROOT_RELS),
+        ("word/_rels/document.xml.rels", DOC_RELS),
         ("word/document.xml", document.as_str()),
+        ("word/styles.xml", STYLES),
+        ("word/header1.xml", HEADER_XML),
+        ("word/footer1.xml", FOOTER_XML),
     ] {
         zip.start_file(name, opts)?;
         zip.write_all(content.as_bytes())?;
@@ -296,6 +473,6 @@ mod tests {
         std::io::Read::read_to_string(&mut archive.by_name("word/document.xml").unwrap(), &mut xml)
             .unwrap();
         assert!(xml.contains("А &amp; Б &lt;1&gt;"));
-        assert!(xml.contains("<w:b/>"));
+        assert!(xml.contains("Heading1"));
     }
 }

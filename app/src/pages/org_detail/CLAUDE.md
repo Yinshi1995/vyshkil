@@ -6,5 +6,5 @@
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
-| `mod.rs` | `OrgDetailPage` — поточні дані + історія назв/статусів | `pages/CLAUDE.md` → `routes.rs` |
-| `server.rs` | `get_org_detail` — потрібен лише цій сторінці | `mod.rs` |
+| `mod.rs` | `OrgDetailPage` — дані організації, підлеглі, групи, подання, користувачі (admin), історія | `pages/CLAUDE.md` → `routes.rs` |
+| `server.rs` | `get_org_detail`, `get_org_children`, `get_org_groups`, `get_org_submissions`, `get_org_users` | `mod.rs` |

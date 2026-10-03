@@ -69,6 +69,7 @@ services:
       - taktoblik_natsdata:/data
       - ./docker/nats-server.conf:/etc/nats/nats-server.conf:ro
     ports:
+      - "127.0.0.1:4222:4222"
       - "127.0.0.1:8222:8222"
 
   app:
@@ -112,6 +113,10 @@ services:
       NOTIFIER_DATABASE_URL: postgres://notifier:notifier@db:5432/notifier
       NATS_URL: nats://notifier:notifier-dev-password@nats:4222
       WA_SESSION_PATH: /app/wa-session
+      # SYS_ADMIN cap дає namespace-sandbox, але Debian Chromium 154+ все одно потребує
+      # --no-sandbox в Docker (user ns зсередині контейнера обмежений навіть з cap) —
+      # prod: seccomp-профіль (decisions/notifier-ts-whatsapp-web-js.md).
+      WA_DISABLE_SANDBOX: "true"
       # Вимкнено за замовчуванням (§4: "логи можуть збиратися") -- увімкнути лише для дебагу.
       WA_PRINT_QR_TO_LOGS: "0"
     volumes:

@@ -1,8 +1,10 @@
+pub mod change_password;
 pub mod discrepancies;
 pub mod documents;
 pub mod home;
 pub mod import;
 pub mod login;
 pub mod org_detail;
+pub mod request_account;
 pub mod settings;
 pub mod training_form;

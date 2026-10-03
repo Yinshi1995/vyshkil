@@ -48,6 +48,10 @@ mod m20261001_000045_add_search_indexes;
 mod m20261001_000046_create_user_account_table;
 mod m20261001_000047_seed_admin_account;
 mod m20261002_000048_create_passkey_credential_table;
+mod m20261002_000049_create_whatsapp_notification_tables;
+mod m20261002_000050_seed_comprehensive;
+mod m20261002_000051_add_must_change_password;
+mod m20261002_000052_add_group_event_notification_type;
 
 pub struct Migrator;
 
@@ -124,6 +128,14 @@ impl MigratorTrait for Migrator {
             Box::new(m20261001_000047_seed_admin_account::Migration),
             // Étap 10b (12-auth.md §1.3): FIDO2/WebAuthn passkey credentials.
             Box::new(m20261002_000048_create_passkey_credential_table::Migration),
+            // WhatsApp-сповіщення (09-messaging.md §3.8): адреси доставки, типи, підписки, групи.
+            Box::new(m20261002_000049_create_whatsapp_notification_tables::Migration),
+            // Комплексний dev-сід: користувачі, групи, воронка, подання, розбіжності, staffing, WhatsApp.
+            Box::new(m20261002_000050_seed_comprehensive::Migration),
+            // must_change_password для flow тимчасового пароля.
+            Box::new(m20261002_000051_add_must_change_password::Migration),
+            // Новий тип нотифікації для подій груп підготовки.
+            Box::new(m20261002_000052_add_group_event_notification_type::Migration),
         ]
     }
 }

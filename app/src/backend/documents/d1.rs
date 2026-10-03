@@ -7,9 +7,10 @@
 //! `repo::documents::grouped_org_ids` `ORDER BY o.short_name` гарантує це), тому 3D-формули
 //! тижневого аркуша коректно підсумовують кожну клітинку через усі 7 днів.
 
+use crate::backend::documents::style;
 use crate::backend::repo::documents::{DailyRollup, OrgRollupRow};
 use chrono::NaiveDate;
-use rust_xlsxwriter::{Format, FormatAlign, Formula, Worksheet, Workbook, XlsxError};
+use rust_xlsxwriter::{Format, Formula, Worksheet, Workbook, XlsxError};
 
 const COL_ORG: u16 = 0;
 const COL_NOTE: u16 = 10;
@@ -34,6 +35,15 @@ pub struct DayLayout {
     pub ooz_total_row: Option<u32>,
 }
 
+fn set_column_widths(ws: &mut Worksheet) -> Result<(), XlsxError> {
+    ws.set_column_width(COL_ORG, 25)?;
+    for col in 1..=9u16 {
+        ws.set_column_width(col, 12)?;
+    }
+    ws.set_column_width(COL_NOTE, 20)?;
+    Ok(())
+}
+
 /// Будує один денний аркуш у `workbook`. Повертає [`DayLayout`] — макет рядків для
 /// подальшого використання тижневим аркушем.
 pub fn build_day_sheet(
@@ -45,9 +55,16 @@ pub fn build_day_sheet(
     let sheet_name = date.format("%d.%m").to_string();
     let worksheet = workbook.add_worksheet().set_name(sheet_name)?;
 
-    let title_format = Format::new().set_bold().set_align(FormatAlign::Center);
-    let header_format = Format::new().set_bold().set_align(FormatAlign::Center).set_text_wrap();
-    let total_format = Format::new().set_bold();
+    let title_fmt = style::title_format();
+    let hdr_fmt = style::header_format();
+    let total_label_fmt = style::total_format();
+    let total_num_fmt = style::total_number_format();
+    let section_fmt = style::section_format();
+
+    set_column_widths(worksheet)?;
+    worksheet.set_row_height(0, 30)?;
+    worksheet.set_row_height(1, 25)?;
+    worksheet.set_row_height(2, 25)?;
 
     worksheet.merge_range(
         0,
@@ -58,16 +75,16 @@ pub fn build_day_sheet(
             "{org_label}. Зведена таблиця підготовки станом на {}",
             date.format("%d.%m.%Y")
         ),
-        &title_format,
+        &title_fmt,
     )?;
 
-    worksheet.merge_range(1, COL_ORG, 2, COL_ORG, "Військові частини", &header_format)?;
-    worksheet.merge_range(1, COL_NOTE, 2, COL_NOTE, "Примітка", &header_format)?;
+    worksheet.merge_range(1, COL_ORG, 2, COL_ORG, "Військові частини", &hdr_fmt)?;
+    worksheet.merge_range(1, COL_NOTE, 2, COL_NOTE, "Примітка", &hdr_fmt)?;
     for (kind_col, label) in KIND_COLS.iter().zip(KIND_LABELS.iter()) {
-        worksheet.merge_range(1, *kind_col, 1, kind_col + 2, label, &header_format)?;
-        worksheet.write_string_with_format(2, *kind_col, "Всього", &header_format)?;
-        worksheet.write_string_with_format(2, kind_col + 1, "Закінчують сьогодні", &header_format)?;
-        worksheet.write_string_with_format(2, kind_col + 2, "Почали сьогодні", &header_format)?;
+        worksheet.merge_range(1, *kind_col, 1, kind_col + 2, label, &hdr_fmt)?;
+        worksheet.write_string_with_format(2, *kind_col, "Всього", &hdr_fmt)?;
+        worksheet.write_string_with_format(2, kind_col + 1, "Закінчують сьогодні", &hdr_fmt)?;
+        worksheet.write_string_with_format(2, kind_col + 2, "Почали сьогодні", &hdr_fmt)?;
     }
 
     let total_row: u32 = 3;
@@ -75,13 +92,13 @@ pub fn build_day_sheet(
 
     let first_main_row = row;
     let mut main_org_rows = Vec::with_capacity(rollup.main.len());
-    for org in &rollup.main {
+    for (idx, org) in rollup.main.iter().enumerate() {
         main_org_rows.push(row);
-        write_org_row(worksheet, row, org)?;
+        write_org_row(worksheet, row, org, idx % 2 == 0)?;
         row += 1;
     }
     let last_main_row = row.saturating_sub(1);
-    write_total_row(worksheet, total_row, first_main_row, last_main_row, "ВСЬОГО", &total_format)?;
+    write_total_row(worksheet, total_row, first_main_row, last_main_row, "ВСЬОГО", &total_label_fmt, &total_num_fmt)?;
 
     let mut ooz_org_rows = Vec::new();
     let mut ooz_total_row = None;
@@ -93,18 +110,18 @@ pub fn build_day_sheet(
                 "Підрозділи, які знаходяться в штатному підпорядкуванні {org_label}, \
                  але не виконують бойові завдання в смузі оборони УВ (с) \"Південь\""
             ),
-            &header_format,
+            &section_fmt,
         )?;
         row += 1;
         let first_ooz_row = row;
-        for org in &rollup.out_of_zone {
+        for (idx, org) in rollup.out_of_zone.iter().enumerate() {
             ooz_org_rows.push(row);
-            write_org_row(worksheet, row, org)?;
+            write_org_row(worksheet, row, org, idx % 2 == 0)?;
             row += 1;
         }
         let last_ooz_row = row.saturating_sub(1);
         let razom_row = row;
-        write_total_row(worksheet, razom_row, first_ooz_row, last_ooz_row, "РАЗОМ", &total_format)?;
+        write_total_row(worksheet, razom_row, first_ooz_row, last_ooz_row, "РАЗОМ", &total_label_fmt, &total_num_fmt)?;
         ooz_total_row = Some(razom_row);
     }
 
@@ -139,6 +156,11 @@ pub fn build_weekly_file(
     }
 
     build_marker_sheet(workbook, "кінець")?;
+
+    // "початок" (index 0) is hidden; make the first day sheet active so Excel opens there
+    if let Ok(ws) = workbook.worksheet_from_index(1) {
+        ws.set_active(true);
+    }
 
     if let Some(layout) = layout {
         let week_end = week_start + chrono::Duration::days(6);
@@ -175,9 +197,20 @@ fn build_weekly_sheet(
 
     let ws = workbook.add_worksheet().set_name("тижневий")?;
 
-    let title_fmt = Format::new().set_bold().set_align(FormatAlign::Center);
-    let hdr_fmt = Format::new().set_bold().set_align(FormatAlign::Center).set_text_wrap();
-    let total_fmt = Format::new().set_bold();
+    let title_fmt = style::title_format();
+    let hdr_fmt = style::header_format();
+    let total_label_fmt = style::total_format();
+    let total_num_fmt = style::total_number_format();
+    let section_fmt = style::section_format();
+
+    ws.set_column_width(0, 25)?;
+    for col in 1..=6u16 {
+        ws.set_column_width(col, 14)?;
+    }
+    ws.set_column_width(WEEKLY_COL_NOTE, 20)?;
+    ws.set_row_height(0, 30)?;
+    ws.set_row_height(1, 25)?;
+    ws.set_row_height(2, 25)?;
 
     ws.merge_range(
         0, 0, 0, WEEKLY_COL_NOTE,
@@ -199,20 +232,21 @@ fn build_weekly_sheet(
 
     // ВСЬОГО рядок (row 3).
     let total_row: u32 = 3;
-    ws.write_string_with_format(total_row, 0, "ВСЬОГО", &total_fmt)?;
+    ws.write_string_with_format(total_row, 0, "ВСЬОГО", &total_label_fmt)?;
     for (i, wk_col) in WEEKLY_KIND_COLS.iter().enumerate() {
-        write_3d_sum_fmt(ws, total_row, *wk_col, KIND_FINISHING_COLS[i], layout.main_total_row, &total_fmt)?;
-        write_3d_sum_fmt(ws, total_row, wk_col + 1, KIND_STARTED_COLS[i], layout.main_total_row, &total_fmt)?;
+        write_3d_sum_fmt(ws, total_row, *wk_col, KIND_FINISHING_COLS[i], layout.main_total_row, &total_num_fmt)?;
+        write_3d_sum_fmt(ws, total_row, wk_col + 1, KIND_STARTED_COLS[i], layout.main_total_row, &total_num_fmt)?;
     }
 
     // Рядки основних органів.
     for (idx, org) in first_rollup.main.iter().enumerate() {
         if let Some(&daily_row) = layout.main_org_rows.get(idx) {
             let wk_row = total_row + 1 + idx as u32;
-            ws.write_string(wk_row, 0, &org.org_label)?;
+            let (text_fmt, num_fmt) = row_formats(idx);
+            ws.write_string_with_format(wk_row, 0, &org.org_label, &text_fmt)?;
             for (i, wk_col) in WEEKLY_KIND_COLS.iter().enumerate() {
-                write_3d_sum(ws, wk_row, *wk_col, KIND_FINISHING_COLS[i], daily_row)?;
-                write_3d_sum(ws, wk_row, wk_col + 1, KIND_STARTED_COLS[i], daily_row)?;
+                write_3d_sum_fmt(ws, wk_row, *wk_col, KIND_FINISHING_COLS[i], daily_row, &num_fmt)?;
+                write_3d_sum_fmt(ws, wk_row, wk_col + 1, KIND_STARTED_COLS[i], daily_row, &num_fmt)?;
             }
         }
     }
@@ -226,26 +260,27 @@ fn build_weekly_sheet(
                 "Підрозділи, які знаходяться в штатному підпорядкуванні {org_label}, \
                  але не виконують бойові завдання в смузі оборони УВ (с) \"Південь\""
             ),
-            &hdr_fmt,
+            &section_fmt,
         )?;
 
         for (idx, org) in first_rollup.out_of_zone.iter().enumerate() {
             if let Some(&daily_row) = layout.ooz_org_rows.get(idx) {
                 let wk_row = ooz_header_row + 1 + idx as u32;
-                ws.write_string(wk_row, 0, &org.org_label)?;
+                let (text_fmt, num_fmt) = row_formats(idx);
+                ws.write_string_with_format(wk_row, 0, &org.org_label, &text_fmt)?;
                 for (i, wk_col) in WEEKLY_KIND_COLS.iter().enumerate() {
-                    write_3d_sum(ws, wk_row, *wk_col, KIND_FINISHING_COLS[i], daily_row)?;
-                    write_3d_sum(ws, wk_row, wk_col + 1, KIND_STARTED_COLS[i], daily_row)?;
+                    write_3d_sum_fmt(ws, wk_row, *wk_col, KIND_FINISHING_COLS[i], daily_row, &num_fmt)?;
+                    write_3d_sum_fmt(ws, wk_row, wk_col + 1, KIND_STARTED_COLS[i], daily_row, &num_fmt)?;
                 }
             }
         }
 
         let ooz_total_row_wk = ooz_header_row + 1 + first_rollup.out_of_zone.len() as u32;
         if let Some(daily_ooz_total) = layout.ooz_total_row {
-            ws.write_string_with_format(ooz_total_row_wk, 0, "РАЗОМ", &total_fmt)?;
+            ws.write_string_with_format(ooz_total_row_wk, 0, "РАЗОМ", &total_label_fmt)?;
             for (i, wk_col) in WEEKLY_KIND_COLS.iter().enumerate() {
-                write_3d_sum_fmt(ws, ooz_total_row_wk, *wk_col, KIND_FINISHING_COLS[i], daily_ooz_total, &total_fmt)?;
-                write_3d_sum_fmt(ws, ooz_total_row_wk, wk_col + 1, KIND_STARTED_COLS[i], daily_ooz_total, &total_fmt)?;
+                write_3d_sum_fmt(ws, ooz_total_row_wk, *wk_col, KIND_FINISHING_COLS[i], daily_ooz_total, &total_num_fmt)?;
+                write_3d_sum_fmt(ws, ooz_total_row_wk, wk_col + 1, KIND_STARTED_COLS[i], daily_ooz_total, &total_num_fmt)?;
             }
         }
     }
@@ -254,15 +289,12 @@ fn build_weekly_sheet(
     Ok(())
 }
 
-fn write_3d_sum(
-    ws: &mut Worksheet,
-    wk_row: u32,
-    wk_col: u16,
-    daily_col: u16,
-    daily_row: u32,
-) -> Result<(), XlsxError> {
-    ws.write_formula(wk_row, wk_col, Formula::new(three_d_formula(daily_col, daily_row)))?;
-    Ok(())
+fn row_formats(idx: usize) -> (Format, Format) {
+    if idx.is_multiple_of(2) {
+        (style::data_format(), style::data_number_format())
+    } else {
+        (style::data_alt_format(), style::data_alt_number_format())
+    }
 }
 
 fn write_3d_sum_fmt(
@@ -281,17 +313,28 @@ fn three_d_formula(daily_col: u16, daily_row: u32) -> String {
     format!("=SUM(початок:кінець!{}{})", column_letter(daily_col), daily_row + 1)
 }
 
-fn write_org_row(worksheet: &mut Worksheet, row: u32, org: &OrgRollupRow) -> Result<(), XlsxError> {
-    worksheet.write_string(row, COL_ORG, &org.org_label)?;
+fn write_org_row(worksheet: &mut Worksheet, row: u32, org: &OrgRollupRow, even: bool) -> Result<(), XlsxError> {
+    let (text_fmt, num_fmt) = if even {
+        (style::data_format(), style::data_number_format())
+    } else {
+        (style::data_alt_format(), style::data_alt_number_format())
+    };
+    let note_fmt = if even { style::muted_format() } else {
+        style::data_alt_format()
+    };
+
+    worksheet.write_string_with_format(row, COL_ORG, &org.org_label, &text_fmt)?;
     for (kind_col, counts) in
         KIND_COLS.iter().zip([&org.bzvp, &org.special, &org.adaptation])
     {
-        worksheet.write_number(row, *kind_col, counts.total as f64)?;
-        worksheet.write_number(row, kind_col + 1, counts.finishing_today as f64)?;
-        worksheet.write_number(row, kind_col + 2, counts.started_today as f64)?;
+        worksheet.write_number_with_format(row, *kind_col, counts.total as f64, &num_fmt)?;
+        worksheet.write_number_with_format(row, kind_col + 1, counts.finishing_today as f64, &num_fmt)?;
+        worksheet.write_number_with_format(row, kind_col + 2, counts.started_today as f64, &num_fmt)?;
     }
     if let Some(note) = &org.note {
-        worksheet.write_string(row, COL_NOTE, note)?;
+        worksheet.write_string_with_format(row, COL_NOTE, note, &note_fmt)?;
+    } else {
+        worksheet.write_string_with_format(row, COL_NOTE, "", &note_fmt)?;
     }
     Ok(())
 }
@@ -302,21 +345,24 @@ fn write_total_row(
     first_data_row: u32,
     last_data_row: u32,
     label: &str,
-    format: &Format,
+    label_fmt: &Format,
+    num_fmt: &Format,
 ) -> Result<(), XlsxError> {
-    worksheet.write_string_with_format(row, COL_ORG, label, format)?;
+    worksheet.write_string_with_format(row, COL_ORG, label, label_fmt)?;
     if first_data_row > last_data_row {
         for col in 1..=9u16 {
-            worksheet.write_number_with_format(row, col, 0.0, format)?;
+            worksheet.write_number_with_format(row, col, 0.0, num_fmt)?;
         }
+        worksheet.write_string_with_format(row, COL_NOTE, "", num_fmt)?;
         return Ok(());
     }
     for col in 1..=9u16 {
         let col_letter = column_letter(col);
         let formula =
             format!("=SUM({col_letter}{}:{col_letter}{})", first_data_row + 1, last_data_row + 1);
-        worksheet.write_formula_with_format(row, col, Formula::new(formula), format)?;
+        worksheet.write_formula_with_format(row, col, Formula::new(formula), num_fmt)?;
     }
+    worksheet.write_string_with_format(row, COL_NOTE, "", num_fmt)?;
     Ok(())
 }
 

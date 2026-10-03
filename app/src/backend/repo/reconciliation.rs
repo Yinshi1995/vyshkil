@@ -6,7 +6,9 @@ use crate::backend::repo::{notifications, outbox};
 use crate::domain::reconciliation::{
     detect_horizontal, detect_vertical, AggregatedCounts, ReportedValues,
 };
-use crate::types::reconciliation::DiscrepancyRow;
+use crate::types::reconciliation::{
+    DiscrepancyComparison, DiscrepancyRow, DiscrepancyValue, ReportedGroupSnapshot, SubmissionDetail,
+};
 use contracts::{subjects, DiscrepancyMetric, DiscrepancyOpened, DiscrepancyResolved, Envelope};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
 use uuid::Uuid;
@@ -22,6 +24,7 @@ fn metric_label(metric: &str) -> &'static str {
         "total" => "Всього (навчаються)",
         "finishing" => "Закінчують",
         "started" => "Почали",
+        "source_format" => "Формат джерела",
         _ => "?",
     }
 }
@@ -664,10 +667,73 @@ pub async fn list_discrepancies(
     .all(db)
     .await?;
 
-    Ok(rows
+    // Collect all submission IDs to enrich in one query
+    let parsed: Vec<(Row, Vec<(i32, String)>)> = rows
         .into_iter()
         .map(|r| {
-            let values: Vec<(i32, String)> = serde_json::from_str(&r.values).unwrap_or_default();
+            let vals: Vec<(i32, String)> = serde_json::from_str(&r.values).unwrap_or_default();
+            (r, vals)
+        })
+        .collect();
+
+    let all_sub_ids: Vec<i32> = parsed
+        .iter()
+        .flat_map(|(_, vals)| vals.iter().map(|(id, _)| *id))
+        .collect();
+
+    // Fetch submission labels: "65 омбр · Форма"
+    #[derive(FromQueryResult)]
+    struct SubLabel {
+        id: i32,
+        label: String,
+    }
+
+    let sub_labels: std::collections::HashMap<i32, String> = if all_sub_ids.is_empty() {
+        Default::default()
+    } else {
+        let ids_csv = all_sub_ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let sub_sql = format!(
+            "SELECT s.id, \
+                 COALESCE(o.short_name, 'org#' || s.reporting_org_id::text) || ' · ' || \
+                 CASE s.source_type \
+                     WHEN 'form' THEN 'Форма' \
+                     WHEN 'table' THEN 'Таблиця' \
+                     WHEN 'official_letter' THEN 'Офіц. лист' \
+                     ELSE s.source_type \
+                 END AS label \
+             FROM submission s \
+             JOIN org o ON o.id = s.reporting_org_id \
+             WHERE s.id IN ({ids_csv})"
+        );
+        SubLabel::find_by_statement(Statement::from_string(
+            db.get_database_backend(),
+            sub_sql,
+        ))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|sl| (sl.id, sl.label))
+        .collect()
+    };
+
+    Ok(parsed
+        .into_iter()
+        .map(|(r, vals)| {
+            let values = vals
+                .into_iter()
+                .map(|(sub_id, val)| DiscrepancyValue {
+                    source_label: sub_labels
+                        .get(&sub_id)
+                        .cloned()
+                        .unwrap_or_else(|| format!("#{sub_id}")),
+                    submission_id: sub_id,
+                    value: val,
+                })
+                .collect();
             DiscrepancyRow {
                 id: r.id,
                 kind: r.kind,
@@ -684,4 +750,140 @@ pub async fn list_discrepancies(
             }
         })
         .collect())
+}
+
+/// Порівняння подань для однієї розбіжності: повертає `reported_group` рядки з лейблами
+/// для кожного `submission_id`, що фігурує у `values` цієї розбіжності.
+/// Повертає `None`, якщо `disc_id` не знайдено.
+pub async fn compare_discrepancy(
+    db: &DatabaseConnection,
+    disc_id: i32,
+) -> Result<Option<DiscrepancyComparison>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct DiscMeta {
+        metric: String,
+        group_id: Option<i32>,
+        values: String,
+    }
+    let Some(meta) = DiscMeta::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT metric, group_id, values::text AS values FROM discrepancy WHERE id = $1",
+        [disc_id.into()],
+    ))
+    .one(db)
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    let sub_ids: Vec<i32> = {
+        let pairs: Vec<(i32, String)> = serde_json::from_str(&meta.values).unwrap_or_default();
+        pairs.into_iter().map(|(id, _)| id).collect()
+    };
+
+    if sub_ids.is_empty() {
+        return Ok(Some(DiscrepancyComparison {
+            metric: meta.metric.clone(),
+            metric_label: metric_label(&meta.metric).to_string(),
+            rows: vec![],
+        }));
+    }
+
+    let ids_csv = sub_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+
+    #[derive(FromQueryResult)]
+    struct RgRow {
+        submission_id: i32,
+        source_label: String,
+        training_kind: String,
+        vos_label: Option<String>,
+        position_label: Option<String>,
+        course_label: Option<String>,
+        site_label: String,
+        organizer_label: Option<String>,
+        planned_start: String,
+        planned_end: String,
+        equipment_text: Option<String>,
+        basis_doc_number: Option<String>,
+        note: Option<String>,
+        planned_count: i32,
+        arrived_count: i32,
+        in_training_count: i32,
+    }
+
+    let sql = format!(
+        "SELECT rg.submission_id, \
+             COALESCE(src_org.short_name, 'org#' || s.reporting_org_id::text) || ' · ' || \
+             CASE s.source_type \
+                 WHEN 'form' THEN 'Форма' \
+                 WHEN 'table' THEN 'Таблиця' \
+                 WHEN 'official_letter' THEN 'Офіц. лист' \
+                 ELSE s.source_type \
+             END AS source_label, \
+             tk.name AS training_kind, \
+             v.code AS vos_label, \
+             pos.name AS position_label, \
+             crs.name AS course_label, \
+             ts_org.short_name || COALESCE(' ' || ts.locality, '') AS site_label, \
+             org_o.short_name AS organizer_label, \
+             to_char(rg.planned_start, 'DD.MM.YYYY') AS planned_start, \
+             to_char(rg.planned_end, 'DD.MM.YYYY') AS planned_end, \
+             rg.equipment_text, \
+             rg.basis_doc_number, \
+             rg.note, \
+             rg.planned_count, \
+             rg.arrived_count, \
+             rg.in_training_count \
+         FROM reported_group rg \
+         JOIN submission s ON s.id = rg.submission_id \
+         JOIN org src_org ON src_org.id = s.reporting_org_id \
+         JOIN training_kind tk ON tk.id = rg.training_kind_id \
+         JOIN training_site ts ON ts.id = rg.site_id \
+         JOIN org ts_org ON ts_org.id = ts.org_id \
+         LEFT JOIN vos v ON v.id = rg.vos_id \
+         LEFT JOIN \"position\" pos ON pos.id = rg.position_id \
+         LEFT JOIN course crs ON crs.id = rg.course_id \
+         LEFT JOIN org org_o ON org_o.id = rg.organizer_org_id \
+         WHERE rg.submission_id IN ({ids_csv}) \
+           AND ({matched_filter}) \
+         ORDER BY rg.submission_id",
+        ids_csv = ids_csv,
+        matched_filter = if let Some(gid) = meta.group_id {
+            format!("rg.matched_group_id = {gid}")
+        } else {
+            "TRUE".to_string()
+        },
+    );
+
+    let rows = RgRow::find_by_statement(Statement::from_string(db.get_database_backend(), sql))
+        .all(db)
+        .await?;
+
+    let snapshots = rows
+        .into_iter()
+        .map(|r| ReportedGroupSnapshot {
+            submission_id: r.submission_id,
+            source_label: r.source_label,
+            training_kind: r.training_kind,
+            vos_label: r.vos_label,
+            position_label: r.position_label,
+            course_label: r.course_label,
+            site_label: r.site_label,
+            organizer_label: r.organizer_label,
+            planned_start: r.planned_start,
+            planned_end: r.planned_end,
+            equipment_text: r.equipment_text,
+            basis_doc_number: r.basis_doc_number,
+            note: r.note,
+            planned_count: r.planned_count,
+            arrived_count: r.arrived_count,
+            in_training_count: r.in_training_count,
+        })
+        .collect();
+
+    Ok(Some(DiscrepancyComparison {
+        metric_label: metric_label(&meta.metric).to_string(),
+        metric: meta.metric,
+        rows: snapshots,
+    }))
 }

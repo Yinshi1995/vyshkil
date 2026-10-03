@@ -9,6 +9,7 @@ use crate::types::dictionaries::{
     DictionariesOverview, DictionaryEntry, EquipmentVosHint, LearnedAlias,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
+use serde::{Deserialize, Serialize};
 
 /// Підказка "ОВТ/сленг → ВОС" (02 §3): той самий `alias`+`pg_trgm` патерн, що й `repo::orgs::
 /// search_orgs`, тільки `target_type = 'equipment'` і приєднання через `equipment_vos` до `vos`.
@@ -91,7 +92,46 @@ struct SimpleRow {
 async fn simple_list(db: &DatabaseConnection, sql: &str) -> Result<Vec<DictionaryEntry>, DbErr> {
     let stmt = Statement::from_string(db.get_database_backend(), sql);
     let rows = SimpleRow::find_by_statement(stmt).all(db).await?;
-    Ok(rows.into_iter().map(|r| DictionaryEntry { id: r.id, label: r.label, extra: r.extra }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| DictionaryEntry {
+            id: r.id,
+            label: r.label,
+            extra: r.extra,
+            extra_id: None,
+        })
+        .collect())
+}
+
+#[derive(FromQueryResult)]
+struct TrainingSiteRow {
+    id: i32,
+    label: String,
+    extra: Option<String>,
+    extra_id: i32,
+}
+
+async fn training_site_list(db: &DatabaseConnection) -> Result<Vec<DictionaryEntry>, DbErr> {
+    let stmt = Statement::from_string(
+        db.get_database_backend(),
+        "SELECT ts.id, \
+                COALESCE(ts.locality, o.short_name) AS label, \
+                o.short_name AS extra, \
+                ts.org_id AS extra_id \
+         FROM training_site ts \
+         JOIN org o ON o.id = ts.org_id \
+         ORDER BY o.short_name, ts.locality",
+    );
+    let rows = TrainingSiteRow::find_by_statement(stmt).all(db).await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| DictionaryEntry {
+            id: r.id,
+            label: r.label,
+            extra: r.extra,
+            extra_id: Some(r.extra_id),
+        })
+        .collect())
 }
 
 /// Усі "прості" довідники Етапу 2 одним викликом (01 §2) — для сторінки адмінки.
@@ -146,6 +186,7 @@ pub async fn dictionaries_overview(db: &DatabaseConnection) -> Result<Dictionari
              FROM attrition_reason WHERE deleted_at IS NULL ORDER BY name",
         )
         .await?,
+        training_sites: training_site_list(db).await?,
     })
 }
 
@@ -302,4 +343,425 @@ pub async fn training_kind_id_by_code(db: &DatabaseConnection, code: &str) -> Re
     .one(db)
     .await?;
     Ok(row.map(|r| r.id))
+}
+
+// ---------------------------------------------------------------------------
+// Admin CRUD: VOS
+// ---------------------------------------------------------------------------
+
+pub async fn create_vos(
+    db: &impl ConnectionTrait,
+    code: &str,
+    title: &str,
+) -> Result<i32, DbErr> {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            "INSERT INTO vos (code, title, status, source) VALUES ($1, $2, 'draft', 'manual') RETURNING id",
+            [code.into(), title.into()],
+        ))
+        .await?
+        .ok_or(DbErr::RecordNotFound("vos".into()))?;
+    row.try_get::<i32>("", "id")
+}
+
+pub async fn update_vos(
+    db: &impl ConnectionTrait,
+    id: i32,
+    code: &str,
+    title: &str,
+) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "UPDATE vos SET code = $2, title = $3 WHERE id = $1 AND deleted_at IS NULL",
+        [id.into(), code.into(), title.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_vos(db: &impl ConnectionTrait, id: i32) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "UPDATE vos SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+        [id.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Admin CRUD: Equipment (ОВТ)
+// ---------------------------------------------------------------------------
+
+pub async fn create_equipment(
+    db: &impl ConnectionTrait,
+    name: &str,
+    category: Option<&str>,
+) -> Result<i32, DbErr> {
+    let row = if let Some(cat) = category {
+        db.query_one(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            "INSERT INTO equipment (name, category) VALUES ($1, $2) RETURNING id",
+            [name.into(), cat.into()],
+        ))
+        .await?
+    } else {
+        db.query_one(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            "INSERT INTO equipment (name) VALUES ($1) RETURNING id",
+            [name.into()],
+        ))
+        .await?
+    };
+    let row = row.ok_or(DbErr::RecordNotFound("equipment".into()))?;
+    row.try_get::<i32>("", "id")
+}
+
+pub async fn update_equipment(
+    db: &impl ConnectionTrait,
+    id: i32,
+    name: &str,
+    category: Option<&str>,
+) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "UPDATE equipment SET name = $2, category = $3 WHERE id = $1 AND deleted_at IS NULL",
+        [id.into(), name.into(), category.unwrap_or("").into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_equipment(db: &impl ConnectionTrait, id: i32) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "UPDATE equipment SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+        [id.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Generic CRUD for simple dictionaries (code+name / name-only / name+bool)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DictKind {
+    TrainingKind,
+    TrainingDirection,
+    BzvpProgram,
+    Position,
+    Course,
+    AttritionReason,
+}
+
+impl DictKind {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "training_kind" | "training-kind" => Some(Self::TrainingKind),
+            "training_direction" | "training-direction" => Some(Self::TrainingDirection),
+            "bzvp_program" | "bzvp-program" => Some(Self::BzvpProgram),
+            "position" => Some(Self::Position),
+            "course" => Some(Self::Course),
+            "attrition_reason" | "attrition-reason" => Some(Self::AttritionReason),
+            _ => None,
+        }
+    }
+
+    fn table(self) -> &'static str {
+        match self {
+            Self::TrainingKind => "training_kind",
+            Self::TrainingDirection => "training_direction",
+            Self::BzvpProgram => "bzvp_program",
+            Self::Position => "\"position\"",
+            Self::Course => "course",
+            Self::AttritionReason => "attrition_reason",
+        }
+    }
+
+    pub fn has_code(self) -> bool {
+        matches!(self, Self::TrainingKind | Self::TrainingDirection)
+    }
+
+    pub fn has_requires_note(self) -> bool {
+        matches!(self, Self::AttritionReason)
+    }
+}
+
+pub async fn create_dict(
+    db: &impl ConnectionTrait,
+    kind: DictKind,
+    name: &str,
+    code: Option<&str>,
+    requires_note: Option<bool>,
+) -> Result<i32, DbErr> {
+    let table = kind.table();
+    let sql = if kind.has_code() {
+        format!("INSERT INTO {table} (name, code) VALUES ($1, $2) RETURNING id")
+    } else if kind.has_requires_note() {
+        format!("INSERT INTO {table} (name, requires_note) VALUES ($1, $2) RETURNING id")
+    } else {
+        format!("INSERT INTO {table} (name) VALUES ($1) RETURNING id")
+    };
+
+    let row = if kind.has_code() {
+        db.query_one(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            &sql,
+            [name.into(), code.unwrap_or("").into()],
+        ))
+        .await?
+    } else if kind.has_requires_note() {
+        db.query_one(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            &sql,
+            [name.into(), requires_note.unwrap_or(false).into()],
+        ))
+        .await?
+    } else {
+        db.query_one(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            &sql,
+            [name.into()],
+        ))
+        .await?
+    };
+    let row = row.ok_or(DbErr::RecordNotFound(table.into()))?;
+    row.try_get::<i32>("", "id")
+}
+
+pub async fn update_dict(
+    db: &impl ConnectionTrait,
+    kind: DictKind,
+    id: i32,
+    name: &str,
+    code: Option<&str>,
+    requires_note: Option<bool>,
+) -> Result<(), DbErr> {
+    let table = kind.table();
+    let sql = if kind.has_code() {
+        format!("UPDATE {table} SET name = $2, code = $3 WHERE id = $1 AND deleted_at IS NULL")
+    } else if kind.has_requires_note() {
+        format!("UPDATE {table} SET name = $2, requires_note = $3 WHERE id = $1 AND deleted_at IS NULL")
+    } else {
+        format!("UPDATE {table} SET name = $2 WHERE id = $1 AND deleted_at IS NULL")
+    };
+
+    if kind.has_code() {
+        db.execute(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            &sql,
+            [id.into(), name.into(), code.unwrap_or("").into()],
+        ))
+        .await?;
+    } else if kind.has_requires_note() {
+        db.execute(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            &sql,
+            [id.into(), name.into(), requires_note.unwrap_or(false).into()],
+        ))
+        .await?;
+    } else {
+        db.execute(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            &sql,
+            [id.into(), name.into()],
+        ))
+        .await?;
+    }
+    Ok(())
+}
+
+pub async fn delete_dict(
+    db: &impl ConnectionTrait,
+    kind: DictKind,
+    id: i32,
+) -> Result<(), DbErr> {
+    let table = kind.table();
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        format!("UPDATE {table} SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL"),
+        [id.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Admin CRUD: Training Sites (місця підготовки)
+// ---------------------------------------------------------------------------
+
+pub async fn create_training_site(
+    db: &impl ConnectionTrait,
+    org_id: i32,
+    locality: &str,
+) -> Result<i32, DbErr> {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            db.get_database_backend(),
+            "INSERT INTO training_site (org_id, locality) VALUES ($1, $2) RETURNING id",
+            [org_id.into(), locality.into()],
+        ))
+        .await?
+        .ok_or(DbErr::RecordNotFound("training_site".into()))?;
+    row.try_get::<i32>("", "id")
+}
+
+pub async fn update_training_site(
+    db: &impl ConnectionTrait,
+    id: i32,
+    org_id: i32,
+    locality: &str,
+) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "UPDATE training_site SET org_id = $2, locality = $3 WHERE id = $1",
+        [id.into(), org_id.into(), locality.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_training_site(db: &impl ConnectionTrait, id: i32) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "DELETE FROM training_site WHERE id = $1",
+        [id.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Export all dictionaries + orgs for import template
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportEnums {
+    pub org_codes: Vec<String>,
+    pub training_kinds: Vec<String>,
+    pub training_directions: Vec<String>,
+    pub bzvp_programs: Vec<String>,
+    pub courses: Vec<String>,
+    pub vos_codes: Vec<String>,
+    pub positions: Vec<String>,
+    pub equipment: Vec<String>,
+    pub attrition_reasons: Vec<String>,
+}
+
+pub async fn export_enums_for_template(db: &DatabaseConnection) -> Result<ImportEnums, DbErr> {
+    #[derive(FromQueryResult)]
+    struct NameRow { name: String }
+    #[derive(FromQueryResult)]
+    struct CodeNameRow { code: String, name: String }
+    #[derive(FromQueryResult)]
+    struct VosRow { label: String }
+    #[derive(FromQueryResult)]
+    struct CodeRow { code: String }
+
+    let org_codes = CodeRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT (COALESCE(number_kind, '') || number) AS code \
+         FROM org WHERE kind = 'military_unit' AND deleted_at IS NULL AND number IS NOT NULL \
+         ORDER BY number_kind, number",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| r.code)
+    .collect();
+
+    let training_kinds = CodeNameRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT code, name FROM training_kind WHERE deleted_at IS NULL ORDER BY name",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| format!("{} ({})", r.name, r.code))
+    .collect();
+
+    let training_directions = NameRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT name FROM training_direction WHERE deleted_at IS NULL ORDER BY name",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| r.name)
+    .collect();
+
+    let bzvp_programs = NameRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT name FROM bzvp_program WHERE deleted_at IS NULL ORDER BY name",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| r.name)
+    .collect();
+
+    let courses = NameRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT name FROM course WHERE deleted_at IS NULL ORDER BY name",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| r.name)
+    .collect();
+
+    let vos_codes = VosRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT (code || ' — ' || title) AS label FROM vos WHERE deleted_at IS NULL ORDER BY code",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| r.label)
+    .collect();
+
+    let positions = NameRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT name FROM \"position\" WHERE deleted_at IS NULL ORDER BY name",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| r.name)
+    .collect();
+
+    let equipment = NameRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT name FROM equipment WHERE deleted_at IS NULL ORDER BY name",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| r.name)
+    .collect();
+
+    let attrition_reasons = NameRow::find_by_statement(Statement::from_string(
+        db.get_database_backend(),
+        "SELECT name FROM attrition_reason WHERE deleted_at IS NULL ORDER BY name",
+    ))
+    .all(db)
+    .await?
+    .into_iter()
+    .map(|r| r.name)
+    .collect();
+
+    Ok(ImportEnums {
+        org_codes,
+        training_kinds,
+        training_directions,
+        bzvp_programs,
+        courses,
+        vos_codes,
+        positions,
+        equipment,
+        attrition_reasons,
+    })
 }

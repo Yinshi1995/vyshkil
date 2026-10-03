@@ -25,7 +25,10 @@ pub async fn unread_count(db: &DatabaseConnection, org_id: i32) -> Result<i64, D
     }
     let row = Count::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
-        "SELECT COUNT(*)::bigint AS cnt FROM notification WHERE org_id = $1 AND is_read = false",
+        "SELECT COUNT(*)::bigint AS cnt FROM notification \
+         WHERE org_id IN (SELECT $1::int UNION SELECT descendant_id FROM subordination_closure \
+         WHERE ancestor_id = $1 AND daterange(valid_from, valid_to, '[)') @> CURRENT_DATE) \
+         AND is_read = false",
         [org_id.into()],
     ))
     .one(db)
@@ -50,9 +53,12 @@ pub async fn list_for_org(
     }
     let rows = Row::find_by_statement(Statement::from_sql_and_values(
         db.get_database_backend(),
-        "SELECT id, kind, title, body, link, is_read, \
-                to_char(created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS created_at \
-         FROM notification WHERE org_id = $1 ORDER BY created_at DESC LIMIT $2",
+        "SELECT n.id, n.kind, n.title, n.body, n.link, n.is_read, \
+                to_char(n.created_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS created_at \
+         FROM notification n \
+         WHERE n.org_id IN (SELECT $1::int UNION SELECT descendant_id FROM subordination_closure \
+         WHERE ancestor_id = $1 AND daterange(valid_from, valid_to, '[)') @> CURRENT_DATE) \
+         ORDER BY n.created_at DESC LIMIT $2",
         [org_id.into(), limit.into()],
     ))
     .all(db)
@@ -75,7 +81,9 @@ pub async fn list_for_org(
 pub async fn mark_read(db: &DatabaseConnection, org_id: i32, notification_id: i32) -> Result<(), DbErr> {
     db.execute(Statement::from_sql_and_values(
         db.get_database_backend(),
-        "UPDATE notification SET is_read = true WHERE id = $1 AND org_id = $2",
+        "UPDATE notification SET is_read = true WHERE id = $1 \
+         AND org_id IN (SELECT $2::int UNION SELECT descendant_id FROM subordination_closure \
+         WHERE ancestor_id = $2 AND daterange(valid_from, valid_to, '[)') @> CURRENT_DATE)",
         [notification_id.into(), org_id.into()],
     ))
     .await?;
@@ -85,7 +93,10 @@ pub async fn mark_read(db: &DatabaseConnection, org_id: i32, notification_id: i3
 pub async fn mark_all_read(db: &DatabaseConnection, org_id: i32) -> Result<(), DbErr> {
     db.execute(Statement::from_sql_and_values(
         db.get_database_backend(),
-        "UPDATE notification SET is_read = true WHERE org_id = $1 AND is_read = false",
+        "UPDATE notification SET is_read = true \
+         WHERE org_id IN (SELECT $1::int UNION SELECT descendant_id FROM subordination_closure \
+         WHERE ancestor_id = $1 AND daterange(valid_from, valid_to, '[)') @> CURRENT_DATE) \
+         AND is_read = false",
         [org_id.into()],
     ))
     .await?;

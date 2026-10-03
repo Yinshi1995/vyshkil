@@ -17,3 +17,5 @@
 | `org_detail/` | картка частини з історією (своя карта) | `routes.rs` (`/org/:id`) |
 | `settings/` | налаштування: теми, WhatsApp, черги, learned-синоніми (своя карта) | `routes.rs` (`/settings`) |
 | `training_form/` | сітка введення груп: вручну АБО файлом Фах/БпС/Терміни, одна чернетка (02, своя карта) | `routes.rs` (`/training-form`) |
+| `change_password/` | примусова зміна пароля після першого входу (12-auth.md) | `routes.rs` (`/change-password`) |
+| `request_account/` | запит на створення облікового запису (12-auth.md) | `routes.rs` (`/request-account`) |

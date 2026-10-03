@@ -12,8 +12,7 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Self {
-        // .ok() навмисно: у продакшені змінні середовища зазвичай інжектяться оркестратором,
-        // а не файлом .env, тому відсутність файлу — це нормальний, а не аварійний випадок.
+        dotenvy::from_filename(".env.local").ok();
         dotenvy::dotenv().ok();
 
         Self {

@@ -38,7 +38,8 @@ pub fn LoginPage() -> impl IntoView {
                         }
                     }
                     if cfg!(target_arch = "wasm32") {
-                        let _ = window().location().set_href("/");
+                        let dest = if resp.must_change_password { "/change-password" } else { "/" };
+                        let _ = window().location().set_href(dest);
                     }
                 }
                 Ok(resp) => {
@@ -95,6 +96,12 @@ pub fn LoginPage() -> impl IntoView {
                         {move || if loading.get() { "Вхід…" } else { "Увійти" }}
                     </button>
                 </form>
+                <div class="login-card__footer">
+                    <p class="login-card__hint">
+                        "Немає облікового запису? "
+                        <a href="/request-account" class="login-card__link">"Надіслати запит адміністратору"</a>
+                    </p>
+                </div>
             </div>
         </div>
     }

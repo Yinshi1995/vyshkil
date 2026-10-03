@@ -118,7 +118,40 @@ pub async fn search_vos_position_course(
             JOIN vos v ON v.id = ev.vos_id
             WHERE a.norm = $1 OR a.norm % $1
         ),
-        combined AS (SELECT * FROM direct UNION ALL SELECT * FROM via_equipment),
+        by_code_or_title AS (
+            SELECT 'vos' AS kind, v.id,
+                   v.code || ' — ' || v.title AS label,
+                   v.code AS matched_raw, 0 AS weight,
+                   (v.code = $1) AS is_exact,
+                   GREATEST(similarity(v.code, $1), similarity(v.title, $1)) AS sim,
+                   NULL::text AS why
+            FROM vos v
+            WHERE v.code = $1 OR v.code ILIKE ($1 || '%')
+                  OR v.title ILIKE ('%' || $1 || '%')
+            UNION ALL
+            SELECT 'position' AS kind, p.id,
+                   p.name AS label,
+                   p.name AS matched_raw, 0 AS weight,
+                   false AS is_exact,
+                   similarity(p.name, $1) AS sim,
+                   NULL::text AS why
+            FROM "position" p
+            WHERE p.name ILIKE ('%' || $1 || '%')
+            UNION ALL
+            SELECT 'course' AS kind, c.id,
+                   c.name AS label,
+                   c.name AS matched_raw, 0 AS weight,
+                   false AS is_exact,
+                   similarity(c.name, $1) AS sim,
+                   NULL::text AS why
+            FROM course c
+            WHERE c.name ILIKE ('%' || $1 || '%')
+        ),
+        combined AS (
+            SELECT * FROM direct
+            UNION ALL SELECT * FROM via_equipment
+            UNION ALL SELECT * FROM by_code_or_title
+        ),
         ranked AS (
             SELECT
                 *,
@@ -230,6 +263,37 @@ pub async fn training_site_options(
             label: r.locality.unwrap_or_else(|| "на базі частини".to_string()),
         })
         .collect())
+}
+
+/// Пошук майданчиків навчання по тексту (Data Workspace — створення групи).
+#[derive(FromQueryResult, serde::Serialize)]
+pub struct SiteSearchRow {
+    pub id: i32,
+    pub label: String,
+}
+
+pub async fn search_training_sites(
+    db: &DatabaseConnection,
+    query: &str,
+    limit: i64,
+) -> Result<Vec<SiteSearchRow>, DbErr> {
+    let pattern = format!("%{}%", query.to_lowercase());
+    SiteSearchRow::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT ts.id, \
+                CASE WHEN ts.locality IS NOT NULL \
+                     THEN ts.locality || ' (' || o.short_name || ')' \
+                     ELSE o.short_name \
+                END AS label \
+         FROM training_site ts \
+         JOIN org o ON o.id = ts.org_id \
+         WHERE LOWER(COALESCE(ts.locality, '')) LIKE $1 \
+            OR LOWER(o.short_name) LIKE $1 \
+         ORDER BY o.short_name LIMIT $2",
+        [pattern.into(), limit.into()],
+    ))
+    .all(db)
+    .await
 }
 
 /// Розібрані дати одного рядка сітки — те, що `validate_row` віддає, а `commit_group_rows` бере
@@ -606,4 +670,416 @@ async fn insert_event(
     ))
     .await?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Data workspace: extended CRUD for the data management UI
+// ---------------------------------------------------------------------------
+
+#[derive(FromQueryResult, serde::Serialize)]
+pub struct DataGroupRow {
+    pub id: i32,
+    pub sender_org_id: i32,
+    pub org_label: String,
+    pub training_kind_id: i32,
+    pub training_kind: String,
+    pub bzvp_program_id: Option<i32>,
+    pub vos_id: Option<i32>,
+    pub vos_label: String,
+    pub position_id: Option<i32>,
+    pub course_id: Option<i32>,
+    pub site_id: i32,
+    pub site_label: String,
+    pub organizer_org_id: Option<i32>,
+    pub organizer_label: String,
+    pub planned_start: String,
+    pub planned_end: String,
+    pub equipment_text: String,
+    pub basis_doc_number: String,
+    pub basis_doc_date: String,
+    pub note: String,
+    pub planned_count: i32,
+    pub arrived_count: i32,
+    pub in_training_count: i32,
+    pub completed_count: i32,
+    pub attrition_count: i32,
+    pub discrepancy_count: i32,
+}
+
+pub async fn list_groups_extended(
+    db: &DatabaseConnection,
+    org_ids: Option<&[i32]>,
+) -> Result<Vec<DataGroupRow>, DbErr> {
+    let base = "\
+        SELECT tg.id, \
+        tg.sender_org_id, \
+        COALESCE(o.short_name, 'org#' || tg.sender_org_id::text) AS org_label, \
+        tg.training_kind_id, \
+        COALESCE(tk.name, '') AS training_kind, \
+        tg.bzvp_program_id, \
+        tg.vos_id, \
+        COALESCE(v.code || ' — ' || v.title, p.name, c.name, '') AS vos_label, \
+        tg.position_id, \
+        tg.course_id, \
+        tg.site_id, \
+        COALESCE(ts.locality, so.short_name, '') AS site_label, \
+        tg.organizer_org_id, \
+        COALESCE(oo.short_name, '') AS organizer_label, \
+        COALESCE(to_char(tg.planned_start, 'DD.MM.YYYY'), '') AS planned_start, \
+        COALESCE(to_char(tg.planned_end, 'DD.MM.YYYY'), '') AS planned_end, \
+        COALESCE(tg.equipment_text, '') AS equipment_text, \
+        COALESCE(tg.basis_doc_number, '') AS basis_doc_number, \
+        COALESCE(to_char(tg.basis_doc_date, 'DD.MM.YYYY'), '') AS basis_doc_date, \
+        COALESCE(tg.note, '') AS note, \
+        COALESCE((SELECT SUM(ge.count) FROM group_event ge WHERE ge.group_id = tg.id AND ge.event_type = 'planned'), 0)::int AS planned_count, \
+        COALESCE((SELECT SUM(ge.count) FROM group_event ge WHERE ge.group_id = tg.id AND ge.event_type = 'arrived'), 0)::int AS arrived_count, \
+        ( COALESCE((SELECT SUM(ge.count) FROM group_event ge WHERE ge.group_id = tg.id AND ge.event_type IN ('started','added')), 0) \
+        - COALESCE((SELECT SUM(ge.count) FROM group_event ge WHERE ge.group_id = tg.id AND ge.event_type IN ('attrition','completed')), 0) \
+        )::int AS in_training_count, \
+        COALESCE((SELECT SUM(ge.count) FROM group_event ge WHERE ge.group_id = tg.id AND ge.event_type = 'completed'), 0)::int AS completed_count, \
+        COALESCE((SELECT SUM(ge.count) FROM group_event ge WHERE ge.group_id = tg.id AND ge.event_type = 'attrition'), 0)::int AS attrition_count, \
+        COALESCE((SELECT COUNT(*) FROM discrepancy d WHERE d.group_id = tg.id AND d.status IN ('open','notified','in_progress')), 0)::int AS discrepancy_count \
+        FROM training_group tg \
+        LEFT JOIN org o ON o.id = tg.sender_org_id \
+        LEFT JOIN training_kind tk ON tk.id = tg.training_kind_id \
+        LEFT JOIN vos v ON v.id = tg.vos_id \
+        LEFT JOIN \"position\" p ON p.id = tg.position_id \
+        LEFT JOIN course c ON c.id = tg.course_id \
+        LEFT JOIN training_site ts ON ts.id = tg.site_id \
+        LEFT JOIN org so ON so.id = ts.org_id \
+        LEFT JOIN org oo ON oo.id = tg.organizer_org_id";
+
+    let (sql, params): (String, Vec<sea_orm::Value>) = match org_ids {
+        Some(ids) if !ids.is_empty() => {
+            let placeholders: Vec<String> =
+                ids.iter().enumerate().map(|(i, _)| format!("${}", i + 1)).collect();
+            let sql = format!(
+                "{base} WHERE tg.sender_org_id IN ({}) \
+                 ORDER BY tg.planned_start DESC NULLS LAST, tg.id DESC LIMIT 1000",
+                placeholders.join(", ")
+            );
+            let params: Vec<sea_orm::Value> = ids.iter().map(|&id| id.into()).collect();
+            (sql, params)
+        }
+        _ => {
+            let sql = format!(
+                "{base} ORDER BY tg.planned_start DESC NULLS LAST, tg.id DESC LIMIT 1000"
+            );
+            (sql, vec![])
+        }
+    };
+
+    DataGroupRow::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        &sql,
+        params,
+    ))
+    .all(db)
+    .await
+}
+
+pub async fn update_group_field(
+    db: &DatabaseConnection,
+    group_id: i32,
+    field: &str,
+    value: &str,
+) -> Result<bool, DbErr> {
+    let allowed = [
+        "sender_org_id", "training_kind_id", "vos_id", "position_id", "course_id",
+        "site_id", "organizer_org_id", "bzvp_program_id",
+        "planned_start", "planned_end", "equipment_text", "basis_doc_number",
+        "basis_doc_date", "note",
+    ];
+    if !allowed.contains(&field) {
+        return Ok(false);
+    }
+
+    let sql = if field.ends_with("_id") {
+        if value.is_empty() || value == "null" {
+            format!("UPDATE training_group SET {field} = NULL WHERE id = $1")
+        } else {
+            format!("UPDATE training_group SET {field} = $2::int WHERE id = $1")
+        }
+    } else if field.contains("date") || field.contains("start") || field.contains("end") {
+        format!("UPDATE training_group SET {field} = $2::date WHERE id = $1")
+    } else {
+        format!("UPDATE training_group SET {field} = $2 WHERE id = $1")
+    };
+
+    let params: Vec<sea_orm::Value> = if (field.ends_with("_id")) && (value.is_empty() || value == "null") {
+        vec![group_id.into()]
+    } else {
+        vec![group_id.into(), value.into()]
+    };
+
+    let result = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            &sql,
+            params,
+        ))
+        .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn delete_group(db: &DatabaseConnection, group_id: i32) -> Result<bool, DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "DELETE FROM group_event WHERE group_id = $1",
+        [group_id.into()],
+    ))
+    .await?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "DELETE FROM group_composition WHERE group_id = $1",
+        [group_id.into()],
+    ))
+    .await?;
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "DELETE FROM reported_group WHERE matched_group_id = $1",
+        [group_id.into()],
+    ))
+    .await?;
+    let result = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "DELETE FROM training_group WHERE id = $1",
+            [group_id.into()],
+        ))
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+#[derive(FromQueryResult, serde::Serialize)]
+pub struct GroupEventRow {
+    pub id: i32,
+    pub group_id: i32,
+    pub event_type: String,
+    pub count: i32,
+    pub occurred_on: String,
+    pub recorded_at: String,
+    pub reason_label: Option<String>,
+    pub note: Option<String>,
+    pub source_label: Option<String>,
+}
+
+pub async fn list_group_events(
+    db: &DatabaseConnection,
+    group_id: i32,
+) -> Result<Vec<GroupEventRow>, DbErr> {
+    GroupEventRow::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT ge.id, ge.group_id, ge.event_type, ge.count, \
+         to_char(ge.occurred_on, 'DD.MM.YYYY') AS occurred_on, \
+         to_char(ge.recorded_at, 'DD.MM.YYYY HH24:MI') AS recorded_at, \
+         ar.name AS reason_label, ge.note, \
+         CASE WHEN s.id IS NOT NULL THEN \
+             COALESCE(src_org.short_name, 'org#' || s.reporting_org_id::text) || ' · ' || \
+             CASE s.source_type \
+                 WHEN 'form' THEN 'Форма' \
+                 WHEN 'table' THEN 'Таблиця' \
+                 WHEN 'official_letter' THEN 'Офіц. лист' \
+                 ELSE s.source_type \
+             END \
+         WHEN al.actor IS NOT NULL AND al.actor <> '' THEN \
+             COALESCE(actor_org.short_name, 'org#' || split_part(al.actor, ':', 1)) \
+         END AS source_label \
+         FROM group_event ge \
+         LEFT JOIN attrition_reason ar ON ar.id = ge.reason_id \
+         LEFT JOIN submission s ON s.id = ge.submission_id \
+         LEFT JOIN org src_org ON src_org.id = s.reporting_org_id \
+         LEFT JOIN LATERAL ( \
+             SELECT actor FROM audit_log \
+             WHERE table_name = 'group_event' AND row_id = ge.id AND action = 'insert' \
+             LIMIT 1 \
+         ) al ON TRUE \
+         LEFT JOIN org actor_org ON al.actor IS NOT NULL AND al.actor <> '' \
+             AND actor_org.id = split_part(al.actor, ':', 1)::int \
+         WHERE ge.group_id = $1 \
+         ORDER BY ge.occurred_on, ge.id",
+        [group_id.into()],
+    ))
+    .all(db)
+    .await
+}
+
+pub async fn group_org_id(db: &DatabaseConnection, group_id: i32) -> Result<Option<i32>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct Row {
+        sender_org_id: i32,
+    }
+    let row = Row::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT sender_org_id FROM training_group WHERE id = $1",
+        [group_id.into()],
+    ))
+    .one(db)
+    .await?;
+    Ok(row.map(|r| r.sender_org_id))
+}
+
+pub async fn add_group_event(
+    db: &(impl ConnectionTrait + Send),
+    group_id: i32,
+    event_type: &str,
+    count: i32,
+    occurred_on: &str,
+    reason_id: Option<i32>,
+    note: Option<&str>,
+) -> Result<i32, DbErr> {
+    #[derive(FromQueryResult)]
+    struct NewId {
+        id: i32,
+    }
+    let row = NewId::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "INSERT INTO group_event (group_id, event_type, count, occurred_on, reason_id, note) \
+         VALUES ($1, $2, $3, $4::date, $5, $6) RETURNING id",
+        [
+            group_id.into(),
+            event_type.into(),
+            count.into(),
+            occurred_on.into(),
+            reason_id.into(),
+            note.into(),
+        ],
+    ))
+    .one(db)
+    .await?
+    .ok_or_else(|| DbErr::Custom("INSERT group_event did not return id".into()))?;
+    Ok(row.id)
+}
+
+pub async fn delete_group_event(db: &(impl ConnectionTrait + Send), event_id: i32) -> Result<bool, DbErr> {
+    let result = db
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "DELETE FROM group_event WHERE id = $1",
+            [event_id.into()],
+        ))
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+#[derive(FromQueryResult, serde::Serialize)]
+pub struct TrainingKindOption {
+    pub id: i32,
+    pub code: String,
+    pub name: String,
+}
+
+pub async fn list_training_kinds(db: &DatabaseConnection) -> Result<Vec<TrainingKindOption>, DbErr> {
+    TrainingKindOption::find_by_statement(Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT id, code, name FROM training_kind ORDER BY id",
+    ))
+    .all(db)
+    .await
+}
+
+#[derive(FromQueryResult, serde::Serialize)]
+pub struct AttritionReasonOption {
+    pub id: i32,
+    pub name: String,
+}
+
+pub async fn list_attrition_reasons(db: &DatabaseConnection) -> Result<Vec<AttritionReasonOption>, DbErr> {
+    AttritionReasonOption::find_by_statement(Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT id, name FROM attrition_reason WHERE deleted_at IS NULL ORDER BY id",
+    ))
+    .all(db)
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn create_group_with_events(
+    db: &DatabaseConnection,
+    sender_org_id: i32,
+    training_kind_id: i32,
+    site_id: i32,
+    vos_id: Option<i32>,
+    position_id: Option<i32>,
+    course_id: Option<i32>,
+    bzvp_program_id: Option<i32>,
+    organizer_org_id: Option<i32>,
+    planned_start: &str,
+    planned_end: &str,
+    equipment_text: Option<&str>,
+    basis_doc_number: Option<&str>,
+    basis_doc_date: Option<&str>,
+    note: Option<&str>,
+    planned_count: i32,
+    arrived_count: i32,
+    in_training_count: i32,
+) -> Result<i32, DbErr> {
+    #[derive(FromQueryResult)]
+    struct NewId {
+        id: i32,
+    }
+    let basis_date_val: sea_orm::Value = basis_doc_date
+        .filter(|s| !s.is_empty())
+        .map(sea_orm::Value::from)
+        .unwrap_or(sea_orm::Value::from(None::<String>));
+
+    let row = NewId::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "INSERT INTO training_group \
+            (sender_org_id, training_kind_id, bzvp_program_id, vos_id, position_id, \
+             course_id, equipment_text, site_id, organizer_org_id, planned_start, \
+             planned_end, basis_doc_number, basis_doc_date, note) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13::date, $14) \
+         RETURNING id",
+        [
+            sender_org_id.into(),
+            training_kind_id.into(),
+            bzvp_program_id.into(),
+            vos_id.into(),
+            position_id.into(),
+            course_id.into(),
+            equipment_text.into(),
+            site_id.into(),
+            organizer_org_id.into(),
+            planned_start.into(),
+            planned_end.into(),
+            basis_doc_number.into(),
+            basis_date_val,
+            note.into(),
+        ],
+    ))
+    .one(db)
+    .await?
+    .ok_or_else(|| DbErr::Custom("INSERT training_group did not return id".into()))?;
+
+    let gid = row.id;
+    if planned_count > 0 {
+        db.execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "INSERT INTO group_event (group_id, event_type, count, occurred_on) \
+             VALUES ($1, 'planned', $2, $3::date)",
+            [gid.into(), planned_count.into(), planned_start.into()],
+        ))
+        .await?;
+    }
+    if arrived_count > 0 {
+        db.execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "INSERT INTO group_event (group_id, event_type, count, occurred_on) \
+             VALUES ($1, 'arrived', $2, $3::date)",
+            [gid.into(), arrived_count.into(), planned_start.into()],
+        ))
+        .await?;
+    }
+    if in_training_count > 0 {
+        db.execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "INSERT INTO group_event (group_id, event_type, count, occurred_on) \
+             VALUES ($1, 'started', $2, $3::date)",
+            [gid.into(), in_training_count.into(), planned_start.into()],
+        ))
+        .await?;
+    }
+    Ok(gid)
 }

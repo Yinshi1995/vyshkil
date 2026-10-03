@@ -25,3 +25,4 @@
 | `reconciliation.rs` | `refresh_horizontal`/`refresh_temporal`/`refresh_vertical` (перерахунок `discrepancy` після фіксації, 04 §3-4, усі три пишуть `DiscrepancyOpened`/`.Resolved` в outbox), `list_discrepancies` (Етап 8 зрізи 1-2) | `repo::groups::commit_group_rows`, `services/reconciliation.rs` |
 | `outbox.rs` | `insert` — транзакційний outbox (09-messaging.md §3.1, Фаза 1); `backlog` — відставання для адмін-екрана "Черги" (§5, Фаза 4) | `repo::reconciliation` (перший продюсер), `pages::settings::server` |
 | `notifications.rs` | Сповіщення (Етап 8 зріз 4, 04 §5) — CRUD для внутрішніх повідомлень | `services/notifications.rs`, `layout` |
+| `whatsapp_routing.rs` | WhatsApp-маршрутизація: CRUD для `whatsapp_destination`, `notification_subscription`, `notification_type` (09-messaging.md §2) | `server/src/api.rs` (WhatsApp routing endpoints) |

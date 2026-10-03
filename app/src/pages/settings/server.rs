@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::types::actor::Actor;
-use crate::types::auth::PasskeyInfo;
+use crate::types::auth::{AccountInfo, PasskeyInfo};
 
 // ---------------------------------------------------------------------------
 // Спільний helper — require_admin
@@ -252,6 +252,173 @@ pub async fn retry_dlq_entry(actor: Option<Actor>, seq: u64) -> Result<(), Serve
 }
 
 // ---------------------------------------------------------------------------
+// Адмін: управління користувачами
+// ---------------------------------------------------------------------------
+
+#[server(AdminListUsers, "/api")]
+pub async fn admin_list_users(actor: Option<Actor>) -> Result<Vec<crate::types::auth::AdminUserRow>, ServerFnError> {
+    use crate::backend::repo;
+    require_admin(actor)?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    repo::auth::list_users(&db)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[server(AdminCreateUser, "/api")]
+pub async fn admin_create_user(
+    actor: Option<Actor>,
+    login: String,
+    password: String,
+    display_name: String,
+    org_id: i32,
+    role: String,
+) -> Result<i32, ServerFnError> {
+    use crate::backend::repo;
+    require_admin(actor)?;
+
+    if login.len() < 3 {
+        return Err(ServerFnError::new("Логін занадто короткий (мін. 3 символи)"));
+    }
+    if password.len() < 6 {
+        return Err(ServerFnError::new("Пароль занадто короткий (мін. 6 символів)"));
+    }
+
+    let password_hash = hash_password(&password)?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    let user_id = repo::auth::create_user(&db, &login, &password_hash, if display_name.is_empty() { None } else { Some(&display_name) })
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    repo::auth::add_user_role(&db, user_id, org_id, &role)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    Ok(user_id)
+}
+
+#[server(AdminResetPassword, "/api")]
+pub async fn admin_reset_password(
+    actor: Option<Actor>,
+    user_id: i32,
+    new_password: String,
+) -> Result<(), ServerFnError> {
+    use crate::backend::repo;
+    require_admin(actor)?;
+
+    if new_password.len() < 6 {
+        return Err(ServerFnError::new("Пароль занадто короткий (мін. 6 символів)"));
+    }
+
+    let password_hash = hash_password(&new_password)?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    repo::auth::reset_password(&db, user_id, &password_hash)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[server(AdminToggleActive, "/api")]
+pub async fn admin_toggle_active(
+    actor: Option<Actor>,
+    user_id: i32,
+    is_active: bool,
+) -> Result<(), ServerFnError> {
+    use crate::backend::repo;
+    require_admin(actor)?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    repo::auth::toggle_active(&db, user_id, is_active)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[server(AdminListSubmissions, "/api")]
+pub async fn admin_list_submissions(
+    actor: Option<Actor>,
+) -> Result<Vec<crate::types::auth::AdminSubmissionRow>, ServerFnError> {
+    use crate::backend::{policy, repo};
+    let actor = require_admin(actor)?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    let visible = policy::visible_org_ids(&db, actor)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    repo::auth::list_submissions(&db, visible.as_deref())
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[server(AdminListGroups, "/api")]
+pub async fn admin_list_groups(
+    actor: Option<Actor>,
+) -> Result<Vec<crate::types::auth::AdminGroupRow>, ServerFnError> {
+    use crate::backend::{policy, repo};
+    let actor = require_admin(actor)?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+    let visible = policy::visible_org_ids(&db, actor)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+    repo::auth::list_training_groups(&db, visible.as_deref())
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+#[cfg(feature = "ssr")]
+fn hash_password(password: &str) -> Result<String, ServerFnError> {
+    use argon2::{Argon2, PasswordHasher};
+    use argon2::password_hash::{SaltString, rand_core::OsRng};
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let hash = argon2.hash_password(password.as_bytes(), &salt)
+        .map_err(|e| ServerFnError::new(format!("помилка хешування: {e}")))?;
+    Ok(hash.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Обліковий запис (Settings → Обліковий запис)
+// ---------------------------------------------------------------------------
+
+#[server(GetMyAccount, "/api")]
+pub async fn get_my_account() -> Result<AccountInfo, ServerFnError> {
+    use crate::backend::repo;
+    use crate::services::auth::require_auth;
+    use sea_orm::FromQueryResult;
+
+    let auth_user = require_auth().await?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+
+    #[derive(FromQueryResult)]
+    struct AccountWithDate {
+        login: String,
+        display_name: Option<String>,
+        created_at: String,
+    }
+
+    let account = AccountWithDate::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT login, display_name, to_char(created_at, 'YYYY-MM-DD') AS created_at \
+         FROM user_account WHERE id = $1",
+        [auth_user.user_id.into()],
+    ))
+    .one(&db)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?
+    .ok_or_else(|| ServerFnError::new("користувача не знайдено"))?;
+
+    let role_rows = repo::auth::user_roles(&db, auth_user.user_id)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let roles: Vec<String> = role_rows
+        .into_iter()
+        .map(|r| format!("{} ({})", r.role, r.org_label))
+        .collect();
+
+    Ok(AccountInfo {
+        login: account.login,
+        full_name: account.display_name,
+        roles,
+        created_at: account.created_at,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Passkey / FIDO2 (12-auth.md §1.3, Étap 10b)
 // ---------------------------------------------------------------------------
 
@@ -260,7 +427,11 @@ pub async fn list_passkeys() -> Result<Vec<PasskeyInfo>, ServerFnError> {
     use crate::backend::repo;
     use crate::services::auth::require_auth;
 
-    let auth_user = require_auth().await?;
+    // Not authenticated (DEV mode / no session) → empty list, not an error.
+    let auth_user = match require_auth().await {
+        Ok(u) => u,
+        Err(_) => return Ok(vec![]),
+    };
     let db = expect_context::<sea_orm::DatabaseConnection>();
     let creds = repo::passkeys::credentials_for_user(&db, auth_user.user_id)
         .await

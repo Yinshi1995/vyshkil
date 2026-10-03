@@ -27,3 +27,5 @@
 | `d4.rs` | `build_pptx`/`CorpsSlide` — "Підготовка" (05 §D4): від-scratch pptx (zip/XML), титульний + загальна динаміка (KPI-плитки) + по корпусах; стиль за 05 §D4 spec; шаблонний підхід потребує `source_files/Підготовка_26.09.2026.pptx` (QUESTIONS.md) | `pages/documents/server.rs` |
 | `d5.rs` | Документ D5 — укомплектованість (05 §D5) | `pages/documents/server.rs` |
 | `d6.rs` | Документ D6 — укомплектованість (05 §D6) | `pages/documents/server.rs` |
+| `import_template.rs` | Типовий зразок для імпорту xlsx (02 §1): дані + прихований "Довідники" з data validation з БД-довідників | `server/src/api.rs` (import_template_handler) |
+| `style.rs` | Спільні стильові константи для docx/pptx/xlsx: кольори, шрифти, розміри (05 §стиль) | `d1.rs`, `d3.rs`, `d4.rs`, `import_template.rs` |

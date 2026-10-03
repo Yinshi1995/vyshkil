@@ -30,3 +30,10 @@
 | `m…_000038_widen_generated_document_kind` | Розширює CHECK на `generated_document.kind`: `'d1'` → `'d1','d2'` (Postgres CHECK — лише DROP+ADD, не ALTER) | — |
 | `m…_000039…041` | Етап 8 зріз 1: `reported_group`, `discrepancy`+audit-тригер (04, горизонтальна звірка) | `backend/repo/reconciliation.rs` |
 | `m…_000042_create_outbox_table` | Брокер (09-messaging.md §3.1, Фаза 1): транзакційний `outbox`, БЕЗ audit-тригера (технічна таблиця relay, не людина-актор) | `backend/repo/outbox.rs`, `server` (relay) |
+| `m…_000043_create_notification_table` | Внутрішні сповіщення (дзвіночок): `notification` (org_id, kind, title, body, link, is_read) | `services/notifications.rs` |
+| `m…_000044…045` | Розширення CHECK d3-d6, пошукові індекси | — |
+| `m…_000046_create_user_account_table` | `user_account`, `user_role`, `user_session` (12-auth.md §1) | `backend/repo/auth.rs` |
+| `m…_000047_seed_admin_account` | Dev-сід: admin/admin123, admin-роль на всі org | — |
+| `m…_000048_create_passkey_credential_table` | `passkey_credential` (12-auth.md §1.3, FIDO2/WebAuthn) | — |
+| `m…_000049_create_whatsapp_notification_tables` | WhatsApp-сповіщення (09 §3.8): `whatsapp_destination`, `notification_type`, `notification_subscription`, `notification_group`, `notification_group_member` | — |
+| `m…_000050_seed_comprehensive` | Комплексний dev-сід: 5 користувачів, 7 груп (різні види/етапи воронки), 10 подань, 6 reported_groups, 5 розбіжностей, 13 сповіщень, 5 staffing, 4 WhatsApp-адреси, 7 підписок, 1 група розсилки | — |

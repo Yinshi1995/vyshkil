@@ -165,10 +165,10 @@ const KEYWORD_ATOMS: &[(&str, &str)] = &[
 const VARIANTS: &[&str] = &["hover", "focus-visible", "active", "disabled", "invalid", "open", "md", "lg", "@md"];
 
 /// (ім'я семантичного токена, CSS-значення для ЦІЄЇ теми). `night` — єдина виміряна зі
-/// striy.pp.ua; `day`/`print` — перше наближення (нема реального джерела для нових тем,
-/// задокументовано в 08 §2.2). fg/bg-пари лишаються ПРЯМИМИ кольорами (не `color-mix()`) навмисно
-/// — щоб контраст-тест міг порахувати WCAG без реалізації CSS color-mix-алгоритму; `color-mix()`
-/// використовується для `border` (декоративне, не потребує точної AA-перевірки).
+/// striy.pp.ua; `day` — перше наближення (нема реального джерела, задокументовано в 08 §2.2).
+/// fg/bg-пари лишаються ПРЯМИМИ кольорами (не `color-mix()`) навмисно — щоб контраст-тест міг
+/// порахувати WCAG без реалізації CSS color-mix-алгоритму; `color-mix()` використовується для
+/// `border` (декоративне, не потребує точної AA-перевірки).
 struct Theme {
     pub name: &'static str,
     pub pairs: &'static [(&'static str, &'static str)],
@@ -218,27 +218,6 @@ const THEMES: &[Theme] = &[
             ("border", "color-mix(in srgb, var(--gold-1) 30%, transparent)"),
             ("border-strong", "var(--gold-1)"),
             ("focus-ring", "var(--gold-1)"),
-            ("ok", "var(--olive-1)"),
-            ("warn", "var(--amber-1)"),
-            ("danger", "var(--brick-1)"),
-            ("info", "var(--steel-1)"),
-        ],
-    },
-    Theme {
-        name: "print",
-        pairs: &[
-            ("surface-base", "#ffffff"),
-            ("surface-panel", "#ffffff"),
-            ("surface-raised", "#f0f0f0"),
-            ("fg-main", "#000000"),
-            ("fg-muted", "#404040"),
-            ("fg-subtle", "#707070"),
-            ("fg-accent", "#000000"),
-            ("fg-on-accent", "#ffffff"),
-            ("accent-dim", "color-mix(in srgb, #000000 12%, transparent)"),
-            ("border", "#000000"),
-            ("border-strong", "#000000"),
-            ("focus-ring", "#000000"),
             ("ok", "var(--olive-1)"),
             ("warn", "var(--amber-1)"),
             ("danger", "var(--brick-1)"),

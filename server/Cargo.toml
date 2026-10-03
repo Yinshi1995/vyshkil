@@ -23,8 +23,12 @@ futures = "0.3"
 # ... локально", той самий принцип, що self-hosted шрифти).
 qrcode = "0.14"
 serde_json = "1"
+argon2 = "0.5"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+rust_xlsxwriter = "0.79"
+urlencoding = "2"
 # "macros" вмикає #[derive(FromRef)] для AppState (axum::extract::FromRef інакше є лише трейтом, без derive).
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.7", features = ["macros", "multipart"] }
 leptos = { workspace = true, features = ["ssr"] }
 leptos_axum = { workspace = true }
 leptos_meta = { workspace = true, features = ["ssr"] }

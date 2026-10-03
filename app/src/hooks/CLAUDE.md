@@ -11,3 +11,4 @@
 | `use_escape_close.rs` | `use_escape_close(open, on_close)` — Escape закриває, поки `open` | `components::Modal`, `components::Drawer` |
 | `use_floating_position.rs` | `use_floating_position(root, open)` — `(flip_up, align_end)`, евристика "де більше місця" відносно в'юпорту (feedback користувача — панелі вилазили за екран) | `components::Select`, `components::DatePicker`, `widgets::group_grid::autocomplete` |
 | `use_popover_position.rs` | `use_popover_position(root, open)` — реальні пікселі (`position: fixed`) для ПОРТАЛЬОВАНОЇ панелі (`docs/spec/components/select.md` §4) — розширює ідею `use_floating_position` на портал, де CSS-класів in-flow вже не досить | `components::Combobox` |
+| `use_theme.rs` | `ThemeSignal`, `set_theme(name)`, `next_theme(current)`, `use_theme()` — глобальний перемикач теми (night/day/print), контекст надається в `app.rs` | `layout::Header` (ThemeToggle), `pages::settings` (AppearanceSection) |

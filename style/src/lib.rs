@@ -33,7 +33,7 @@ pub fn all_atoms() -> Vec<String> {
     all_atom_names()
 }
 
-/// Імена тем (`"night"`, `"day"`, `"print"`) — для перемикача тем на `/styleguide`.
+/// Імена тем (`"night"`, `"day"`) — для перемикача тем.
 pub fn theme_names() -> Vec<&'static str> {
     THEMES.iter().map(|t| t.name).collect()
 }

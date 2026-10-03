@@ -21,6 +21,8 @@ pub struct DictionaryEntry {
     pub id: i32,
     pub label: String,
     pub extra: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_id: Option<i32>,
 }
 
 /// Довідники Етапу 2 одним запитом — сторінка адмінки показує всі одразу (01 §2).
@@ -34,6 +36,7 @@ pub struct DictionariesOverview {
     pub equipment: Vec<DictionaryEntry>,
     pub courses: Vec<DictionaryEntry>,
     pub attrition_reasons: Vec<DictionaryEntry>,
+    pub training_sites: Vec<DictionaryEntry>,
 }
 
 /// Один learned-синонім, що чекає підтвердження адміном (01 §"alias", §"Навчання").

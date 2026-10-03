@@ -88,6 +88,40 @@ body {
   color: var(--text-main);
 }
 
+/* Глобальне стилізування текстових полів: усі input[type="text"|"password"|"number"] і textarea
+   мають відповідати темній палітрі, щоб не лишалися "білими" на сторінках (Settings, Login тощо),
+   де немає власного BEM-класу для input. Патерн той самий, що .org-search__input / .cell__input. */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea {
+  background: var(--surface-raised);
+  color: var(--fg-main);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-md-size);
+  line-height: var(--text-md-line);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--fg-accent);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.1);
+}
+
+input[type="text"]::placeholder,
+input[type="password"]::placeholder,
+input[type="number"]::placeholder,
+textarea::placeholder {
+  color: var(--fg-subtle);
+}
+
 /* Етап 7.5 (docs/spec/components/layout.md §3) — `main` більше НЕ несе власний max-width (це
    різало ширину ще до Grid'а, попри всю sticky/scroll-верстку розділу Б); кожна сторінка сама
    оголошує тип через `layout::PageContent`. Сторінки, що ще не мігрували (лише 2 пілотні цього
@@ -3669,6 +3703,90 @@ table thead th {
   }
 }
 
+/* Settings sections — card-based visual hierarchy */
+
+.settings-section {
+  background: var(--surface-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  padding: var(--space-5) var(--space-6);
+  margin-bottom: var(--space-5);
+}
+
+.settings-section .eyebrow {
+  margin-top: 0;
+}
+
+.settings-section .card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-4);
+}
+
+/* Account info table */
+
+.settings-account-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.settings-account-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-account-table tr:last-child td {
+  border-bottom: none;
+}
+
+.settings-account-table__label {
+  color: var(--fg-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  width: 120px;
+}
+
+/* Learned aliases table — zebra striping */
+
+.settings-aliases-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.settings-aliases-table th,
+.settings-aliases-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+}
+
+.settings-aliases-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.settings-aliases-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Empty state for settings sections */
+
+.settings-empty {
+  text-align: center;
+  padding: var(--space-7) var(--space-4);
+  color: var(--fg-muted);
+}
+
+.settings-empty__icon {
+  margin-bottom: var(--space-3);
+  opacity: 0.3;
+}
+
+.settings-empty__text {
+  font-size: 14px;
+}
+
 /* --- Login page (/login) --- */
 
 .login-page {
@@ -3754,6 +3872,117 @@ table thead th {
   margin-top: var(--space-2);
 }
 
+.login-card__footer {
+  text-align: center;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-4);
+}
+
+.login-card__hint {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: 0;
+}
+
+.login-card__link {
+  color: var(--fg-accent);
+  text-decoration: none;
+}
+
+.login-card__link:hover {
+  text-decoration: underline;
+}
+
+.login-card__success {
+  text-align: center;
+  padding: var(--space-5) var(--space-4);
+  color: var(--ok);
+  font-size: 15px;
+}
+
+.login-card__field textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-1);
+  background: var(--surface-base);
+  color: var(--fg-main);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+/* ── Theme toggle button ── */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2);
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.theme-toggle:hover {
+  color: var(--fg-accent);
+  border-color: var(--fg-accent);
+}
+
+/* ── Day theme — component overrides ── */
+:root[data-theme="day"] .app-header {
+  background: linear-gradient(180deg, rgba(245, 243, 236, 0.97) 0%, rgba(235, 231, 218, 0.98) 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="day"] .app-header__mark {
+  background: radial-gradient(circle at 30% 30%, rgba(168, 130, 40, 0.12), transparent 70%);
+  box-shadow: 0 0 8px rgba(168, 130, 40, 0.08);
+}
+
+:root[data-theme="day"] .card {
+  background: var(--surface-panel);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="day"] .card::before {
+  display: none;
+}
+
+:root[data-theme="day"] .card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+:root[data-theme="day"] .dash-stat {
+  background: var(--surface-panel);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="day"] .dict-section {
+  background: var(--surface-panel);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="day"] .skeleton {
+  background: linear-gradient(90deg,
+    rgba(0, 0, 0, 0.03) 25%,
+    rgba(0, 0, 0, 0.06) 50%,
+    rgba(0, 0, 0, 0.03) 75%
+  );
+  background-size: 200% 100%;
+}
+
+:root[data-theme="day"] ::selection {
+  background: rgba(168, 130, 40, 0.25);
+}
+
 /* === style::generate_css() — НЕ РЕДАГУВАТИ ВРУЧНУ, cargo run -p style --bin gen === */
 @layer reset, tokens, base, components, atoms, overrides;
 
@@ -3774,6 +4003,7 @@ table thead th {
     --space-7: 48px;
     --space-8: 64px;
     --radius-0: 0;
+    --radius-sm: 4px;
     --radius-1: 4px;
     --radius-2: 8px;
     --radius-3: 999px;
@@ -3858,6 +4088,8 @@ table thead th {
     --surface-base: #f5f3ec;
     --surface-panel: #ffffff;
     --surface-raised: #ebe7da;
+    --surface-2: #ebe7da;
+    --surface-3: #e0dac8;
     --fg-main: #1a1a14;
     --fg-muted: #4a4638;
     --fg-subtle: #6b6656;
@@ -3867,25 +4099,6 @@ table thead th {
     --border: color-mix(in srgb, var(--gold-1) 30%, transparent);
     --border-strong: var(--gold-1);
     --focus-ring: var(--gold-1);
-    --ok: var(--olive-1);
-    --warn: var(--amber-1);
-    --danger: var(--brick-1);
-    --info: var(--steel-1);
-  }
-
-  :root[data-theme="print"] {
-    --surface-base: #ffffff;
-    --surface-panel: #ffffff;
-    --surface-raised: #f0f0f0;
-    --fg-main: #000000;
-    --fg-muted: #404040;
-    --fg-subtle: #707070;
-    --fg-accent: #000000;
-    --fg-on-accent: #ffffff;
-    --accent-dim: color-mix(in srgb, #000000 12%, transparent);
-    --border: #000000;
-    --border-strong: #000000;
-    --focus-ring: #000000;
     --ok: var(--olive-1);
     --warn: var(--amber-1);
     --danger: var(--brick-1);
@@ -7244,6 +7457,32 @@ table thead th {
 }
 
 @layer overrides {
+}
+
+/* --- org_detail: підлеглі підрозділи, горизонтальний скрол таблиць --- */
+
+.org-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.org-children__link {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: var(--text-sm-size);
+  transition: background var(--duration-fast);
+}
+.org-children__link:hover {
+  background: var(--surface-3);
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* === кінець style::generate_css() === */

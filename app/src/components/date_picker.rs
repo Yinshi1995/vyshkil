@@ -55,6 +55,44 @@ fn mask_digits(digits: &str) -> String {
     out
 }
 
+/// Посимвольна перевірка під час набору: щойно день/місяць ПОВНІСТЮ набрані (2 цифри кожен) —
+/// одразу відхиляємо неможливі значення (місяць 00/13+, день 00/32+, 31.04 тощо). Рік ще не
+/// відомий — толерантно до лютого (дозволяємо 29, точна високосність — щойно всі 8 цифр будуть,
+/// `try_parse_ddmmyyyy` перевірить через `NaiveDate`). Повертає `true`, якщо набране ПОКИ ЩО
+/// валідне (неповне, але не суперечить реальному календарю).
+fn validate_partial(digits: &str) -> bool {
+    if digits.len() < 2 {
+        return true; // ще набирає першу цифру дня
+    }
+    let day: u32 = match digits[0..2].parse() {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+    if day == 0 || day > 31 {
+        return false;
+    }
+    if digits.len() < 4 {
+        return true; // ще набирає місяць
+    }
+    let month: u32 = match digits[2..4].parse() {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    if month == 0 || month > 12 {
+        return false;
+    }
+    // День у конкретному місяці (без року — лютий толерантно до 29).
+    let max_day = match month {
+        4 | 6 | 9 | 11 => 30,
+        2 => 29,
+        _ => 31,
+    };
+    if day > max_day {
+        return false;
+    }
+    true
+}
+
 /// `None`, якщо цифр не 8 РІВНО, або вони не складаються в реальну дату (`31.02` тощо —
 /// `NaiveDate` сам це відкидає, окремого календарного парсера писати не довелось).
 fn try_parse_ddmmyyyy(digits: &str) -> Option<NaiveDate> {
@@ -144,8 +182,9 @@ pub fn DatePicker(
                 None => invalid.set(true),
             }
         } else {
-            // Ще не всі 8 цифр — не помилка, людина просто не дописала.
-            invalid.set(false);
+            // Ще не всі 8 цифр — перевіряємо те, що вже набрано: місяць 00/13+, день 00/32+,
+            // 31.04 тощо відхиляємо одразу, не чекаючи повних 8 цифр.
+            invalid.set(!validate_partial(&digits));
         }
     };
 

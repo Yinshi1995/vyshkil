@@ -6,8 +6,9 @@
 
 use axum::{
     body::Body,
-    extract::{Request, State},
+    extract::{DefaultBodyLimit, Request, State},
     http::{StatusCode, Uri},
+    middleware::Next,
     response::{IntoResponse, Response},
     Router,
 };
@@ -19,7 +20,7 @@ use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
 use app::app::{shell, App};
-use server::{admin_sse, config, db, relay, state::AppState};
+use server::{admin_sse, api, config, db, relay, spa, state::AppState};
 
 // mimalloc фрагментує купу помітно менше за glibc malloc на довгоживучих процесах
 // і активно повертає вільну пам'ять ОС — на сервері з обмеженим RAM це відчутно знижує RSS.
@@ -74,30 +75,47 @@ async fn run(config: config::Config) {
     // контекст (09 §4) — relay єдиний володіє з'єднанням.
     tokio::spawn(relay::run(app_state.db.clone(), config.nats_url.clone(), shared_nats));
 
-    let routes = generate_route_list(App);
+    let use_react = spa::is_available();
+    if use_react {
+        tracing::info!("React SPA detected at web/dist/ — serving React frontend");
+    }
 
-    let app = Router::new()
-        .leptos_routes_with_context(
-            &app_state,
-            routes,
-            {
-                let db = app_state.db.clone();
-                let nats = app_state.nats.clone();
-                move || {
-                    provide_context(db.clone());
-                    provide_context(nats.clone());
-                }
-            },
-            {
-                let leptos_options = app_state.leptos_options.clone();
-                move || shell(leptos_options.clone())
-            },
-        )
-        .route("/api/admin/whatsapp/events", axum::routing::get(admin_sse::whatsapp_status_stream))
-        .fallback(file_and_error_handler)
-        .with_state(app_state);
+    let app = if use_react {
+        Router::new()
+            .merge(api::api_router())
+            .route("/api/admin/whatsapp/events", axum::routing::get(admin_sse::whatsapp_status_stream))
+            .merge(spa::spa_router())
+            .layer(axum::middleware::from_fn(security_headers))
+            .layer(DefaultBodyLimit::max(25 * 1024 * 1024))
+            .with_state(app_state)
+    } else {
+        let routes = generate_route_list(App);
+        Router::new()
+            .merge(api::api_router())
+            .leptos_routes_with_context(
+                &app_state,
+                routes,
+                {
+                    let db = app_state.db.clone();
+                    let nats = app_state.nats.clone();
+                    move || {
+                        provide_context(db.clone());
+                        provide_context(nats.clone());
+                    }
+                },
+                {
+                    let leptos_options = app_state.leptos_options.clone();
+                    move || shell(leptos_options.clone())
+                },
+            )
+            .route("/api/admin/whatsapp/events", axum::routing::get(admin_sse::whatsapp_status_stream))
+            .fallback(file_and_error_handler)
+            .layer(axum::middleware::from_fn(security_headers))
+            .layer(DefaultBodyLimit::max(25 * 1024 * 1024))
+            .with_state(app_state)
+    };
 
-    tracing::info!("Taktoblik listening on http://{addr}");
+    tracing::info!("Вишкіл listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .expect("failed to bind to the configured address");
@@ -132,15 +150,33 @@ async fn file_and_error_handler(uri: Uri, State(state): State<AppState>, req: Re
     }
 }
 
+async fn security_headers(req: Request<Body>, next: Next) -> Response {
+    let mut resp = next.run(req).await;
+    let hdrs = resp.headers_mut();
+    hdrs.insert("x-content-type-options", "nosniff".parse().unwrap());
+    hdrs.insert("x-frame-options", "DENY".parse().unwrap());
+    hdrs.insert("referrer-policy", "strict-origin-when-cross-origin".parse().unwrap());
+    resp
+}
+
 async fn get_static_file(uri: Uri, root: &str) -> Result<Response, (StatusCode, String)> {
     let req = Request::builder()
-        .uri(uri)
+        .uri(uri.clone())
         .body(Body::empty())
         .expect("failed to build a static-file request");
 
-    ServeDir::new(root)
+    let mut response = ServeDir::new(root)
         .oneshot(req)
         .await
         .map(IntoResponse::into_response)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("static file error: {e}")))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("static file error: {e}")))?;
+
+    if uri.path().starts_with("/pkg/") {
+        response.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            "no-cache".parse().unwrap(),
+        );
+    }
+
+    Ok(response)
 }

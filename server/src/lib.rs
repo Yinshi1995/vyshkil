@@ -3,7 +3,9 @@
 //! §"Інші крейти"), сам бінарник (`main.rs`) — тонка обгортка над цими модулями, як і раніше.
 
 pub mod admin_sse;
+pub mod api;
 pub mod config;
 pub mod db;
 pub mod relay;
+pub mod spa;
 pub mod state;

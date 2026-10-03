@@ -4,6 +4,7 @@ use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
 use leptos_router::components::Router;
 use leptos_router::hooks::use_location;
 
+use crate::hooks::use_theme::{set_theme, ThemeSignal};
 use crate::layout::Header;
 use crate::routes::AppRoutes;
 use crate::services::auth::get_current_user;
@@ -40,6 +41,10 @@ pub fn App() -> impl IntoView {
 
     let auth_display_name: RwSignal<Option<String>> = RwSignal::new(None);
     provide_context(auth_display_name);
+
+    let theme: ThemeSignal = RwSignal::new("night");
+    provide_context(theme);
+    Effect::new(move |_| set_theme(theme.get()));
 
     Effect::new(move |_| {
         spawn_local(async move {

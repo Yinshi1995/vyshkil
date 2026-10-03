@@ -6,56 +6,83 @@
 
 use std::convert::Infallible;
 
-use app::backend::policy;
-use app::types::actor::{Actor, Role};
-use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::extract::State;
+use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
+use crate::api::{require_admin_actor, require_auth};
 use crate::state::AppState;
 
-#[derive(Deserialize)]
-pub struct ActorQuery {
-    org_id: i32,
-    role: String,
+fn not_running_json() -> String {
+    serde_json::json!({
+        "state": "not_running",
+        "qr_svg": null,
+        "pairing_code": null,
+        "phone_masked": null,
+        "updated_at": ""
+    })
+    .to_string()
 }
 
-pub async fn whatsapp_status_stream(State(state): State<AppState>, Query(q): Query<ActorQuery>) -> Response {
-    let Some(role) = Role::parse(&q.role) else {
-        return (StatusCode::BAD_REQUEST, "невідома роль").into_response();
+fn not_running_sse() -> Response {
+    let events = futures::stream::iter(vec![
+        Ok::<_, Infallible>(Event::default().data(not_running_json())),
+    ])
+    .chain(futures::stream::pending());
+    Sse::new(events)
+        .keep_alive(KeepAlive::default())
+        .into_response()
+}
+
+pub async fn whatsapp_status_stream(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let user = match require_auth(&state.db, &headers).await {
+        Ok(u) => u,
+        Err(status) => return (status, "").into_response(),
     };
-    let actor = Actor { org_id: q.org_id, role };
-    if !policy::is_admin(actor) {
-        return (StatusCode::FORBIDDEN, "лише адмін").into_response();
+    if let Err(status) = require_admin_actor(&user) {
+        return (status, "лише адмін").into_response();
     }
 
     let client = { state.nats.lock().expect("shared NATS mutex отруєний").clone() };
     let Some(client) = client else {
-        return (StatusCode::SERVICE_UNAVAILABLE, "NATS недоступний").into_response();
+        return not_running_sse();
     };
 
     let js = bus::jetstream(&client);
     let Ok(store) = js.get_key_value("notifier_status").await else {
-        return (StatusCode::SERVICE_UNAVAILABLE, "notifier_status bucket ще не створено notifier'ом")
-            .into_response();
-    };
-    // `watch_with_history` (не голий `watch`, який за замовчуванням `DeliverPolicy::New` -- лише
-    // МАЙБУТНІ зміни): адмін, що відкрив сторінку, коли QR УЖЕ чекає, має побачити його одразу,
-    // не чекати наступного оновлення (whatsapp-web.js оновлює QR раз на ~20с).
-    let Ok(watch) = store.watch_with_history("whatsapp").await else {
-        return (StatusCode::INTERNAL_SERVER_ERROR, "не вдалось підписатись на KV").into_response();
+        return not_running_sse();
     };
 
-    let events = watch.filter_map(|res| async move {
-        let entry = res.ok()?;
-        let text = String::from_utf8(entry.value.to_vec()).ok()?;
-        Some(Ok::<_, Infallible>(Event::default().data(render_status(&text))))
-    });
+    let current = store.get("whatsapp").await.ok().flatten();
+    let initial_json = match current {
+        Some(bytes) => {
+            let text = String::from_utf8_lossy(&bytes);
+            render_status(&text)
+        }
+        None => not_running_json(),
+    };
 
-    Sse::new(events).keep_alive(KeepAlive::default()).into_response()
+    // Watch for future changes (DeliverPolicy::New — only updates after this point)
+    let watch_stream = match store.watch("whatsapp").await {
+        Ok(w) => w.filter_map(|res| async move {
+            let entry = res.ok()?;
+            let text = String::from_utf8(entry.value.to_vec()).ok()?;
+            Some(Ok::<_, Infallible>(Event::default().data(render_status(&text))))
+        }).left_stream(),
+        Err(_) => futures::stream::pending::<Result<Event, Infallible>>().right_stream(),
+    };
+
+    let events = futures::stream::iter(vec![
+        Ok::<_, Infallible>(Event::default().data(initial_json)),
+    ])
+    .chain(watch_stream);
+
+    Sse::new(events)
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 #[derive(Deserialize)]
@@ -97,5 +124,9 @@ fn render_qr_svg(data: &str) -> Option<String> {
     use qrcode::render::svg;
     use qrcode::QrCode;
     let code = QrCode::new(data.as_bytes()).ok()?;
-    Some(code.render::<svg::Color>().min_dimensions(200, 200).build())
+    Some(
+        code.render::<svg::Color>()
+            .min_dimensions(200, 200)
+            .build(),
+    )
 }

@@ -13,6 +13,7 @@ pub async fn auth_login(login: String, password: String) -> Result<LoginResponse
             error: Some("Забагато спроб входу. Спробуйте через 15 хвилин.".to_string()),
             display_name: None,
             roles: vec![],
+            must_change_password: false,
         });
     }
 
@@ -29,6 +30,7 @@ pub async fn auth_login(login: String, password: String) -> Result<LoginResponse
             error: Some("Невірний логін або пароль".to_string()),
             display_name: None,
             roles: vec![],
+            must_change_password: false,
         });
     };
 
@@ -38,6 +40,7 @@ pub async fn auth_login(login: String, password: String) -> Result<LoginResponse
             error: Some("Акаунт деактивовано".to_string()),
             display_name: None,
             roles: vec![],
+            must_change_password: false,
         });
     }
 
@@ -49,6 +52,7 @@ pub async fn auth_login(login: String, password: String) -> Result<LoginResponse
             error: Some("Невірний логін або пароль".to_string()),
             display_name: None,
             roles: vec![],
+            must_change_password: false,
         });
     }
 
@@ -76,6 +80,7 @@ pub async fn auth_login(login: String, password: String) -> Result<LoginResponse
         error: None,
         display_name: user.display_name,
         roles,
+        must_change_password: user.must_change_password,
     })
 }
 
@@ -202,6 +207,56 @@ pub async fn require_auth() -> Result<crate::types::auth::AuthUser, ServerFnErro
 }
 
 // ---------------------------------------------------------------------------
+// Зміна пароля (must_change_password flow)
+// ---------------------------------------------------------------------------
+
+#[server(ChangePassword, "/api")]
+pub async fn change_password(
+    old_password: String,
+    new_password: String,
+) -> Result<(), ServerFnError> {
+    use crate::backend::repo;
+    use argon2::{Argon2, PasswordHash, PasswordVerifier, PasswordHasher};
+    use argon2::password_hash::{SaltString, rand_core::OsRng};
+    use sea_orm::FromQueryResult;
+
+    if new_password.len() < 6 {
+        return Err(ServerFnError::new("Новий пароль занадто короткий (мін. 6 символів)"));
+    }
+
+    let auth_user = require_auth().await?;
+    let db = expect_context::<sea_orm::DatabaseConnection>();
+
+    #[derive(FromQueryResult)]
+    struct PwRow { password_hash: String }
+    let pw_row = PwRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT password_hash FROM user_account WHERE id = $1",
+        [auth_user.user_id.into()],
+    ))
+    .one(&db)
+    .await
+    .map_err(|e| ServerFnError::new(e.to_string()))?
+    .ok_or_else(|| ServerFnError::new("користувача не знайдено"))?;
+
+    let parsed = PasswordHash::new(&pw_row.password_hash)
+        .map_err(|_| ServerFnError::new("пошкоджений хеш"))?;
+    if Argon2::default().verify_password(old_password.as_bytes(), &parsed).is_err() {
+        return Err(ServerFnError::new("Невірний поточний пароль"));
+    }
+
+    let salt = SaltString::generate(&mut OsRng);
+    let new_hash = Argon2::default()
+        .hash_password(new_password.as_bytes(), &salt)
+        .map_err(|e| ServerFnError::new(format!("помилка хешування: {e}")))?
+        .to_string();
+
+    repo::auth::set_password(&db, auth_user.user_id, &new_hash)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))
+}
+
+// ---------------------------------------------------------------------------
 // Rate limiting (12-auth.md §6: 5 спроб / 15 хв на IP)
 // ---------------------------------------------------------------------------
 
@@ -218,7 +273,7 @@ fn rate_limiter() -> &'static std::sync::Mutex<std::collections::HashMap<String,
 }
 
 #[cfg(feature = "ssr")]
-fn check_rate_limit(ip: &str) -> bool {
+pub fn check_rate_limit(ip: &str) -> bool {
     let mut map = rate_limiter().lock().unwrap_or_else(|e| e.into_inner());
     let now = std::time::Instant::now();
     let window = std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS);
@@ -231,7 +286,7 @@ fn check_rate_limit(ip: &str) -> bool {
 }
 
 #[cfg(feature = "ssr")]
-fn record_failed_attempt(ip: &str) {
+pub fn record_failed_attempt(ip: &str) {
     let mut map = rate_limiter().lock().unwrap_or_else(|e| e.into_inner());
     let now = std::time::Instant::now();
     let window = std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS);

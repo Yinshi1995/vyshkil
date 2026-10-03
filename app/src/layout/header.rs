@@ -2,12 +2,17 @@ use leptos::prelude::*;
 
 use super::actor_switcher::ActorSwitcher;
 use crate::hooks::use_actor::use_actor;
+use crate::hooks::use_theme::{next_theme, use_theme};
 use crate::services::notifications::{get_unread_count, get_notifications, mark_all_notifications_read};
 use crate::types::notification::NotificationRow;
 
 #[component]
 pub fn Header() -> impl IntoView {
+    let actor = use_actor();
     let menu_open = RwSignal::new(false);
+    let org_href = move || {
+        actor.get().map(|a| format!("/org/{}", a.org_id)).unwrap_or_default()
+    };
 
     view! {
         <header class="app-header">
@@ -25,6 +30,9 @@ pub fn Header() -> impl IntoView {
                 </a>
             </div>
             <nav class="app-header__nav">
+                <Show when=move || actor.get().is_some()>
+                    <a href=org_href>"Мій підрозділ"</a>
+                </Show>
                 <a href="/training-form">"Навчання"</a>
                 <a href="/discrepancies">"Розбіжності"</a>
                 <a href="/documents">"Документи"</a>
@@ -32,6 +40,7 @@ pub fn Header() -> impl IntoView {
             </nav>
             <div class="app-header__actions">
                 <NotificationBell/>
+                <ThemeToggle/>
                 <a href="/settings" class="app-header__settings" title="Налаштування">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"/>
@@ -45,6 +54,9 @@ pub fn Header() -> impl IntoView {
             <div class="mobile-menu" on:click=move |_| menu_open.set(false)>
                 <nav class="mobile-menu__nav">
                     <a href="/" class="mobile-menu__link">"Головна"</a>
+                    <Show when=move || actor.get().is_some()>
+                        <a href=org_href class="mobile-menu__link">"Мій підрозділ"</a>
+                    </Show>
                     <a href="/training-form" class="mobile-menu__link">"Навчання"</a>
                     <a href="/discrepancies" class="mobile-menu__link">"Розбіжності"</a>
                     <a href="/documents" class="mobile-menu__link">"Документи"</a>
@@ -139,6 +151,35 @@ fn NotificationBell() -> impl IntoView {
                 </div>
             </Show>
         </div>
+    }
+}
+
+/// Кнопка перемикання теми (night → day → night).
+#[component]
+fn ThemeToggle() -> impl IntoView {
+    let theme = use_theme();
+
+    let icon_title = move || match theme.get() {
+        "night" => "Тема: нічна",
+        "day" => "Тема: денна",
+        _ => "Тема",
+    };
+
+    let icon_path = move || match theme.get() {
+        "night" => "M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z",
+        _ => "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z",
+    };
+
+    view! {
+        <button
+            class="theme-toggle"
+            title=icon_title
+            on:click=move |_| theme.set(next_theme(theme.get()))
+        >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d=icon_path/>
+            </svg>
+        </button>
     }
 }
 
