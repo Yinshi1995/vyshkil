@@ -4,7 +4,10 @@
 нормалізація → звірка між рівнями підпорядкування → виявлення розбіжностей → звітні документи.
 Домен — `docs/spec/README.md` (джерело істини; код узгоджується з ним, не навпаки).
 
-Стек: Axum + Leptos 0.7 (SSR) + SeaORM + PostgreSQL. Workspace: `app/`, `frontend/`, `server/`, `migration/`.
+Стек: Axum + React 19 (SPA, Vite + TypeScript + shadcn/ui) + SeaORM + PostgreSQL.
+Workspace: `app/`, `frontend/`, `server/`, `migration/`, `web/` (React SPA).
+Leptos-код (`app/`, `frontend/`) лишається як fallback — сервер автоматично використовує React
+SPA, якщо `web/dist/` існує (`server/src/spa.rs`).
 
 ## Жорсткі правила
 
@@ -49,9 +52,21 @@
 
 ## Запуск і перевірка (коротко — деталі в MEMORY.md)
 
-```
-docker start taktoblik-db          # Postgres (fresh: docker run — див. MEMORY.md)
-cargo leptos build                 # НЕ watch — зависає на .gitignore-скані (див. MEMORY.md)
-$env:LEPTOS_SITE_ROOT="target/site"; .\target\debug\server.exe
+```bash
+# 1. Postgres
+docker start taktoblik-db          # fresh: docker run — див. MEMORY.md
+
+# 2. Frontend (React SPA)
+cd web && npm ci && npx vite build  # → web/dist/
+
+# 3. Server
+cargo build -p server
+LEPTOS_SITE_ROOT="target/site" ./target/debug/server
 ```
 Відкрити `http://localhost:3000`.
+
+### Docker Compose (повний стек)
+
+```bash
+docker compose up --build           # db + nats + app + notifier
+```

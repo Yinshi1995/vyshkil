@@ -94,6 +94,20 @@ VM (вона лишалась застиглою на старому коміт�
 **Штатний push-шлях (`git push vm main` у bare-репо на VM) лишається НЕ перевіреним** — див.
 "Відоме відкрите" нижче; bundle-спосіб вище його не потребує, тож не є блокером.
 
+Після оновлення коду — перезбірка:
+```bash
+# React SPA (потрібно Node 22+, роль `node`)
+cd ~/vyshkil/web && npm ci && npx vite build   # → web/dist/
+
+# Rust-сервер
+cd ~/vyshkil && cargo build -p server
+
+# Або Docker Compose (повний стек, включно з notifier)
+cd ~/vyshkil && docker compose up --build -d
+```
+Сервер автоматично використовує React SPA, якщо `web/dist/` існує (`server/src/spa.rs`);
+інакше fallback на Leptos SSR. `cargo leptos build` більше НЕ потрібен для React-шляху.
+
 Для щоденної роботи НАПРЯМУ на VM (ціль "основне середовище розробки — dev-VM", `.claude/
 memory/MEMORY.md`) — Claude Code-сесія на VM, VS Code Remote-SSH, або редактор по SSH — коміт
 там локальний, а подальший `git push origin` з САМОЇ VM поки заблокований DNS-проблемою нижче.
