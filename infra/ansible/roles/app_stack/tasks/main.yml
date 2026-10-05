@@ -1,0 +1,84 @@
+---
+- name: "Каталог стеку {{ app_stack_compose_dir }}"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ app_stack_compose_dir }}"
+    - "{{ app_stack_data_dir }}"
+    - "{{ app_stack_images_dir }}"
+    - "{{ app_stack_compose_dir }}/docker"
+
+- name: docker-compose.prod.yml
+  ansible.builtin.template:
+    src: docker-compose.prod.yml.j2
+    dest: "{{ app_stack_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Перезапустити стек
+
+- name: app.env (секрети з vault)
+  ansible.builtin.template:
+    src: app.env.j2
+    dest: "{{ app_stack_compose_dir }}/app.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Перезапустити стек
+
+- name: notifier.env (секрети з vault)
+  ansible.builtin.template:
+    src: notifier.env.j2
+    dest: "{{ app_stack_compose_dir }}/notifier.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Перезапустити стек
+
+- name: db.env (секрети з vault)
+  ansible.builtin.template:
+    src: db.env.j2
+    dest: "{{ app_stack_compose_dir }}/db.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Перезапустити стек
+
+- name: NATS config
+  ansible.builtin.template:
+    src: nats-server.conf.j2
+    dest: "{{ app_stack_compose_dir }}/docker/nats-server.conf"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Перезапустити стек
+
+- name: Init-скрипт notifier DB
+  ansible.builtin.template:
+    src: init-notifier-db.sql.j2
+    dest: "{{ app_stack_compose_dir }}/docker/init-notifier-db.sql"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Перевірити, чи завантажені образи
+  ansible.builtin.command: "docker image inspect vyshkil-app:latest"
+  register: app_image_check
+  failed_when: false
+  changed_when: false
+
+- name: "ПОПЕРЕДЖЕННЯ: образ vyshkil-app не знайдено"
+  ansible.builtin.debug:
+    msg: >-
+      Docker-образ vyshkil-app:latest не знайдено. Завантажте образи з dev-VM:
+      На dev: docker save vyshkil-app:latest vyshkil-notifier:latest | gzip > /tmp/vyshkil-images.tar.gz
+      Передати: rsync -av vyshkil-images.tar.gz deploy@{{ ansible_host }}:{{ app_stack_images_dir }}/
+      На prod: docker load < {{ app_stack_images_dir }}/vyshkil-images.tar.gz
+  when: app_image_check.rc != 0

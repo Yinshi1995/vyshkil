@@ -1,0 +1,55 @@
+# Прод-параметри. Секрети — group_vars/vault.yml (шаблон — vault.yml.example).
+
+# --- Proxmox (provision VM) ---
+pve_node: pidhotovka
+pve_api_host: "{{ pve_api_host_override | default('192.168.1.106') }}"
+pve_api_user: root@pam
+pve_template_vmid: 9000
+pve_template_name: ubuntu-24.04-cloudimg
+pve_prod_vmid: 400
+pve_prod_vm_name: vyshkil-prod
+pve_storage_images: local-lvm
+pve_storage_templates: local
+cloud_image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+
+# --- Розмір прод-VM (менше dev: нема компіляції, лише Docker runtime) ---
+prod_vm_cores: 2
+prod_vm_cpu_type: host
+prod_vm_memory_mb: 2048
+prod_vm_swap_gb: 2
+prod_vm_disk_gb: 50
+
+# --- Мережа (VyOS-керований сегмент, НЕ vmbr0) ---
+# ЗАПОВНИТИ: bridge/VLAN, яким VyOS маршрутизує прод-сегмент.
+prod_vm_bridge: "{{ prod_vm_bridge_override | default('ЗАПОВНИТИ') }}"
+prod_vm_vlan_tag: null
+prod_vm_ip_cidr: "{{ prod_vm_ip_cidr_override | default('ЗАПОВНИТИ') }}"
+prod_vm_gateway: "{{ prod_vm_gateway_override | default('ЗАПОВНИТИ') }}"
+prod_vm_dns: "{{ prod_vm_gateway }}"
+
+# --- Користувач ---
+prod_vm_user: deploy
+prod_vm_ip: "{{ prod_vm_ip_cidr | regex_replace('/.*', '') }}"
+prod_vm_ssh_key_path: /root/.ssh/vyshkil-prod
+
+# --- Base role overrides (прод-режим) ---
+base_primary_user: "{{ prod_vm_user }}"
+base_user_passwordless_sudo: false
+base_swap_gb: "{{ prod_vm_swap_gb }}"
+
+# --- Docker role overrides ---
+docker_add_primary_user_to_group: false
+docker_dns_servers:
+  - "{{ prod_vm_dns }}"
+
+# --- Firewall ---
+firewall_allowed_tcp_ports:
+  - 22
+
+# --- App stack ---
+app_stack_compose_dir: "/opt/vyshkil"
+app_stack_data_dir: "/opt/vyshkil/data"
+app_stack_images_dir: "/opt/vyshkil/images"
+
+# --- Cloudflare tunnel ---
+cloudflare_tunnel_service: cloudflared

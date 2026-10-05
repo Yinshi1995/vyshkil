@@ -10,6 +10,7 @@ struct AccountRow {
     display_name: Option<String>,
     is_active: bool,
     must_change_password: bool,
+    can_see_org_names: bool,
 }
 
 #[derive(FromQueryResult)]
@@ -27,12 +28,15 @@ struct SessionRow {
     active_role: Option<String>,
     login: String,
     display_name: Option<String>,
+    callsign: Option<String>,
+    avatar_path: Option<String>,
+    can_see_org_names: bool,
 }
 
 pub async fn find_user_by_login(db: &DatabaseConnection, login: &str) -> Result<Option<UserAccount>, DbErr> {
     let row = AccountRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
-        "SELECT id, login, password_hash, display_name, is_active, must_change_password \
+        "SELECT id, login, password_hash, display_name, is_active, must_change_password, can_see_org_names \
          FROM user_account WHERE login = $1",
         [login.into()],
     ))
@@ -46,6 +50,7 @@ pub async fn find_user_by_login(db: &DatabaseConnection, login: &str) -> Result<
         display_name: r.display_name,
         is_active: r.is_active,
         must_change_password: r.must_change_password,
+        can_see_org_names: r.can_see_org_names,
     }))
 }
 
@@ -103,7 +108,8 @@ pub async fn find_session(db: &DatabaseConnection, session_id: &str) -> Result<O
     let row = SessionRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
         "SELECT s.id::text AS session_id, s.user_id, s.active_org_id, s.active_role, \
-                ua.login, ua.display_name \
+                ua.login, ua.display_name, ua.callsign, ua.avatar_path, \
+                ua.can_see_org_names \
          FROM user_session s \
          JOIN user_account ua ON ua.id = s.user_id \
          WHERE s.id = $1::uuid AND s.expires_at > now() AND ua.is_active = true",
@@ -119,6 +125,9 @@ pub async fn find_session(db: &DatabaseConnection, session_id: &str) -> Result<O
         active_role: r.active_role,
         login: r.login,
         display_name: r.display_name,
+        callsign: r.callsign,
+        avatar_path: r.avatar_path,
+        can_see_org_names: r.can_see_org_names,
     }))
 }
 
@@ -155,11 +164,12 @@ pub async fn list_users(db: &DatabaseConnection) -> Result<Vec<crate::types::aut
         display_name: Option<String>,
         is_active: bool,
         must_change_password: bool,
+        can_see_org_names: bool,
         created_at: String,
     }
     let users = UserRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
-        "SELECT id, login, display_name, is_active, must_change_password, \
+        "SELECT id, login, display_name, is_active, must_change_password, can_see_org_names, \
                 to_char(created_at, 'DD.MM.YYYY') AS created_at \
          FROM user_account ORDER BY id",
         [],
@@ -176,6 +186,7 @@ pub async fn list_users(db: &DatabaseConnection) -> Result<Vec<crate::types::aut
             display_name: u.display_name,
             is_active: u.is_active,
             must_change_password: u.must_change_password,
+            can_see_org_names: u.can_see_org_names,
             roles,
             created_at: u.created_at,
         });
@@ -313,6 +324,7 @@ pub async fn list_training_groups(
     #[derive(FromQueryResult)]
     struct Row {
         id: i32,
+        org_id: i32,
         org_label: String,
         training_kind: String,
         vos_label: String,
@@ -326,6 +338,7 @@ pub async fn list_training_groups(
 
     let base_select = "\
         SELECT tg.id, \
+        tg.sender_org_id AS org_id, \
         COALESCE(o.short_name, 'org#' || tg.sender_org_id::text) AS org_label, \
         COALESCE(tk.name, '') AS training_kind, \
         COALESCE(v.code || ' — ' || v.title, p.name, c.name, '') AS vos_label, \
@@ -372,6 +385,7 @@ pub async fn list_training_groups(
 
     Ok(rows.into_iter().map(|r| crate::types::auth::AdminGroupRow {
         id: r.id,
+        org_id: r.org_id,
         org_label: r.org_label,
         training_kind: r.training_kind,
         vos_label: r.vos_label,
@@ -399,13 +413,14 @@ pub async fn list_users_by_orgs(
         display_name: Option<String>,
         is_active: bool,
         must_change_password: bool,
+        can_see_org_names: bool,
         created_at: String,
     }
 
     let placeholders: Vec<String> = org_ids.iter().enumerate().map(|(i, _)| format!("${}", i + 1)).collect();
     let sql = format!(
         "SELECT DISTINCT ua.id, ua.login, ua.display_name, ua.is_active, ua.must_change_password, \
-                to_char(ua.created_at, 'DD.MM.YYYY') AS created_at \
+                ua.can_see_org_names, to_char(ua.created_at, 'DD.MM.YYYY') AS created_at \
          FROM user_account ua \
          JOIN user_role ur ON ur.user_id = ua.id \
          WHERE ur.org_id IN ({}) \
@@ -429,6 +444,7 @@ pub async fn list_users_by_orgs(
             display_name: u.display_name,
             is_active: u.is_active,
             must_change_password: u.must_change_password,
+            can_see_org_names: u.can_see_org_names,
             roles,
             created_at: u.created_at,
         });
@@ -445,6 +461,20 @@ pub async fn toggle_active(
         sea_orm::DatabaseBackend::Postgres,
         "UPDATE user_account SET is_active = $1, updated_at = now() WHERE id = $2",
         [is_active.into(), user_id.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+pub async fn set_can_see_org_names(
+    db: &DatabaseConnection,
+    user_id: i32,
+    value: bool,
+) -> Result<(), DbErr> {
+    db.execute(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "UPDATE user_account SET can_see_org_names = $1, updated_at = now() WHERE id = $2",
+        [value.into(), user_id.into()],
     ))
     .await?;
     Ok(())

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/auth";
 import { ThemeProvider } from "@/context/theme";
 import { AppLayout } from "@/components/layout/app-layout";
+import { PageTransition } from "@/components/page-transition";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
@@ -20,6 +21,9 @@ const SettingsPage = lazy(() => import("@/pages/settings").then(m => ({ default:
 const DataWorkspacePage = lazy(() => import("@/pages/data-workspace").then(m => ({ default: m.DataWorkspacePage })));
 const ImportPage = lazy(() => import("@/pages/import").then(m => ({ default: m.ImportPage })));
 const OrgsPage = lazy(() => import("@/pages/orgs").then(m => ({ default: m.OrgsPage })));
+const DirectoryPage = lazy(() => import("@/pages/directory").then(m => ({ default: m.DirectoryPage })));
+const ChatPage = lazy(() => import("@/pages/chat").then(m => ({ default: m.ChatPage })));
+const DashboardPage = lazy(() => import("@/pages/dashboard").then(m => ({ default: m.DashboardPage })));
 
 function PageLoader() {
   return (
@@ -56,18 +60,23 @@ function AppRoutes() {
               <AppLayout>
                 <ErrorBoundary>
                   <Suspense fallback={<PageLoader />}>
-                    <Routes>
-                      <Route path="/" element={<HomePage />} />
-                      <Route path="/orgs" element={<OrgsPage />} />
-                      <Route path="/org/:id" element={<OrgDetailPage />} />
-                      <Route path="/training" element={<TrainingPage />} />
-                      <Route path="/data" element={<DataWorkspacePage />} />
-                      <Route path="/documents" element={<DocumentsPage />} />
-                      <Route path="/discrepancies" element={<DiscrepanciesPage />} />
-                      <Route path="/settings" element={<SettingsPage />} />
-                      <Route path="/import" element={<ImportPage />} />
-                      <Route path="*" element={<p className="py-8 text-center">Сторінку не знайдено.</p>} />
-                    </Routes>
+                    <PageTransition>
+                      <Routes>
+                        <Route path="/" element={<HomePage />} />
+                        <Route path="/orgs" element={<OrgsPage />} />
+                        <Route path="/org/:id" element={<OrgDetailPage />} />
+                        <Route path="/training" element={<TrainingPage />} />
+                        <Route path="/data" element={<DataWorkspacePage />} />
+                        <Route path="/documents" element={<DocumentsPage />} />
+                        <Route path="/discrepancies" element={<DiscrepanciesPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/import" element={<ImportPage />} />
+                        <Route path="/directory" element={<DirectoryPage />} />
+                        <Route path="/chat" element={<ChatPage />} />
+                        <Route path="/dashboard" element={<DashboardPage />} />
+                        <Route path="*" element={<p className="py-8 text-center">Сторінку не знайдено.</p>} />
+                      </Routes>
+                    </PageTransition>
                   </Suspense>
                 </ErrorBoundary>
               </AppLayout>

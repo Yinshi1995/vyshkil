@@ -19,13 +19,43 @@ export async function markProcessed(tx: postgres.TransactionSql, messageId: stri
 export interface OrgContact {
   phone: string;
   channel: string;
+  kind: string;
 }
 
 export async function contactsForOrg(orgId: number): Promise<OrgContact[]> {
   const rows = await sql<OrgContact[]>`
-    SELECT phone, channel FROM org_contact WHERE org_id = ${orgId} AND active
+    SELECT phone, channel, kind FROM org_contact WHERE org_id = ${orgId} AND active
   `;
   return rows;
+}
+
+export async function upsertContact(orgId: number, phone: string, kind: string, active: boolean): Promise<void> {
+  await sql`
+    INSERT INTO org_contact (org_id, phone, kind, active)
+    VALUES (${orgId}, ${phone}, ${kind}, ${active})
+    ON CONFLICT (org_id, phone) DO UPDATE SET kind = ${kind}, active = ${active}
+  `;
+}
+
+export async function removeContact(orgId: number, phone: string): Promise<void> {
+  await sql`DELETE FROM org_contact WHERE org_id = ${orgId} AND phone = ${phone}`;
+}
+
+export interface SyncContact {
+  org_id: number;
+  phone: string;
+  kind: string;
+  active: boolean;
+}
+
+export async function replaceAllContacts(contacts: SyncContact[]): Promise<void> {
+  await sql.begin(async (tx) => {
+    await tx`DELETE FROM org_contact`;
+    for (const c of contacts) {
+      await tx`INSERT INTO org_contact (org_id, phone, kind, active)
+        VALUES (${c.org_id}, ${c.phone}, ${c.kind}, ${c.active})`;
+    }
+  });
 }
 
 /** `phone_masked` -- викликач МАЄ передати вже замаскований рядок (§5: "номери в логах

@@ -118,10 +118,18 @@ export class PairingStateMachine {
   }
 
   async logout(): Promise<void> {
-    await this.client.logout();
+    try {
+      await this.client.logout();
+    } catch (e) {
+      console.warn("notifier: client.logout() помилка (ігноруємо):", e);
+    }
     this.state = "needs_pairing";
     this.lastQr = undefined;
     this.lastPairingCode = undefined;
+    purgeSession();
     await publishStatus(this.nats, { state: this.state });
+    // Перезапустити процес — Docker restart policy піднімає з чистою сесією і QR
+    console.log("notifier: сесію видалено після logout, перезапуск для нового QR");
+    setTimeout(() => process.exit(0), 500);
   }
 }

@@ -1,7 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type PointerEvent as RPointerEvent } from "react";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { useTheme } from "@/context/theme";
+import { useConfirm } from "@/components/confirm-dialog";
 import { api } from "@/api/client";
 import type { AdminUserRow, AccountInfo, WhatsAppStatus, WaDestination, WaSubscription, NotificationType, DictionariesOverview, DictionaryEntry } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +44,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { OrgSearchResult } from "@/api/types";
 import {
   Settings,
@@ -76,70 +86,370 @@ import {
   MapPin,
   ChevronsUpDown,
   Check,
+  Camera,
+  X,
+  ChevronUp,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Account
 // ---------------------------------------------------------------------------
 
-function AccountSection() {
-  const [info, setInfo] = useState<AccountInfo | null>(null);
-  const { actor, logout } = useAuth();
+function cropImage(imageSrc: string, crop: Area): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const size = 512;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("no canvas ctx"));
+      ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, size, size);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("no blob"))),
+        "image/jpeg",
+        0.9,
+      );
+    };
+    img.onerror = reject;
+    img.src = imageSrc;
+  });
+}
 
-  useEffect(() => {
-    api.get<AccountInfo>("/auth/account").then(setInfo).catch(() => {});
+function AvatarCropDialog({
+  src,
+  open,
+  onClose,
+  onCropped,
+}: {
+  src: string;
+  open: boolean;
+  onClose: () => void;
+  onCropped: (blob: Blob) => void;
+}) {
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedArea, setCroppedArea] = useState<Area | null>(null);
+
+  const onCropComplete = useCallback((_: Area, areaPixels: Area) => {
+    setCroppedArea(areaPixels);
   }, []);
 
-  if (!info) return <Skeleton className="h-48 w-full" />;
+  async function handleSave() {
+    if (!croppedArea) return;
+    try {
+      const blob = await cropImage(src, croppedArea);
+      onCropped(blob);
+    } catch {
+      toast.error("Помилка обрізки");
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-[440px] p-0 overflow-hidden" style={{ background: "var(--card)" }}>
+        <DialogHeader className="px-4 pt-4 pb-0">
+          <DialogTitle className="text-sm font-semibold" style={{ fontFamily: "var(--font-heading)" }}>
+            Обрізати фото
+          </DialogTitle>
+        </DialogHeader>
+        <div className="relative w-full" style={{ height: 320, background: "#000" }}>
+          <Cropper
+            image={src}
+            crop={crop}
+            zoom={zoom}
+            aspect={1}
+            cropShape="round"
+            showGrid={false}
+            onCropChange={setCrop}
+            onZoomChange={setZoom}
+            onCropComplete={onCropComplete}
+          />
+        </div>
+        <div className="px-4 py-3 space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-muted-foreground shrink-0">Масштаб</span>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.05}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="flex-1 accent-[var(--primary)]"
+              style={{ height: 4 }}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Скасувати
+            </Button>
+            <Button size="sm" onClick={handleSave}>
+              Зберегти
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AvatarUpload({ url, onUploaded }: { url: string | null; onUploaded: (url: string | null) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(reader.result as string);
+    reader.readAsDataURL(file);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function handleCropped(blob: Blob) {
+    setCropSrc(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("avatar", blob, "avatar.jpg");
+      const res = await fetch("/api/auth/avatar", { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      onUploaded(data.avatar_url);
+      toast.success("Аватар оновлено");
+    } catch {
+      toast.error("Помилка завантаження");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleRemove() {
+    try {
+      await fetch("/api/auth/avatar", { method: "DELETE", credentials: "include" });
+      onUploaded(null);
+      toast.success("Аватар видалено");
+    } catch {
+      toast.error("Помилка");
+    }
+  }
+
+  return (
+    <div className="relative group">
+      <div
+        className="h-24 w-24 rounded-full border-2 border-primary/30 overflow-hidden flex items-center justify-center transition-all duration-300 group-hover:border-primary/60 group-hover:shadow-lg group-hover:shadow-primary/10"
+        style={{ background: "var(--muted)" }}
+      >
+        {url ? (
+          <img src={url} alt="avatar" className="h-full w-full object-cover" />
+        ) : (
+          <User className="h-10 w-10 text-muted-foreground" />
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className="absolute bottom-0 right-0 h-8 w-8 rounded-full flex items-center justify-center border-2 transition-all duration-200 hover:scale-110"
+        style={{ background: "var(--primary)", borderColor: "var(--background)", color: "var(--primary-foreground)" }}
+        disabled={uploading}
+      >
+        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+      </button>
+      {url && (
+        <button
+          type="button"
+          onClick={handleRemove}
+          className="absolute top-0 right-0 h-5 w-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          style={{ background: "var(--destructive)", color: "var(--destructive-foreground)" }}
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+      {cropSrc && (
+        <AvatarCropDialog
+          src={cropSrc}
+          open={!!cropSrc}
+          onClose={() => setCropSrc(null)}
+          onCropped={handleCropped}
+        />
+      )}
+    </div>
+  );
+}
+
+const ROLE_UA: Record<string, string> = {
+  admin: "Адмін",
+  org_editor: "Редактор",
+  viewer: "Переглядач",
+};
+
+function AccountSection() {
+  const [info, setInfo] = useState<AccountInfo | null>(null);
+  const { actor, logout, refresh: refreshUser } = useAuth();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [rank, setRank] = useState("");
+  const [phone, setPhone] = useState("");
+  const [callsign, setCallsign] = useState("");
+  const [deltaNick, setDeltaNick] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [rolesExpanded, setRolesExpanded] = useState(false);
+
+  useEffect(() => {
+    api.get<AccountInfo>("/auth/account").then((data) => {
+      setInfo(data);
+      setFirstName(data.first_name ?? "");
+      setLastName(data.last_name ?? "");
+      setRank(data.rank ?? "");
+      setPhone(data.phone ?? "");
+      setCallsign(data.callsign ?? "");
+      setDeltaNick(data.delta_nick ?? "");
+      setAvatarUrl(data.avatar_url);
+    }).catch(() => {});
+  }, []);
+
+  async function handleSaveProfile() {
+    setSaving(true);
+    try {
+      await api.put("/auth/account", {
+        first_name: firstName.trim() || null,
+        last_name: lastName.trim() || null,
+        rank: rank.trim() || null,
+        phone: phone.trim() || null,
+        callsign: callsign.trim() || null,
+        delta_nick: deltaNick.trim() || null,
+      });
+      toast.success("Профіль оновлено");
+      setDirty(false);
+      refreshUser();
+    } catch {
+      toast.error("Помилка збереження");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const d = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setter(e.target.value);
+    setDirty(true);
+  };
+
+  if (!info) return <Skeleton className="h-64 w-full rounded-lg" />;
+
+  const ROLES_PREVIEW = 5;
+  const hasMore = info.roles.length > ROLES_PREVIEW;
+  const visibleRoles = rolesExpanded ? info.roles : info.roles.slice(0, ROLES_PREVIEW);
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <User className="h-4 w-4 text-primary" />
-            Обліковий запис
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <span className="eyebrow-label">Логін</span>
-              <span className="text-sm font-medium">{info.login}</span>
-            </div>
-            {info.full_name && (
-              <div className="flex flex-col gap-1">
-                <span className="eyebrow-label">Ім'я</span>
-                <span className="text-sm font-medium">{info.full_name}</span>
-              </div>
-            )}
-            <div className="flex flex-col gap-1">
-              <span className="eyebrow-label">Поточна роль</span>
-              <span className="text-sm font-medium">
-                {actor ? `${actor.role} — ${actor.org_label}` : "—"}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="eyebrow-label">Створено</span>
-              <span className="text-sm font-medium">{info.created_at}</span>
+      {/* Profile card with avatar */}
+      <Card className="overflow-hidden">
+        <div className="h-16" style={{ background: "linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary) 60%, transparent) 100%)" }} />
+        <CardContent className="relative pt-0 -mt-10">
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
+            <AvatarUpload url={avatarUrl} onUploaded={(url) => { setAvatarUrl(url); refreshUser(); }} />
+            <div className="flex-1 flex flex-col gap-0.5 pb-1">
+              <h3 className="text-lg font-bold leading-tight">
+                {callsign || firstName || info.login}
+              </h3>
+              {(firstName || lastName) && (
+                <p className="text-sm text-muted-foreground">
+                  {[rank, firstName, lastName].filter(Boolean).join(" ")}
+                </p>
+              )}
+              {actor && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {actor.role} — {actor.org_label}
+                </p>
+              )}
             </div>
           </div>
-          <Separator />
-          <div className="flex flex-col gap-1">
-            <span className="eyebrow-label">Усі ролі</span>
-            <div className="flex flex-wrap gap-1.5">
-              {info.roles.map((r, i) => (
-                <Badge key={i} variant="outline" className="text-xs">
-                  {r}
-                </Badge>
-              ))}
+
+          <Separator className="my-4" />
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="callsign">Позивний / нік</Label>
+              <Input id="callsign" placeholder="Ваш позивний" value={callsign} onChange={d(setCallsign)} />
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="firstName">Ім'я</Label>
+              <Input id="firstName" placeholder="Ім'я" value={firstName} onChange={d(setFirstName)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="lastName">Прізвище</Label>
+              <Input id="lastName" placeholder="Прізвище" value={lastName} onChange={d(setLastName)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rank">Звання</Label>
+              <Input id="rank" placeholder="напр. капітан" value={rank} onChange={d(setRank)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="phone">Телефон</Label>
+              <Input id="phone" placeholder="+380..." value={phone} onChange={d(setPhone)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="deltaNick">IXD (Delta)</Label>
+              <Input id="deltaNick" placeholder="нік в IXD" value={deltaNick} onChange={d(setDeltaNick)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Логін</Label>
+              <Input value={info.login} disabled className="opacity-60" />
+            </div>
+          </div>
+
+          {dirty && (
+            <div className="mt-4">
+              <Button size="sm" onClick={handleSaveProfile} disabled={saving}>
+                {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
+                Зберегти
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Roles — collapsible */}
+      <Card>
+        <CardContent className="pt-4 pb-3">
+          <button
+            type="button"
+            className="flex items-center gap-2 text-sm font-medium w-full text-left"
+            onClick={() => setRolesExpanded(!rolesExpanded)}
+          >
+            <Shield className="h-4 w-4 text-primary" />
+            Ролі
+            <Badge variant="secondary" className="ml-1 text-xs">{info.roles.length}</Badge>
+            <ChevronUp className={`ml-auto h-4 w-4 text-muted-foreground transition-transform duration-200 ${rolesExpanded ? "" : "rotate-180"}`} />
+          </button>
+          <div className="flex flex-wrap gap-1.5 mt-2 overflow-hidden transition-all duration-300" style={{ maxHeight: rolesExpanded ? "500px" : "32px" }}>
+            {visibleRoles.map((r, i) => (
+              <Badge key={i} variant="outline" className="text-xs animate-in fade-in duration-200" style={{ animationDelay: `${i * 30}ms` }}>
+                {r}
+              </Badge>
+            ))}
+            {!rolesExpanded && hasMore && (
+              <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => setRolesExpanded(true)}>
+                +{info.roles.length - ROLES_PREVIEW}
+              </Badge>
+            )}
           </div>
         </CardContent>
       </Card>
 
+      {/* Security */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm">
             <Lock className="h-4 w-4 text-primary" />
             Безпека
@@ -432,14 +742,16 @@ function WhatsAppSection() {
 
 function NotificationsSection() {
   const { actor } = useAuth();
+  const isAdmin = actor?.role === "admin";
   const [destinations, setDestinations] = useState<WaDestination[]>([]);
   const [types, setTypes] = useState<NotificationType[]>([]);
   const [newPhone, setNewPhone] = useState("");
-  const [newKind, setNewKind] = useState<"personal" | "bot">("personal");
+  const [newKind, setNewKind] = useState<"personal" | "bot" | "group">("personal");
   const [adding, setAdding] = useState(false);
   const [expandedDest, setExpandedDest] = useState<number | null>(null);
   const [subs, setSubs] = useState<Record<number, WaSubscription[]>>({});
   const [loading, setLoading] = useState(true);
+  const [newGroupName, setNewGroupName] = useState("");
 
   const loadDestinations = useCallback(async () => {
     try {
@@ -456,17 +768,35 @@ function NotificationsSection() {
   useEffect(() => { loadDestinations(); }, [loadDestinations]);
 
   async function handleAdd() {
-    if (!newPhone.trim()) return;
-    setAdding(true);
-    try {
-      await api.post("/whatsapp/destinations", { kind: newKind, phone_masked: newPhone.trim() });
-      setNewPhone("");
-      toast.success("Контакт додано");
-      await loadDestinations();
-    } catch {
-      toast.error("Не вдалося додати контакт");
-    } finally {
-      setAdding(false);
+    if (newKind === "group") {
+      if (!newGroupName.trim()) return;
+      setAdding(true);
+      try {
+        await api.post("/whatsapp/destinations", {
+          kind: "group",
+          phone_masked: newGroupName.trim(),
+        });
+        setNewGroupName("");
+        toast.success("Групу додано");
+        await loadDestinations();
+      } catch {
+        toast.error("Не вдалося додати групу");
+      } finally {
+        setAdding(false);
+      }
+    } else {
+      if (!newPhone.trim()) return;
+      setAdding(true);
+      try {
+        await api.post("/whatsapp/destinations", { kind: newKind, phone_masked: newPhone.trim() });
+        setNewPhone("");
+        toast.success("Контакт додано");
+        await loadDestinations();
+      } catch {
+        toast.error("Не вдалося додати контакт");
+      } finally {
+        setAdding(false);
+      }
     }
   }
 
@@ -538,34 +868,61 @@ function NotificationsSection() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
-            Додайте номери WhatsApp для отримання сповіщень. Натисніть на контакт, щоб налаштувати підписки.
+            Додайте номери WhatsApp або групи для отримання сповіщень. Натисніть на контакт, щоб налаштувати підписки.
           </p>
 
           <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <Label className="text-xs">Номер телефону</Label>
-              <Input
-                value={newPhone}
-                onChange={e => setNewPhone(e.target.value)}
-                placeholder="380XXXXXXXXX"
-                className="mt-1"
-              />
-            </div>
             <div>
               <Label className="text-xs">Тип</Label>
-              <select
-                value={newKind}
-                onChange={e => setNewKind(e.target.value as "personal" | "bot")}
-                className="mt-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="personal">Особистий</option>
-                <option value="bot">Бот</option>
-              </select>
+              <Select value={newKind} onValueChange={v => setNewKind(v as "personal" | "bot" | "group")}>
+                <SelectTrigger className="mt-1 w-[150px]">
+                  <SelectValue>
+                    {newKind === "personal" ? "Особистий" : newKind === "bot" ? "Бот" : "Група"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="personal">Особистий</SelectItem>
+                  <SelectItem value="bot">Бот</SelectItem>
+                  {isAdmin && <SelectItem value="group">Група</SelectItem>}
+                </SelectContent>
+              </Select>
             </div>
-            <Button size="sm" onClick={handleAdd} disabled={adding || !newPhone.trim()}>
+            <div className="flex-1">
+              {newKind === "group" ? (
+                <>
+                  <Label className="text-xs">Назва групи WhatsApp</Label>
+                  <Input
+                    value={newGroupName}
+                    onChange={e => setNewGroupName(e.target.value)}
+                    placeholder="Назва групи точно як у WhatsApp"
+                    className="mt-1"
+                  />
+                </>
+              ) : (
+                <>
+                  <Label className="text-xs">Номер телефону</Label>
+                  <Input
+                    value={newPhone}
+                    onChange={e => setNewPhone(e.target.value)}
+                    placeholder="380XXXXXXXXX"
+                    className="mt-1"
+                  />
+                </>
+              )}
+            </div>
+            <Button
+              size="sm"
+              onClick={handleAdd}
+              disabled={adding || (newKind === "group" ? !newGroupName.trim() : !newPhone.trim())}
+            >
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             </Button>
           </div>
+          {newKind === "group" && (
+            <p className="text-xs text-muted-foreground">
+              Бот повинен бути учасником цієї групи. Введіть назву точно як у WhatsApp.
+            </p>
+          )}
 
           {destinations.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">Немає контактів</p>
@@ -582,10 +939,17 @@ function NotificationsSection() {
                     ) : (
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
-                    <Phone className="h-4 w-4 shrink-0 text-primary" />
+                    {dest.kind === "group" ? (
+                      <UsersIcon className="h-4 w-4 shrink-0 text-emerald-500" />
+                    ) : (
+                      <Phone className="h-4 w-4 shrink-0 text-primary" />
+                    )}
                     <span className="text-sm font-medium flex-1">{dest.phone_masked}</span>
-                    <Badge variant={dest.kind === "bot" ? "secondary" : "outline"} className="text-xs">
-                      {dest.kind === "bot" ? "Бот" : "Особистий"}
+                    <Badge
+                      variant={dest.kind === "group" ? "default" : dest.kind === "bot" ? "secondary" : "outline"}
+                      className={`text-xs ${dest.kind === "group" ? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30" : ""}`}
+                    >
+                      {dest.kind === "group" ? "Група" : dest.kind === "bot" ? "Бот" : "Особистий"}
                     </Badge>
                     <button
                       onClick={e => { e.stopPropagation(); handleToggle(dest.id, !dest.is_active); }}
@@ -598,13 +962,15 @@ function NotificationsSection() {
                         <ToggleLeft className="h-5 w-5" />
                       )}
                     </button>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
                       onClick={e => { e.stopPropagation(); handleDelete(dest.id); }}
-                      className="text-muted-foreground hover:text-destructive"
                       title="Видалити"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </Button>
                   </div>
 
                   {expandedDest === dest.id && (
@@ -709,6 +1075,7 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
 
 function UserManagementSection() {
   const [users, setUsers] = useState<AdminUserRow[] | null>(null);
+  const { prompt: promptDialog, dialog: confirmDialog } = useConfirm();
 
   const loadUsers = useCallback(() => {
     api.get<AdminUserRow[]>("/admin/users").then(setUsers).catch(() => setUsers([]));
@@ -719,7 +1086,12 @@ function UserManagementSection() {
   }, [loadUsers]);
 
   async function handleResetPassword(userId: number) {
-    const pw = prompt("Новий тимчасовий пароль:");
+    const pw = await promptDialog({
+      title: "Скидання пароля",
+      description: "Введіть новий тимчасовий пароль для користувача.",
+      confirmLabel: "Скинути",
+      input: { label: "Новий пароль", type: "password", placeholder: "Тимчасовий пароль" },
+    });
     if (!pw) return;
     try {
       await api.post(`/admin/users/${userId}/reset-password`, { temp_password: pw });
@@ -739,10 +1111,20 @@ function UserManagementSection() {
     }
   }
 
+  async function handleToggleOrgNames(userId: number) {
+    try {
+      await api.post(`/admin/users/${userId}/toggle-org-names`);
+      loadUsers();
+    } catch {
+      toast.error("Помилка зміни видимості назв");
+    }
+  }
+
   if (!users) return <Skeleton className="h-48 w-full" />;
 
   return (
     <Card>
+      {confirmDialog}
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-sm">
           <UsersIcon className="h-4 w-4 text-primary" />
@@ -793,6 +1175,18 @@ function UserManagementSection() {
                           onClick={() => handleResetPassword(u.id)}
                         >
                           <KeyRound className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={u.can_see_org_names ? "Заборонити бачити назви частин" : "Дозволити бачити назви частин"}
+                          onClick={() => handleToggleOrgNames(u.id)}
+                        >
+                          {u.can_see_org_names ? (
+                            <Eye className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <EyeOff className="h-4 w-4" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
@@ -1058,6 +1452,7 @@ function TrainingSitesTab({
   const [locality, setLocality] = useState("");
   const [orgId, setOrgId] = useState<number | null>(null);
   const [orgLabel, setOrgLabel] = useState("");
+  const { confirm: confirmDel, dialog: confirmDelDialog } = useConfirm();
 
   function openAdd() {
     setEditEntry(null);
@@ -1108,7 +1503,13 @@ function TrainingSitesTab({
   }
 
   async function handleDelete(id: number) {
-    if (!confirm("Видалити місце підготовки? Це можливо лише якщо немає пов'язаних груп.")) return;
+    const ok = await confirmDel({
+      title: "Видалити місце підготовки?",
+      description: "Це можливо лише якщо немає пов'язаних груп підготовки.",
+      confirmLabel: "Видалити",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/dictionaries/training_site/${id}`);
       toast.success("Видалено");
@@ -1120,6 +1521,7 @@ function TrainingSitesTab({
 
   return (
     <div className="flex flex-col gap-3">
+      {confirmDelDialog}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-medium">Місця проведення підготовки</h3>
@@ -1220,6 +1622,7 @@ function DictionariesSection() {
   const [category, setCategory] = useState("");
   const [requiresNote, setRequiresNote] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const { confirm: confirmDel, dialog: confirmDelDialog } = useConfirm();
 
   const load = useCallback(() => {
     api.get<DictionariesOverview>("/admin/dictionaries").then(setOverview).catch(() => {});
@@ -1294,7 +1697,13 @@ function DictionariesSection() {
   }
 
   async function handleDelete(cfg: DictConfig, id: number) {
-    if (!confirm("Видалити запис?")) return;
+    const ok = await confirmDel({
+      title: "Видалити запис?",
+      description: `Запис із довідника "${cfg.label}" буде видалено.`,
+      confirmLabel: "Видалити",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/dictionaries/${cfg.key}/${id}`);
       toast.success("Видалено");
@@ -1332,6 +1741,7 @@ function DictionariesSection() {
 
   return (
     <div className="flex flex-col gap-4">
+      {confirmDelDialog}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Довідники системи — ВОС, ОВТ, види підготовки та інші класифікатори.
@@ -1473,35 +1883,35 @@ export function SettingsPage() {
       </h1>
 
       <Tabs defaultValue="account">
-        <TabsList className="flex-wrap">
+        <TabsList className="flex-wrap gap-1">
           <TabsTrigger value="account">
-            <User className="mr-1.5 h-3.5 w-3.5" />
-            Обліковий запис
+            <User className="sm:mr-1.5 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Обліковий запис</span>
           </TabsTrigger>
           <TabsTrigger value="appearance">
-            <Palette className="mr-1.5 h-3.5 w-3.5" />
-            Вигляд
+            <Palette className="sm:mr-1.5 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Вигляд</span>
           </TabsTrigger>
           <TabsTrigger value="notifications">
-            <Bell className="mr-1.5 h-3.5 w-3.5" />
-            Сповіщення
+            <Bell className="sm:mr-1.5 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Сповіщення</span>
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="whatsapp">
-              <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
-              WhatsApp
+              <MessageCircle className="sm:mr-1.5 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">WhatsApp</span>
             </TabsTrigger>
           )}
           {isAdmin && (
             <TabsTrigger value="users">
-              <User className="mr-1.5 h-3.5 w-3.5" />
-              Користувачі
+              <UsersIcon className="sm:mr-1.5 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Користувачі</span>
             </TabsTrigger>
           )}
           {isAdmin && (
             <TabsTrigger value="dictionaries">
-              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-              Довідники
+              <BookOpen className="sm:mr-1.5 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Довідники</span>
             </TabsTrigger>
           )}
         </TabsList>

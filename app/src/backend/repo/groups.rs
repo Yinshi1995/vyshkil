@@ -380,6 +380,9 @@ pub fn validate_row(row: &GroupFormRow, as_of: NaiveDate) -> Result<ValidatedRow
             CountError::FunnelOrderViolated => {
                 "порушено порядок воронки: план ≥ прибуло ≥ навчаються".to_string()
             }
+            CountError::BalanceExceeded { available, requested, event_type } => {
+                format!("неможливо {event_type} {requested}: у групі лише {available} осіб")
+            }
         };
         (field.to_string(), message)
     };
@@ -863,6 +866,7 @@ pub struct GroupEventRow {
     pub reason_label: Option<String>,
     pub note: Option<String>,
     pub source_label: Option<String>,
+    pub created_by_label: Option<String>,
 }
 
 pub async fn list_group_events(
@@ -885,7 +889,8 @@ pub async fn list_group_events(
              END \
          WHEN al.actor IS NOT NULL AND al.actor <> '' THEN \
              COALESCE(actor_org.short_name, 'org#' || split_part(al.actor, ':', 1)) \
-         END AS source_label \
+         END AS source_label, \
+         COALESCE(cb.callsign, cb.display_name, cb.login) AS created_by_label \
          FROM group_event ge \
          LEFT JOIN attrition_reason ar ON ar.id = ge.reason_id \
          LEFT JOIN submission s ON s.id = ge.submission_id \
@@ -897,6 +902,7 @@ pub async fn list_group_events(
          ) al ON TRUE \
          LEFT JOIN org actor_org ON al.actor IS NOT NULL AND al.actor <> '' \
              AND actor_org.id = split_part(al.actor, ':', 1)::int \
+         LEFT JOIN user_account cb ON cb.id = ge.created_by \
          WHERE ge.group_id = $1 \
          ORDER BY ge.occurred_on, ge.id",
         [group_id.into()],
@@ -928,15 +934,45 @@ pub async fn add_group_event(
     occurred_on: &str,
     reason_id: Option<i32>,
     note: Option<&str>,
+    created_by: Option<i32>,
 ) -> Result<i32, DbErr> {
+    if matches!(event_type, "attrition" | "completed") {
+        #[derive(FromQueryResult)]
+        struct Balance {
+            total_in: i64,
+            total_out: i64,
+        }
+        let bal = Balance::find_by_statement(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT \
+                COALESCE(SUM(CASE WHEN event_type IN ('arrived','added') THEN count ELSE 0 END), 0) AS total_in, \
+                COALESCE(SUM(CASE WHEN event_type IN ('attrition','completed') THEN count ELSE 0 END), 0) AS total_out \
+             FROM group_event WHERE group_id = $1",
+            [group_id.into()],
+        ))
+        .one(db)
+        .await?
+        .unwrap_or(Balance { total_in: 0, total_out: 0 });
+
+        crate::domain::validation::validate_event_balance(
+            bal.total_in, bal.total_out, count as i64, event_type,
+        )
+        .map_err(|e| match e {
+            crate::domain::validation::CountError::BalanceExceeded { available, requested, event_type: label } => {
+                DbErr::Custom(format!("Неможливо {label} {requested}: у групі лише {available} осіб"))
+            }
+            _ => DbErr::Custom("Помилка валідації балансу".into()),
+        })?;
+    }
+
     #[derive(FromQueryResult)]
     struct NewId {
         id: i32,
     }
     let row = NewId::find_by_statement(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
-        "INSERT INTO group_event (group_id, event_type, count, occurred_on, reason_id, note) \
-         VALUES ($1, $2, $3, $4::date, $5, $6) RETURNING id",
+        "INSERT INTO group_event (group_id, event_type, count, occurred_on, reason_id, note, created_by) \
+         VALUES ($1, $2, $3, $4::date, $5, $6, $7) RETURNING id",
         [
             group_id.into(),
             event_type.into(),
@@ -944,6 +980,7 @@ pub async fn add_group_event(
             occurred_on.into(),
             reason_id.into(),
             note.into(),
+            created_by.into(),
         ],
     ))
     .one(db)
@@ -1019,6 +1056,36 @@ pub async fn create_group_with_events(
     struct NewId {
         id: i32,
     }
+
+    let existing = NewId::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT id FROM training_group \
+         WHERE sender_org_id = $1 AND training_kind_id = $2 AND site_id = $3 \
+           AND planned_start = $4::date AND planned_end = $5::date \
+           AND COALESCE(vos_id, 0) = COALESCE($6, 0) \
+           AND COALESCE(course_id, 0) = COALESCE($7, 0) \
+           AND COALESCE(bzvp_program_id, 0) = COALESCE($8, 0) \
+         LIMIT 1",
+        [
+            sender_org_id.into(),
+            training_kind_id.into(),
+            site_id.into(),
+            planned_start.into(),
+            planned_end.into(),
+            vos_id.into(),
+            course_id.into(),
+            bzvp_program_id.into(),
+        ],
+    ))
+    .one(db)
+    .await?;
+
+    if existing.is_some() {
+        return Err(DbErr::Custom(
+            "Група з такими параметрами (частина, вид, місце, дати) вже існує".into(),
+        ));
+    }
+
     let basis_date_val: sea_orm::Value = basis_doc_date
         .filter(|s| !s.is_empty())
         .map(sea_orm::Value::from)

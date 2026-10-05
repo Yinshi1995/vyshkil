@@ -15,6 +15,7 @@ interface AuthCtx {
   loading: boolean;
   actor: Actor | null;
   isAdmin: boolean;
+  canSeeOrgNames: boolean;
   login: (req: LoginRequest) => Promise<LoginResponse>;
   logout: () => Promise<void>;
   switchActor: (orgId: number, role: string) => Promise<void>;
@@ -31,6 +32,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       const u = await api.get<AuthUser>("/auth/me");
+      if (u.avatar_url) {
+        const sep = u.avatar_url.includes("?") ? "&" : "?";
+        u.avatar_url = `${u.avatar_url}${sep}v=${Date.now()}`;
+      }
       setUser(u);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
@@ -75,10 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const actor = user?.actor ?? null;
   const isAdmin = actor?.role === "admin";
+  const canSeeOrgNames = user?.can_see_org_names ?? false;
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, actor, isAdmin, login, logout, switchActor, refresh }}
+      value={{ user, loading, actor, isAdmin, canSeeOrgNames, login, logout, switchActor, refresh }}
     >
       {children}
     </AuthContext.Provider>

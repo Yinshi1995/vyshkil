@@ -1,0 +1,6 @@
+---
+- name: Перезапустити cloudflared
+  ansible.builtin.systemd:
+    name: cloudflared
+    daemon_reload: true
+    state: restarted

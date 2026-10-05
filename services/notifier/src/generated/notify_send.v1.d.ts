@@ -2,7 +2,8 @@
  * Шаблон сповіщення — сам текст (знеособлений, 04 §5) рендерить `notifier` за цим варіантом,
  * не отримує його рядком через брокер.
  */
-export type NotifyTemplate = "discrepancy_detected";
+export type NotifyTemplate =
+  "discrepancy_detected" | "discrepancy_resolved" | "import_completed" | "submission_committed" | "group_event_added";
 
 export interface EnvelopeNotifySendV1 {
   causation_id?: string | null;

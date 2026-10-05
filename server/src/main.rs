@@ -20,7 +20,7 @@ use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
 use app::app::{shell, App};
-use server::{admin_sse, api, config, db, relay, spa, state::AppState};
+use server::{admin_sse, api, chat_api, config, db, relay, spa, state::AppState};
 
 // mimalloc фрагментує купу помітно менше за glibc malloc на довгоживучих процесах
 // і активно повертає вільну пам'ять ОС — на сервері з обмеженим RAM це відчутно знижує RSS.
@@ -67,7 +67,9 @@ async fn run(config: config::Config) {
     let addr = leptos_options.site_addr;
 
     let shared_nats: bus::SharedNatsClient = std::sync::Arc::new(std::sync::Mutex::new(None));
-    let app_state = AppState { leptos_options, db, nats: shared_nats.clone() };
+    let (chat_tx, _) = tokio::sync::broadcast::channel(256);
+    let chat_tx = std::sync::Arc::new(chat_tx);
+    let app_state = AppState { leptos_options, db, nats: shared_nats.clone(), chat_tx };
 
     // Перша фонова задача в цьому проєкті (09-messaging.md §3.1, Фаза 1) -- `tokio::spawn`, не
     // блокує запуск: NATS недоступний при старті — relay сам ретраїть, сервер піднімається як
@@ -83,6 +85,7 @@ async fn run(config: config::Config) {
     let app = if use_react {
         Router::new()
             .merge(api::api_router())
+            .merge(chat_api::chat_router())
             .route("/api/admin/whatsapp/events", axum::routing::get(admin_sse::whatsapp_status_stream))
             .merge(spa::spa_router())
             .layer(axum::middleware::from_fn(security_headers))
@@ -92,6 +95,7 @@ async fn run(config: config::Config) {
         let routes = generate_route_list(App);
         Router::new()
             .merge(api::api_router())
+            .merge(chat_api::chat_router())
             .leptos_routes_with_context(
                 &app_state,
                 routes,

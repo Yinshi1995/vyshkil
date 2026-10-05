@@ -39,8 +39,11 @@ import {
   GitCompareArrows,
   ChevronDown,
   ChevronUp,
+  Copy,
+  Eye,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 
 function kindLabel(kind: string): string {
   switch (kind) {
@@ -191,35 +194,35 @@ function ComparisonTable({ comparison }: { comparison: DiscrepancyComparison }) 
   const conflictField = METRIC_TO_FIELD[metric];
 
   return (
-    <div className="overflow-x-auto -mx-4 px-4">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr>
-            <th
-              className="text-left py-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider"
-              style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-heading)", minWidth: 100 }}
+    <div className="-mx-4 px-4">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead
+              className="text-[11px] font-semibold uppercase tracking-wider"
+              style={{ fontFamily: "var(--font-heading)", minWidth: 100 }}
             >
               Поле
-            </th>
+            </TableHead>
             {rows.map((r) => (
-              <th
+              <TableHead
                 key={r.submission_id}
-                className="text-left py-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider"
-                style={{ color: "var(--muted-foreground)", fontFamily: "var(--font-heading)", minWidth: 100 }}
+                className="text-[11px] font-semibold uppercase tracking-wider"
+                style={{ fontFamily: "var(--font-heading)", minWidth: 100 }}
               >
                 {r.source_label}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {COMPARE_FIELDS.map((field) => {
             const vals = rows.map(r => fieldValue(r, field));
             const isDiff = vals.some(v => v !== vals[0]);
             const isConflict = field === conflictField;
 
             return (
-              <tr
+              <TableRow
                 key={field}
                 style={isConflict ? {
                   background: "rgba(217,83,79,0.08)",
@@ -227,10 +230,9 @@ function ComparisonTable({ comparison }: { comparison: DiscrepancyComparison }) 
                   background: "rgba(243,146,0,0.06)",
                 } : undefined}
               >
-                <td
-                  className="py-1.5 px-2 font-medium whitespace-nowrap"
+                <TableCell
+                  className="font-medium"
                   style={{
-                    borderBottom: "1px solid var(--border)",
                     color: isConflict ? "#D9534F" : undefined,
                     fontWeight: isConflict ? 700 : undefined,
                   }}
@@ -241,25 +243,24 @@ function ComparisonTable({ comparison }: { comparison: DiscrepancyComparison }) 
                       конфлікт
                     </span>
                   )}
-                </td>
+                </TableCell>
                 {rows.map((r) => (
-                  <td
+                  <TableCell
                     key={r.submission_id}
-                    className="py-1.5 px-2 tabular-nums"
+                    className="tabular-nums"
                     style={{
-                      borderBottom: "1px solid var(--border)",
                       fontWeight: isConflict ? 700 : undefined,
                       color: isConflict ? "#D9534F" : isDiff ? "#F39200" : undefined,
                     }}
                   >
                     {fieldValue(r, field)}
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -331,7 +332,7 @@ function DiscrepancyDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" dockable className="w-full overflow-y-auto sm:max-w-lg">
+      <SheetContent side="right" dockable className="w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5" style={{ color: ks.color }} />
@@ -484,6 +485,7 @@ export function DiscrepanciesPage() {
   const [search, setSearch] = useState("");
   const [selectedDisc, setSelectedDisc] = useState<DiscrepancyRow | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const ctxMenu = useContextMenu();
 
   const loadData = useCallback(() => {
     api.get<DiscrepancyRow[]>("/discrepancies").then(setRows).catch(() => setRows([]));
@@ -517,6 +519,23 @@ export function DiscrepanciesPage() {
 
   const openCount = statusCounts.get("open") ?? 0;
 
+  function handleRowContextMenu(e: React.MouseEvent, r: DiscrepancyRow) {
+    const items: ContextMenuEntry[] = [
+      {
+        label: "Деталі",
+        icon: <Eye className="h-4 w-4" />,
+        onClick: () => { setSelectedDisc(r); setSheetOpen(true); },
+      },
+      { separator: true },
+      {
+        label: "Копіювати підрозділ",
+        icon: <Copy className="h-4 w-4" />,
+        onClick: () => { navigator.clipboard.writeText(r.org_label); },
+      },
+    ];
+    ctxMenu.open(e, items);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -545,37 +564,28 @@ export function DiscrepanciesPage() {
               className="pl-9"
             />
           </div>
-          <button
+          <Button
+            variant={!statusFilter ? "default" : "outline"}
+            size="sm"
             onClick={() => setStatusFilter(null)}
-            className="rounded-md border px-2.5 py-1 text-xs font-semibold uppercase tracking-wider transition-colors"
-            style={{
-              fontFamily: "var(--font-heading)",
-              borderColor: !statusFilter ? "var(--primary)" : "var(--border)",
-              color: !statusFilter ? "var(--primary)" : "var(--muted-foreground)",
-              background: !statusFilter ? "color-mix(in srgb, var(--primary) 8%, transparent)" : "transparent",
-              cursor: "pointer",
-            }}
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ fontFamily: "var(--font-heading)" }}
           >
             Усі ({rows.length})
-          </button>
+          </Button>
           {Array.from(statusCounts.entries())
             .sort((a, b) => b[1] - a[1])
             .map(([status, count]) => (
-              <button
+              <Button
                 key={status}
+                variant={statusFilter === status ? "default" : "outline"}
+                size="sm"
                 onClick={() => setStatusFilter(statusFilter === status ? null : status)}
-                className="rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors"
-                style={{
-                  fontFamily: "var(--font-heading)",
-                  letterSpacing: "0.02em",
-                  borderColor: statusFilter === status ? "var(--primary)" : "var(--border)",
-                  color: statusFilter === status ? "var(--primary)" : "var(--muted-foreground)",
-                  background: statusFilter === status ? "color-mix(in srgb, var(--primary) 8%, transparent)" : "transparent",
-                  cursor: "pointer",
-                }}
+                className="text-xs font-semibold"
+                style={{ fontFamily: "var(--font-heading)", letterSpacing: "0.02em" }}
               >
                 {statusLabel(status)} ({count})
-              </button>
+              </Button>
             ))}
         </div>
       )}
@@ -624,6 +634,7 @@ export function DiscrepanciesPage() {
                         key={r.id}
                         className="cursor-pointer"
                         onClick={() => { setSelectedDisc(r); setSheetOpen(true); }}
+                        onContextMenu={(e) => handleRowContextMenu(e, r)}
                       >
                         <TableCell className="font-medium">
                           {r.org_label}
@@ -666,6 +677,8 @@ export function DiscrepanciesPage() {
         onOpenChange={(v) => { setSheetOpen(v); if (!v) setSelectedDisc(null); }}
         onStatusChanged={loadData}
       />
+
+      <ContextMenuPortal state={ctxMenu.state} onClose={ctxMenu.close} />
     </div>
   );
 }

@@ -112,6 +112,55 @@ const routes: MockHandler[] = [
   (url) => { if (url === "/api/auth/account") return MOCK_ACCOUNT; return null; },
   (url) => { if (url === "/api/dashboard/stats") return MOCK_STATS; return null; },
   (url) => {
+    if (url === "/api/dashboard/pipeline") return { planned: 495, arrived: 460, in_training: 433, completed: 312, attrition: 47 };
+    return null;
+  },
+  (url) => {
+    if (url === "/api/dashboard/by-org") return [
+      { org_name: "17 АК", group_count: 2, planned: 165, completed: 95, attrition: 12 },
+      { org_name: "30 КМП", group_count: 1, planned: 150, completed: 98, attrition: 15 },
+      { org_name: "20 АК", group_count: 2, planned: 120, completed: 72, attrition: 11 },
+      { org_name: "152 НЦ", group_count: 1, planned: 60, completed: 47, attrition: 9 },
+    ];
+    return null;
+  },
+  (url) => {
+    if (url === "/api/dashboard/timeline") return [
+      { week: "2026-08-24", planned: 60, started: 45, completed: 20, attrition: 3 },
+      { week: "2026-08-31", planned: 80, started: 72, completed: 35, attrition: 5 },
+      { week: "2026-09-07", planned: 95, started: 88, completed: 50, attrition: 7 },
+      { week: "2026-09-14", planned: 110, started: 100, completed: 65, attrition: 8 },
+      { week: "2026-09-21", planned: 75, started: 70, completed: 72, attrition: 10 },
+      { week: "2026-09-28", planned: 75, started: 85, completed: 70, attrition: 14 },
+    ];
+    return null;
+  },
+  (url) => {
+    if (url === "/api/dashboard/discrepancies-chart") return {
+      by_status: [{ status: "open", count: 3 }, { status: "resolved", count: 1 }, { status: "accepted", count: 0 }],
+      by_org: [
+        { org_name: "17 АК", open: 1, resolved: 0, accepted: 0 },
+        { org_name: "20 АК", open: 1, resolved: 0, accepted: 0 },
+        { org_name: "30 КМП", open: 1, resolved: 0, accepted: 0 },
+        { org_name: "152 НЦ", open: 0, resolved: 1, accepted: 0 },
+      ],
+    };
+    return null;
+  },
+  (url) => {
+    if (url === "/api/dashboard/staffing") return [
+      { org_name: "17 АК", category: "squad_leaders", authorized: 48, assigned: 42 },
+      { org_name: "17 АК", category: "instructors", authorized: 24, assigned: 20 },
+      { org_name: "20 АК", category: "squad_leaders", authorized: 36, assigned: 28 },
+      { org_name: "20 АК", category: "instructors", authorized: 18, assigned: 15 },
+      { org_name: "152 НЦ", category: "squad_leaders", authorized: 20, assigned: 18 },
+      { org_name: "152 НЦ", category: "instructors", authorized: 12, assigned: 11 },
+      { org_name: "30 КМП", category: "squad_leaders", authorized: 40, assigned: 25 },
+      { org_name: "30 КМП", category: "instructors", authorized: 20, assigned: 12 },
+    ];
+    return null;
+  },
+  (url) => {
     const m = url.match(/^\/api\/orgs\/(\d+)$/);
     if (m) {
       const id = parseInt(m[1]);

@@ -9,6 +9,9 @@ pub struct AuthUser {
     pub user_id: i32,
     pub actor: Option<Actor>,
     pub display_name: Option<String>,
+    pub callsign: Option<String>,
+    pub avatar_url: Option<String>,
+    pub can_see_org_names: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +22,7 @@ pub struct UserAccount {
     pub display_name: Option<String>,
     pub is_active: bool,
     pub must_change_password: bool,
+    pub can_see_org_names: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +40,9 @@ pub struct UserSession {
     pub active_role: Option<String>,
     pub login: String,
     pub display_name: Option<String>,
+    pub callsign: Option<String>,
+    pub avatar_path: Option<String>,
+    pub can_see_org_names: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +68,7 @@ pub struct AdminUserRow {
     pub display_name: Option<String>,
     pub is_active: bool,
     pub must_change_password: bool,
+    pub can_see_org_names: bool,
     pub roles: Vec<UserRoleRow>,
     pub created_at: String,
 }
@@ -80,6 +88,7 @@ pub struct AdminSubmissionRow {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdminGroupRow {
     pub id: i32,
+    pub org_id: i32,
     pub org_label: String,
     pub training_kind: String,
     pub vos_label: String,
@@ -104,6 +113,13 @@ pub struct PasskeyInfo {
 pub struct AccountInfo {
     pub login: String,
     pub full_name: Option<String>,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub rank: Option<String>,
+    pub phone: Option<String>,
+    pub callsign: Option<String>,
+    pub delta_nick: Option<String>,
+    pub avatar_url: Option<String>,
     pub roles: Vec<String>,
     pub created_at: String,
 }

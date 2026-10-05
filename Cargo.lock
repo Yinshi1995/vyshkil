@@ -3389,6 +3389,7 @@ dependencies = [
  "app",
  "argon2",
  "async-nats",
+ "async-stream",
  "axum",
  "bus",
  "chrono",

@@ -8,7 +8,7 @@ import { ChannelNotReadyError, WhatsAppChannel } from "./channel.ts";
 // помилки `sendMessage` однаково, тож needs_pairing ніколи б фактично не чекав -- одразу
 // ack'ався б як "failed".
 test("send() throws ChannelNotReadyError (not a failed-status result) when client isn't ready yet", async () => {
-  const notReadyClient = { info: undefined, sendMessage: async () => "unreachable" };
+  const notReadyClient = { info: undefined, sendMessage: async () => "unreachable", getChats: async () => [] };
   const channel = new WhatsAppChannel(notReadyClient);
 
   await assert.rejects(() => channel.send("+380501234567", "текст"), ChannelNotReadyError);
@@ -20,10 +20,11 @@ test("send() throws ChannelNotReadyError (not a failed-status result) when clien
 test("a thrown error containing the raw phone number is scrubbed before being returned", async () => {
   const phone = "+380501234567";
   const fakeClient = {
-    info: { wid: { user: "380999999999" } }, // "готовий" -- не той сценарій, що тестується тут
+    info: { wid: { user: "380999999999" } },
     sendMessage: async (chatId: string) => {
       throw new Error(`could not send message to ${chatId}: timeout`);
     },
+    getChats: async () => [],
   };
   const channel = new WhatsAppChannel(fakeClient);
 

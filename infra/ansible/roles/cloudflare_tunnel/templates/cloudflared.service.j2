@@ -1,0 +1,16 @@
+# Згенеровано Ansible (roles/cloudflare_tunnel). Не редагувати вручну.
+[Unit]
+Description=Cloudflare Tunnel (vyshkil-prod)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ cloudflare_tunnel_user }}
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token {{ vault_cloudflare_tunnel_token }}
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

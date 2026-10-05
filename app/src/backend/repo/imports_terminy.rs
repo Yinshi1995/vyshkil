@@ -59,7 +59,7 @@ async fn resolve_bzvp(
             planned_count: count,
             arrived_count: count,
             in_training_count: count,
-            note: format!("Імпорт: Терміни, БЗВП. Розподіл: {}", raw.distribution_raw),
+            note: format!("Імпорт: Терміни-БЗВП {}", raw.row_number),
             ..Default::default()
         });
     }
@@ -96,7 +96,7 @@ async fn resolve_special(
             planned_count: count,
             arrived_count: count,
             in_training_count: count,
-            note: "Імпорт: Терміни, фахова підготовка".to_string(),
+            note: format!("Імпорт: Терміни-Фахова {}", raw.row_number),
             ..Default::default()
         });
     }
@@ -121,7 +121,7 @@ async fn resolve_adapt(
             planned_count: count,
             arrived_count: count,
             in_training_count: count,
-            note: format!("Імпорт: Терміни, адаптація. Розподіл: {}", raw.distribution_raw),
+            note: format!("Імпорт: Терміни-Адаптація {}", raw.row_number),
             ..Default::default()
         });
     }

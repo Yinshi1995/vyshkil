@@ -15,6 +15,10 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema-gen", derive(schemars::JsonSchema))]
 pub enum NotifyTemplate {
     DiscrepancyDetected,
+    DiscrepancyResolved,
+    ImportCompleted,
+    SubmissionCommitted,
+    GroupEventAdded,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -58,6 +58,57 @@ pub async fn can_view_org(
     }
 }
 
+/// Чи може адміністратор керувати (створювати/редагувати/видаляти) підрозділом `target_org_id`:
+/// лише свій або підлеглий. На відміну від `can_view_org`, перевіряє підпорядкування навіть для
+/// `Admin` — адмін керує тільки власним піддеревом (01 §6).
+pub async fn can_manage_org(
+    db: &DatabaseConnection,
+    actor: Actor,
+    target_org_id: i32,
+) -> Result<bool, DbErr> {
+    if actor.org_id == target_org_id {
+        return Ok(true);
+    }
+
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT EXISTS ( \
+            SELECT 1 FROM subordination_closure \
+            WHERE ancestor_id = $1 AND descendant_id = $2 \
+              AND daterange(valid_from, valid_to, '[)') @> CURRENT_DATE \
+        ) AS exists_flag",
+        [actor.org_id.into(), target_org_id.into()],
+    );
+
+    let row = db.query_one(stmt).await?;
+    match row {
+        Some(row) => row.try_get::<bool>("", "exists_flag").or(Ok(false)),
+        None => Ok(false),
+    }
+}
+
+/// Список org_id, якими актор може керувати: своя організація + піддерево за
+/// `subordination_closure` (обидві осі, на сьогодні). На відміну від `visible_org_ids`, перевіряє
+/// підпорядкування навіть для `admin` — адмін керує тільки власним піддеревом.
+pub async fn manageable_org_ids(
+    db: &DatabaseConnection,
+    actor: Actor,
+) -> Result<Vec<i32>, DbErr> {
+    let stmt = Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "SELECT $1::int AS org_id \
+         UNION \
+         SELECT descendant_id AS org_id FROM subordination_closure \
+         WHERE ancestor_id = $1 AND daterange(valid_from, valid_to, '[)') @> CURRENT_DATE",
+        [actor.org_id.into()],
+    );
+
+    let rows = db.query_all(stmt).await?;
+    rows.into_iter()
+        .map(|r| r.try_get::<i32>("", "org_id"))
+        .collect::<Result<Vec<_>, _>>()
+}
+
 /// Список org_id, видимих актору: сама організація + все піддерево за `subordination_closure`
 /// (обидві осі, на сьогодні) — 01 §6. `None` = без обмежень (`admin` бачить усе); `Some(ids)` —
 /// список для фільтрації результатів багаторядкових запитів (пошук, дерево), де перевіряти

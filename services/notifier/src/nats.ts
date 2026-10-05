@@ -24,7 +24,7 @@ const NOTIFY_CMD_SUBJECT = "vyshkil.notify.send.v1";
 const NOTIFY_RESULT_SUBJECT = "vyshkil.notify.result.v1";
 const STATUS_BUCKET = "notifier_status";
 const DURABLE_CONSUMER = "notifier-whatsapp";
-export const MAX_DELIVER = 5;
+export const MAX_DELIVER = 20;
 
 /** З'єднання + KV bucket для стану прив'язки (§4: TTL 60с, history 1 -- лише ОСТАННІЙ стан
  *  має значення, попередні не потрібні). Стрім `NOTIFY_CMD` МАЄ вже існувати (створює його
@@ -73,13 +73,19 @@ async function ensureStream(jsm: JetStreamManager, name: string, subjects: strin
 }
 
 export async function bindNotifyCmdConsumer({ js, jsm }: NatsHandles) {
-  await jsm.consumers.add(NOTIFY_CMD_STREAM, {
+  const cfg = {
     durable_name: DURABLE_CONSUMER,
     ack_policy: AckPolicy.Explicit,
     ack_wait: 30_000_000_000, // 30с у наносекундах (JetStream consumer config -- nanos, не мс)
     max_deliver: MAX_DELIVER,
     filter_subject: NOTIFY_CMD_SUBJECT,
-  });
+  };
+  try {
+    await jsm.consumers.add(NOTIFY_CMD_STREAM, cfg);
+  } catch {
+    await jsm.consumers.delete(NOTIFY_CMD_STREAM, DURABLE_CONSUMER);
+    await jsm.consumers.add(NOTIFY_CMD_STREAM, cfg);
+  }
   return js.consumers.get(NOTIFY_CMD_STREAM, DURABLE_CONSUMER);
 }
 

@@ -28,6 +28,7 @@ use crate::domain::normalize::normalize;
 
 #[derive(Debug, Clone)]
 pub struct RawIvsStaffingRow {
+    pub row_number: u32,
     pub org_raw: String,
     pub by_tos_raw: String,
     pub by_list_raw: String,
@@ -37,6 +38,7 @@ pub struct RawIvsStaffingRow {
 
 #[derive(Debug, Clone)]
 pub struct RawInternshipRow {
+    pub row_number: u32,
     pub org_raw: String,
     pub count_raw: String,
     /// "дд.мм" без року — рік визначається пізніше через `as_of` (той самий шлях, що й ручне
@@ -48,6 +50,7 @@ pub struct RawInternshipRow {
 
 #[derive(Debug, Clone)]
 pub struct RawIvsCourseRow {
+    pub row_number: u32,
     pub org_raw: String,
     pub course_raw: String,
     pub count_raw: String,
@@ -180,17 +183,19 @@ fn parse_staffing_and_internships(
 
     let mut staffing = Vec::new();
     let mut internships = Vec::new();
-    for row in rows.iter().skip(header_idx + 1) {
+    for (idx, row) in rows.iter().enumerate().skip(header_idx + 1) {
+        let excel_row = (idx + 1) as u32;
         let org_raw = cell_text(row, org_i);
         if org_raw.is_empty() || looks_like_summary(&org_raw) {
             continue;
         }
         let by_tos_raw = cell_text(row, by_tos_i);
         if by_tos_raw.parse::<i64>().map(|n| n <= 0).unwrap_or(true) {
-            continue; // секційний рядок ("Військові частини…") — немає числа в "за штатом".
+            continue;
         }
 
         staffing.push(RawIvsStaffingRow {
+            row_number: excel_row,
             org_raw: org_raw.clone(),
             by_tos_raw,
             by_list_raw: by_list_i.map(|i| cell_text(row, i)).unwrap_or_default(),
@@ -201,7 +206,7 @@ fn parse_staffing_and_internships(
         if let Some(i) = internship_i {
             let raw_text = cell_text(row, i);
             if let Some(parsed) = parse_internship_text(&raw_text) {
-                internships.push(RawInternshipRow { org_raw, ..parsed });
+                internships.push(RawInternshipRow { org_raw, row_number: excel_row, ..parsed });
             }
         }
     }
@@ -235,7 +240,8 @@ fn parse_internship_text(text: &str) -> Option<RawInternshipRow> {
     };
     let site_raw = text[close + 1..].trim().to_string();
     Some(RawInternshipRow {
-        org_raw: String::new(), // заповнюється викликачем (org рядка таблиці).
+        row_number: 0,
+        org_raw: String::new(),
         count_raw,
         start_raw: start_raw.to_string(),
         end_raw: end_raw.to_string(),
@@ -258,7 +264,8 @@ fn parse_courses(rows: &[Vec<Data>]) -> Vec<RawIvsCourseRow> {
 
     let mut out = Vec::new();
     let mut last_org = String::new();
-    for row in rows.iter().skip(header_idx + 1) {
+    for (idx, row) in rows.iter().enumerate().skip(header_idx + 1) {
+        let excel_row = (idx + 1) as u32;
         let org_cell = cell_text(row, 0);
         if !org_cell.is_empty() {
             last_org = org_cell;
@@ -272,6 +279,7 @@ fn parse_courses(rows: &[Vec<Data>]) -> Vec<RawIvsCourseRow> {
             continue;
         }
         out.push(RawIvsCourseRow {
+            row_number: excel_row,
             org_raw: last_org.clone(),
             course_raw,
             count_raw,

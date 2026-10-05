@@ -1,0 +1,12 @@
+---
+- name: Конфігурація прод-VM
+  hosts: prod
+  become: true
+  vars:
+    dev_vm_user_ssh_public_key: "{{ vault_prod_vm_user_ssh_public_key }}"
+  roles:
+    - base
+    - docker
+    - firewall
+    - app_stack
+    - cloudflare_tunnel

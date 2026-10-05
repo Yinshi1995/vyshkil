@@ -36,7 +36,7 @@ pub async fn resolve_rows(
 
         let (vos_id, vos_label) = match dictionaries::resolve_vos_by_code(db, &raw.vos_raw).await? {
             Some((id, label)) => (Some(id), label),
-            None => (None, String::new()),
+            None => (None, raw.vos_raw.clone()),
         };
         let (position_id, position_label) =
             match dictionaries::resolve_position(db, &raw.position_raw).await? {

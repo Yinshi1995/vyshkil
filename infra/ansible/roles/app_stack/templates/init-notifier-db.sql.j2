@@ -1,0 +1,3 @@
+-- Окрема роль/БД для notifier (09-messaging.md §3.7).
+CREATE ROLE {{ app_stack_postgres_notifier_user }} WITH LOGIN PASSWORD '{{ vault_postgres_notifier_password }}';
+CREATE DATABASE {{ app_stack_postgres_notifier_db }} OWNER {{ app_stack_postgres_notifier_user }};

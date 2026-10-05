@@ -4,10 +4,12 @@ import { KindBadge } from "@/components/kind-badge";
 import { api } from "@/api/client";
 import type { AdminGroupRow, AdminSubmissionRow } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
   Sheet,
   SheetContent,
@@ -27,7 +29,10 @@ import {
   MapPin,
   Calendar,
   Hash,
+  Copy,
+  Eye,
 } from "lucide-react";
+import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 import { sourceTypeLabel, statusLabel, statusVariant } from "@/lib/labels";
 
 // ---------------------------------------------------------------------------
@@ -188,7 +193,7 @@ function GroupDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" dockable className="w-full overflow-y-auto sm:max-w-md">
+      <SheetContent side="right" dockable className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>{group.org_label}</SheetTitle>
           <SheetDescription>
@@ -253,7 +258,7 @@ function GroupDetailSheet({
 
 function ImportLink() {
   return (
-    <Card>
+    <Card className="card-animate card-hover">
       <CardContent className="flex items-center gap-3 py-4">
         <Upload className="h-5 w-5 text-primary" />
         <div className="flex flex-col gap-0.5">
@@ -285,42 +290,40 @@ function RecentSubmissions() {
   if (subs.length === 0) return null;
 
   return (
-    <Card>
+    <Card className="card-animate">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Clock className="h-4 w-4" />
           Останні подання ({subs.length})
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="data-grid w-full">
-            <thead>
-              <tr>
-                <th>Підрозділ</th>
-                <th>Тип</th>
-                <th>Статус</th>
-                <th>Станом на</th>
-                <th>Оновлено</th>
-              </tr>
-            </thead>
-            <tbody>
-              {subs.map((s) => (
-                <tr key={s.id}>
-                  <td className="font-medium">{s.org_label}</td>
-                  <td>{sourceTypeLabel(s.source_type)}</td>
-                  <td>
-                    <Badge variant={statusVariant(s.status)}>
-                      {statusLabel(s.status)}
-                    </Badge>
-                  </td>
-                  <td>{s.as_of_date}</td>
-                  <td>{s.updated_at}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <CardContent className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Підрозділ</TableHead>
+              <TableHead>Тип</TableHead>
+              <TableHead>Статус</TableHead>
+              <TableHead className="hidden sm:table-cell">Станом на</TableHead>
+              <TableHead className="hidden sm:table-cell">Оновлено</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {subs.map((s) => (
+              <TableRow key={s.id}>
+                <TableCell className="font-medium">{s.org_label}</TableCell>
+                <TableCell>{sourceTypeLabel(s.source_type)}</TableCell>
+                <TableCell>
+                  <Badge variant={statusVariant(s.status)}>
+                    {statusLabel(s.status)}
+                  </Badge>
+                </TableCell>
+                <TableCell className="hidden sm:table-cell">{s.as_of_date}</TableCell>
+                <TableCell className="hidden sm:table-cell">{s.updated_at}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );
@@ -338,6 +341,7 @@ export function TrainingPage() {
   const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<AdminGroupRow | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const ctxMenu = useContextMenu();
 
   useEffect(() => {
     api.get<AdminGroupRow[]>("/training/groups").then(setGroups).catch(() => setGroups([]));
@@ -369,6 +373,23 @@ export function TrainingPage() {
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [groups]);
+
+  function handleRowContextMenu(e: React.MouseEvent, g: AdminGroupRow) {
+    const items: ContextMenuEntry[] = [
+      {
+        label: "Деталі",
+        icon: <Eye className="h-4 w-4" />,
+        onClick: () => { setSelectedGroup(g); setSheetOpen(true); },
+      },
+      { separator: true },
+      {
+        label: "Копіювати підрозділ",
+        icon: <Copy className="h-4 w-4" />,
+        onClick: () => { navigator.clipboard.writeText(g.org_label); },
+      },
+    ];
+    ctxMenu.open(e, items);
+  }
 
   const totalPlanned = filtered.reduce((s, g) => s + g.planned_count, 0);
   const totalArrived = filtered.reduce((s, g) => s + g.arrived_count, 0);
@@ -403,35 +424,26 @@ export function TrainingPage() {
           </div>
           {kinds.length > 1 && (
             <>
-              <button
+              <Button
+                variant={!kindFilter ? "default" : "outline"}
+                size="sm"
                 onClick={() => setKindFilter(null)}
-                className="rounded-md border px-2.5 py-1 text-xs font-semibold uppercase tracking-wider transition-colors"
-                style={{
-                  fontFamily: "var(--font-heading)",
-                  borderColor: !kindFilter ? "var(--primary)" : "var(--border)",
-                  color: !kindFilter ? "var(--primary)" : "var(--muted-foreground)",
-                  background: !kindFilter ? "color-mix(in srgb, var(--primary) 8%, transparent)" : "transparent",
-                  cursor: "pointer",
-                }}
+                className="text-xs font-semibold uppercase tracking-wider"
+                style={{ fontFamily: "var(--font-heading)" }}
               >
                 Усі
-              </button>
+              </Button>
               {kinds.map(([kind, count]) => (
-                <button
+                <Button
                   key={kind}
+                  variant={kindFilter === kind ? "default" : "outline"}
+                  size="sm"
                   onClick={() => setKindFilter(kindFilter === kind ? null : kind)}
-                  className="rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors"
-                  style={{
-                    fontFamily: "var(--font-heading)",
-                    letterSpacing: "0.02em",
-                    borderColor: kindFilter === kind ? "var(--primary)" : "var(--border)",
-                    color: kindFilter === kind ? "var(--primary)" : "var(--muted-foreground)",
-                    background: kindFilter === kind ? "color-mix(in srgb, var(--primary) 8%, transparent)" : "transparent",
-                    cursor: "pointer",
-                  }}
+                  className="text-xs font-semibold"
+                  style={{ fontFamily: "var(--font-heading)", letterSpacing: "0.02em" }}
                 >
                   {kind} ({count})
-                </button>
+                </Button>
               ))}
             </>
           )}
@@ -453,49 +465,50 @@ export function TrainingPage() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "var(--border)" }}>
-          <table className="data-grid w-full">
-            <thead>
-              <tr>
-                {COLUMNS.map((col) => (
-                  <th
-                    key={col.key}
-                    onClick={() => toggleSort(col.key)}
-                    className="cursor-pointer select-none whitespace-nowrap"
-                    style={{ textAlign: col.align ?? "left" }}
-                  >
-                    {col.label}
-                    <SortIcon active={sortKey === col.key} dir={sortDir} />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((g) => (
-                <tr
-                  key={g.id}
-                  onClick={() => { setSelectedGroup(g); setSheetOpen(true); }}
-                  className="cursor-pointer"
+        <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {COLUMNS.map((col) => (
+                <TableHead
+                  key={col.key}
+                  onClick={() => toggleSort(col.key)}
+                  className="cursor-pointer select-none whitespace-nowrap"
+                  style={{ textAlign: col.align ?? "left" }}
                 >
-                  <td className="font-medium">{g.org_label}</td>
-                  <td><KindBadge kind={g.training_kind} /></td>
-                  <td className="text-sm">{g.vos_label}</td>
-                  <td className="text-sm">{g.site_label}</td>
-                  <td>{g.planned_start}</td>
-                  <td>{g.planned_end}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <span className="tabular-nums font-semibold">{g.planned_count}</span>
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <span className="tabular-nums">{g.arrived_count}</span>
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <span className="tabular-nums">{g.in_training_count}</span>
-                  </td>
-                </tr>
+                  {col.label}
+                  <SortIcon active={sortKey === col.key} dir={sortDir} />
+                </TableHead>
               ))}
-            </tbody>
-          </table>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((g) => (
+              <TableRow
+                key={g.id}
+                onClick={() => { setSelectedGroup(g); setSheetOpen(true); }}
+                onContextMenu={(e) => handleRowContextMenu(e, g)}
+                className="cursor-pointer"
+              >
+                <TableCell className="font-medium">{g.org_label}</TableCell>
+                <TableCell><KindBadge kind={g.training_kind} /></TableCell>
+                <TableCell className="text-sm">{g.vos_label}</TableCell>
+                <TableCell className="text-sm">{g.site_label}</TableCell>
+                <TableCell>{g.planned_start}</TableCell>
+                <TableCell>{g.planned_end}</TableCell>
+                <TableCell style={{ textAlign: "right" }}>
+                  <span className="tabular-nums font-semibold">{g.planned_count}</span>
+                </TableCell>
+                <TableCell style={{ textAlign: "right" }}>
+                  <span className="tabular-nums">{g.arrived_count}</span>
+                </TableCell>
+                <TableCell style={{ textAlign: "right" }}>
+                  <span className="tabular-nums">{g.in_training_count}</span>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
         </div>
       )}
 
@@ -511,6 +524,8 @@ export function TrainingPage() {
 
       {/* Recent submissions */}
       <RecentSubmissions />
+
+      <ContextMenuPortal state={ctxMenu.state} onClose={ctxMenu.close} />
     </div>
   );
 }

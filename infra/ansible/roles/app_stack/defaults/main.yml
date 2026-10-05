@@ -1,0 +1,15 @@
+---
+app_stack_compose_dir: /opt/vyshkil
+app_stack_data_dir: "{{ app_stack_compose_dir }}/data"
+app_stack_images_dir: "{{ app_stack_compose_dir }}/images"
+app_stack_user: "{{ base_primary_user | default('deploy') }}"
+
+# Postgres
+app_stack_postgres_app_db: taktoblik
+app_stack_postgres_app_user: taktoblik
+app_stack_postgres_notifier_db: notifier
+app_stack_postgres_notifier_user: notifier
+
+# NATS
+app_stack_nats_app_user: app
+app_stack_nats_notifier_user: notifier

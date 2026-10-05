@@ -18,6 +18,7 @@ migration = { path = "../migration" }
 bus = { path = "../bus" }
 contracts = { path = "../contracts" }
 # admin_sse.rs -- /admin/whatsapp SSE (09 §4), не Leptos #[server] fn (ті не стрімлять).
+async-stream = "0.3"
 futures = "0.3"
 # Рендер QR у SVG на сервері (не client-side JS з CDN -- CLAUDE.md: "жодних мережевих викликів
 # ... локально", той самий принцип, що self-hosted шрифти).

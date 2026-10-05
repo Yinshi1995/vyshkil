@@ -21,8 +21,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Upload, FileUp, Clock, Download, Loader2 } from "lucide-react";
+import { Upload, FileUp, Clock, Download, Loader2, AlertTriangle, CheckCircle2, FileWarning, MapPin, Building2, GraduationCap } from "lucide-react";
 import { sourceTypeLabel, statusLabel, statusVariant } from "@/lib/labels";
 
 type FileKind = "fah" | "bps" | "kvid" | "terminy" | "ivs" | "archive";
@@ -117,7 +118,7 @@ function RecentSubmissions() {
   }, []);
 
   return (
-    <Card>
+    <Card className="card-animate">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Clock className="h-4 w-4" />
@@ -136,7 +137,7 @@ function RecentSubmissions() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="table-animate">
               <TableHeader>
                 <TableRow>
                   <TableHead>Підрозділ</TableHead>
@@ -169,13 +170,44 @@ function RecentSubmissions() {
   );
 }
 
+interface ImportIssue {
+  row: number;
+  sheet: string;
+  field: string;
+  value: string;
+  message: string;
+}
+
+interface ImportError {
+  message: string;
+  issues: ImportIssue[];
+}
+
+const FIELD_STYLE: Record<string, { icon: typeof Building2; color: string }> = {
+  "Частина": { icon: Building2, color: "border-blue-500/50 bg-blue-500/10 text-blue-400" },
+  "Місце": { icon: MapPin, color: "border-emerald-500/50 bg-emerald-500/10 text-emerald-400" },
+  "ВОС/Посада": { icon: GraduationCap, color: "border-violet-500/50 bg-violet-500/10 text-violet-400" },
+};
+
+function FieldBadge({ field }: { field: string }) {
+  const style = FIELD_STYLE[field];
+  if (!style) return <Badge variant="outline" className="text-xs">{field}</Badge>;
+  const Icon = style.icon;
+  return (
+    <Badge variant="outline" className={`text-xs ${style.color}`}>
+      <Icon className="mr-1 h-3 w-3" />
+      {field}
+    </Badge>
+  );
+}
+
 export function ImportPage() {
   const [fileKind, setFileKind] = useState<FileKind>("fah");
   const [fileName, setFileName] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<{ imported: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ImportError | null>(null);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
 
   function handleFile(f: File) {
@@ -201,7 +233,12 @@ export function ImportPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: `Помилка ${res.status}` }));
-        throw new Error(body.error || `Помилка ${res.status}`);
+        setError({
+          message: body.error || `Помилка ${res.status}`,
+          issues: Array.isArray(body.issues) ? body.issues : [],
+        });
+        toast.error(body.error || `Помилка ${res.status}`);
+        return;
       }
       const data = await res.json();
       setResult({ imported: data.imported ?? 0 });
@@ -210,7 +247,7 @@ export function ImportPage() {
       toast.success(`Імпортовано ${data.imported ?? 0} записів`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Невідома помилка";
-      setError(msg);
+      setError({ message: msg, issues: [] });
       toast.error(msg);
     } finally {
       setUploading(false);
@@ -244,7 +281,7 @@ export function ImportPage() {
     <div className="flex flex-col gap-6">
       <h1>Імпорт</h1>
 
-      <Card>
+      <Card className="card-animate card-hover">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Upload className="h-4 w-4" />
@@ -285,29 +322,62 @@ export function ImportPage() {
           <DropZone fileName={fileName} onFile={handleFile} disabled={uploading} />
 
           {error && (
-            <div
-              className="rounded-md border p-3 text-sm"
-              style={{
-                borderColor: "rgba(220,38,38,0.3)",
-                background: "rgba(220,38,38,0.04)",
-                color: "#dc2626",
-              }}
-            >
-              {error}
+            <div className="flex flex-col gap-3">
+              <Alert variant="destructive">
+                <FileWarning className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{error.message}</span>
+                  {error.issues.length > 0 && (
+                    <Badge variant="destructive" className="ml-2 tabular-nums badge-pulse">
+                      {error.issues.length} {error.issues.length === 1 ? "проблема" : error.issues.length < 5 ? "проблеми" : "проблем"}
+                    </Badge>
+                  )}
+                </AlertDescription>
+              </Alert>
+              {error.issues.length > 0 && (
+                <div className="max-h-80 overflow-auto rounded-md border border-destructive/30">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b-destructive/30 bg-destructive/5">
+                        <TableHead className="w-20">Рядок</TableHead>
+                        <TableHead className="w-28">Аркуш</TableHead>
+                        <TableHead className="w-32">Поле</TableHead>
+                        <TableHead>Значення</TableHead>
+                        <TableHead>Помилка</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {error.issues.map((issue, i) => (
+                        <TableRow key={i} className="border-b-destructive/10 hover:bg-destructive/5">
+                          <TableCell>
+                            {issue.row ? (
+                              <Badge variant="outline" className="tabular-nums border-amber-500/50 bg-amber-500/10 text-amber-400">
+                                #{issue.row}
+                              </Badge>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{issue.sheet || "—"}</TableCell>
+                          <TableCell>
+                            <FieldBadge field={issue.field} />
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate font-mono text-xs text-amber-300/80">
+                            {issue.value || "—"}
+                          </TableCell>
+                          <TableCell className="text-sm text-destructive">{issue.message}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
           )}
 
           {result && (
-            <div
-              className="rounded-md border p-3 text-sm"
-              style={{
-                borderColor: "rgba(34,197,94,0.3)",
-                background: "rgba(34,197,94,0.04)",
-                color: "#16a34a",
-              }}
-            >
-              Імпортовано {result.imported} записів
-            </div>
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>Імпортовано {result.imported} записів</AlertDescription>
+            </Alert>
           )}
 
           <div className="flex items-center gap-3">

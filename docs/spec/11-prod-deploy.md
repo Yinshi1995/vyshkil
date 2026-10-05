@@ -1,13 +1,10 @@
 ---
 tags: [spec, infra, ansible, proxmox, production, security]
-date: 2026-10-01
-status: ВІДКЛАДЕНО — НЕ ВИКОНУВАТИ, поки замовник явно не скаже "починаємо прод"
+date: 2026-10-05
+status: АКТИВНО — замовник дав команду починати прод (2026-10-05)
 ---
 
 # 11. Прод-деплой на Proxmox (Ansible)
-
-> Не починати цю роботу самостійно. Цей документ — ТЗ на майбутнє, щоб рішення dev-VM (10) були з ним
-> сумісні. Можна читати; не можна виконувати.
 
 ## 0. Мета
 
@@ -18,112 +15,280 @@ Proxmox замовника — з **технічно гарантованими*
 - `source_files/` (ДСК) на проді **відсутні** (архів уже перенесено в БД; прод їх не потребує);
 - секрети — тільки через Ansible Vault (dev-compose plaintext-паролі в прод не копіюються).
 
-## 0.1. Обмеження хоста (з інвентаризації для dev-VM, `[[dev-vm-parameters]]`)
+## 0.1. Обмеження хоста
 
-Фізичний хост (`pidhotovka`, Ryzen 5 5600GT, 14.9 ГБ RAM) **без апгрейду RAM не вміщає прод
-поруч із dev-VM** (dev-VM сама забрала 8 ГБ + 8 ГБ swap з наявних ~8 ГБ вільних). Якщо прод
-розгортається на тому самому хості без апгрейду — або dev-VM вимикається на час роботи проду,
-або прод іде на окремий хост/хмару. Не вирішувати мовчки одним зі способів — явне питання
-замовнику перед Фазою 1 цього документа.
+Фізичний хост (`pidhotovka`, Ryzen 5 5600GT, 14.9 ГБ RAM). Dev-VM забрала 8 ГБ. Прод-VM
+потребує значно менше (~2–4 ГБ): на проді не компілюється Rust, не ставляться dev-інструменти —
+лише Docker-контейнери з готовими образами. Рантайм-стек (db+nats+app+notifier) споживає
+~220 МБ RSS (виміряно на dev-VM). З урахуванням буферів/кешу ОС 2 ГБ RAM + 2 ГБ swap —
+достатній мінімум. 4 ГБ — комфортно.
 
-## 0.2. Публікація — НІКОЛИ через наявний Cloudflare tunnel
+**Якщо обидві VM одночасно**: dev-VM (8 ГБ) + prod-VM (2 ГБ) = 10 ГБ з 14.9 ГБ фізичних —
+вміщається, з резервом ~5 ГБ для хоста. Dev-VM можна тимчасово зменшити до 6 ГБ, якщо потрібно
+більше запасу.
 
-На хості вже є `cf-connector` (LXC 150, `cloudflare;edge-vlan;public-gateway;tunnel`), яким
-назовні публікуються інші сервіси (`nextcloud-lan`, `home-portal` тощо). **Цей застосунок через
-цей (чи будь-який інший) Cloudflare tunnel не публікується ніколи** — замовник прямо це
-підтвердив. Єдиний дозволений вхід ззовні — VPN-підмережа (§1.3/§3.1), не публічний домен.
+## 0.2. Зовнішній доступ — Cloudflare tunnel
 
-## 1. Відкриті питання — ЗАДАТИ ПЕРЕД ПОЧАТКОМ
+> **Рішення змінено 2026-10-05** (`.claude/decisions/prod-cloudflare-tunnel.md`):
+> замовник вирішив публікувати через Cloudflare tunnel для зручного доступу з польових пристроїв.
+> Попереднє обмеження "НІКОЛИ через Cloudflare tunnel" скасовано.
 
-Усе з `10 §1` (PVE, сторедж, мережа, доступ API, control node) — з поправкою на прод, плюс:
-1. Одна прод-VM чи розділення (БД окремою VM)? Рекомендація для старту: **одна VM**, БД — окремий
-   віртуальний диск; розділення — коли буде потреба.
-2. Звідки беруться образи: збираються на dev-VM і переносяться (`docker save` → передача → `load`),
-   чи власний реєстр (Gitea/Harbor/`registry:2`) у периметрі? CI нема — це вирішує процес релізу.
-3. Як користувачі заходять: тільки через VPN? Яка підмережа? Є внутрішнє DNS-ім'я?
-4. TLS: внутрішній CA організації, самопідписаний CA для застосунку, чи інше? (Публічного ACME нема —
-   сервер не в інтернеті для вхідних.)
-5. Бекапи: куди (PBS, окремий сторедж, зовнішній диск), хто має доступ, як довго зберігати, хто
-   відповідає за відновлення? Чи допустимо бекапити БД (вона містить дані ДСК) — і в якому вигляді
-   (тільки шифровані)?
-6. Чи є вихідний проксі/файрвол організації з allowlist доменів, чи allowlist робимо самі (§3.3)?
-7. Хто отримує технічні сповіщення (диск закінчується, сервіс упав) і яким каналом — **не** через
-   WhatsApp службовим номером.
-8. Вікно оновлень і допустимий простій.
+На хості є `cf-connector` (LXC 150) з активним Cloudflare tunnel. Для прод-VM використовується
+**окремий `cloudflared` daemon** безпосередньо на прод-VM:
+- проксює `localhost:3000` (застосунок) на зовнішній домен через Cloudflare;
+- не залежить від `cf-connector` LXC (ізоляція, окремий токен);
+- Cloudflare Access policy для обмеження доступу (email/OTP або інший IdP);
+- tunnel token зберігається в Ansible Vault.
 
-## 2. Ролі (перевикористання з 10)
+## 0.3. Мережа — VyOS сегментація
 
-`base` (прод-режим: без sudo для сервісних користувачів, auditd, journald retention), `docker` (прод:
-адміністратори не в групі docker; керування — тільки через Ansible), `firewall` (§3), нові:
-`app_stack` (compose-проєкт, env-файли з Vault, томи, healthchecks), `egress_proxy` (§3.3),
-`reverse_proxy` (TLS, тільки VPN-підмережа), `backup` (§5), `monitoring_min` (§6).
+Прод-VM **не** на тій самій LAN (vmbr0), що й dev-VM. Маршрутизацією прод-VM займається VyOS:
+- прод-VM підключена до VyOS-керованого мережевого сегменту (окремий bridge або VLAN);
+- VyOS забезпечує маршрутизацію, firewall між сегментами, NAT для вихідного трафіку;
+- параметри (bridge, VLAN, IP-діапазон) — в `inventories/prod/group_vars/all.yml`.
 
-Compose на проді — керований Ansible (`community.docker.docker_compose_v2` або актуальний еквівалент),
-образи — **за digest**, не за `latest`.
+## 1. Ролі (перевикористання з dev)
 
-## 3. Мережа — гарантувати, а не сподіватись
+| Роль | Dev | Prod | Різниця на проді |
+|---|---|---|---|
+| `provision` | ✓ | ✓ | Інший VMID, менше ресурсів, VyOS-мережа |
+| `base` | ✓ | ✓ | `base_user_passwordless_sudo: false` |
+| `docker` | ✓ | ✓ | `docker_add_primary_user_to_group: false` |
+| `firewall` | ✓ | ✓ | SSH + порти для cloudflared (якщо потрібно) |
+| `app_stack` | — | ✓ | **Нова**: compose-стек, env-файли з Vault, volumes |
+| `cloudflare_tunnel` | — | ✓ | **Нова**: cloudflared daemon, tunnel config |
+| `rust_toolchain` | ✓ | — | Не потрібна: образи збираються на dev |
+| `node` | ✓ | — | Не потрібна: notifier всередині Docker |
+| `devtools` | ✓ | — | |
+| `claude_code` | ✓ | — | |
+| `project` | ✓ | — | Замінена на `app_stack` |
+| `autonomy` | ✓ | — | |
 
-### 3.1. Вхідні
-Тільки 443 (reverse proxy) з VPN-підмережі §1.3 і 22 з адмін-підмережі. Усе інше — drop.
+## 2. Секрети
+
+Ansible Vault (`inventories/prod/group_vars/vault.yml`):
+- `vault_postgres_app_password` — пароль app→Postgres
+- `vault_postgres_notifier_password` — пароль notifier→Postgres
+- `vault_nats_app_password` — пароль app→NATS
+- `vault_nats_notifier_password` — пароль notifier→NATS
+- `vault_cloudflare_tunnel_token` — токен tunnel
+- `vault_prod_vm_user_ssh_public_key` — SSH-ключ для доступу
+
+## 3. Мережа
+
+### 3.1. Вхідні (nftables на гостьовій VM)
+SSH (22) — тільки з адмін-підмережі. Усе інше — drop.
 NATS 4222 — не публікується; 8222 — тільки 127.0.0.1; Postgres — не публікується.
+Порт 3000 — тільки 127.0.0.1 (cloudflared проксює локально).
 
 ### 3.2. Docker і хостовий файрвол
-**Docker додає власні правила iptables і обходить звичайні правила INPUT/FORWARD.** Обмеження для
-контейнерів писати в ланцюжку `DOCKER-USER` (або еквіваленті для nftables-бекенду) — інакше
-файрвол "є", але не діє. Плейбук має тест, що це працює (§7).
+`DOCKER-USER` ланцюжок для обмеження контейнерних з'єднань. Compose-файл: усі порти на
+`127.0.0.1`, не на `0.0.0.0`.
 
-### 3.3. Закрити незроблений хвіст: allowlist доменів WhatsApp
-Зараз "notifier має вихід в інтернет" забезпечено тільки Docker-мережею `egress` — це **будь-який**
-домен. На проді:
-- notifier переводиться в мережу без прямого виходу; вихід — **тільки через egress-проксі**
-  (окремий контейнер, напр. squid/tinyproxy, підключений до внутрішньої мережі й до виходу);
-- проксі має allowlist доменів WhatsApp; Chromium/whatsapp-web.js отримує `--proxy-server=…`;
-- хостовий файрвол (`DOCKER-USER`) дропає будь-який вихід з контейнерних мереж, крім виходу самого
-  проксі на 443;
-- **список доменів не вгадувати**: на dev-VM запустити notifier через проксі в режимі логування,
-  пройти сценарій (QR-прив'язка, надсилання, перезапуск, медіа не потрібні), зібрати фактичні домени
-  (очікувано `web.whatsapp.com`, `*.whatsapp.net`, `*.whatsapp.com`, CDN-домени) → зафіксувати в ролі
-  з коментарем, звідки взято; у README — процедура оновлення списку, якщо WhatsApp змінить домени.
+### 3.3. Egress allowlist (WhatsApp)
+Notifier на проді — через egress-мережу з обмеженням доменів (squid/tinyproxy з allowlist).
+Список доменів: `web.whatsapp.com`, `*.whatsapp.net`, `*.whatsapp.com`, CDN-домени WhatsApp
+(фактичний список зібрати на dev-VM через proxy-логування перед прод-деплоєм).
 
-### 3.4. notifier і Chromium sandbox
-`cap_add: SYS_ADMIN` (для user-namespace sandbox Chromium без `--no-sandbox`) переноситься в прод
-**свідомо** і задокументовано. Додатково оцінити заміну на seccomp-профіль для Chromium без
-`SYS_ADMIN` (вужчі права); рішення — в `.claude/decisions/`.
+### 3.4. Docker-мережі: топологія ізоляції
 
-## 4. Секрети
-- Ansible Vault для всього: паролі Postgres (окремі ролі app/notifier — як у dev init-скрипті, БД
-  розділені), NATS-облікові записи app/notifier, ключ шифрування сесії/файлів, TLS-ключі.
-- На VM — env-файли `0600` власника сервісу або Docker secrets; не в образах, не в логах, не в
-  `docker inspect`, де можна уникнути.
-- Ротація: процедура в README (як змінити пароль NATS/DB без втрати даних).
+Три мережі (як у dev `docker-compose.yml`, так і в прод-шаблоні):
 
-## 5. Дані, томи, бекапи
+| Мережа | Тип | Сервіси | Доступ до інтернету |
+|---|---|---|---|
+| `internal` | `internal: true` | db, nats, app, notifier | **НІ** (нема gateway) |
+| `publish` | bridge, `enable_ip_masquerade: false` | db, nats, app | **НІ** (нема NAT); тільки для публікації портів на 127.0.0.1 |
+| `egress` | bridge (звичайний) | notifier | **ТАК** — єдина мережа з виходом назовні |
+
+Ключові наслідки:
+- **db** і **nats** не мають жодного маршруту в інтернет — навіть якщо зловмисник потрапить у
+  контейнер, DNS/TCP-з'єднання назовні не пройдуть;
+- **app** (сервер) теж не має інтернету — XSS/SSRF з контейнера не вийде за периметр;
+- **notifier** — єдиний з виходом, обмежений egress allowlist (§3.3) до доменів WhatsApp.
+
+### 3.5. Захист від прямого зовнішнього доступу (DB, NATS, WhatsApp)
+
+Завдання: жоден зовнішній актор не може дістатися до бази, брокера або WhatsApp-сесії напряму.
+
+**Рівень 1 — nftables на VM (§3.1):**
+- INPUT policy DROP; дозволено: SSH (22) тільки з адмін-підмережі, loopback, established/related.
+- Усі порти Docker-сервісів (5432, 4222, 8222, 3000) прив'язані до `127.0.0.1` → ззовні
+  недоступні навіть без файрволу.
+
+**Рівень 2 — `DOCKER-USER` ланцюжок (§3.2):**
+- nftables/iptables правила в `DOCKER-USER`: DROP вхідних з'єднань до контейнерних портів,
+  які прийшли НЕ з `lo`. Страховка від випадкової зміни bind-адреси в compose.
+
+**Рівень 3 — автентифікація сервісів:**
+- **Postgres**: `pg_hba.conf` — `md5`/`scram-sha-256` для всіх підключень; `listen_addresses = '*'`
+  тільки всередині Docker-мережі (порт не видно ззовні). Два окремих користувача з мінімальними
+  правами (§9).
+- **NATS**: анонімний доступ заборонено; авторизація per-user з мінімальними правами (§8).
+  Monitoring (8222) — тільки `127.0.0.1`, read-only.
+- **WhatsApp-сесія**: том `taktoblik_wa_session` доступний лише контейнеру notifier;
+  Chromium sandbox увімкнений (SYS_ADMIN cap, не `--privileged`).
+
+**Рівень 4 — Cloudflare tunnel:**
+- Tunnel проксює **тільки** `localhost:3000` (застосунок); жоден інший порт/сервіс не
+  маршрутизується через tunnel.
+- Cloudflare Access policy: email/OTP автентифікація перед доступом.
+
+**Рівень 5 — VyOS (§0.3):**
+- Прод-VM в окремому мережевому сегменті; VyOS firewall між сегментами.
+
+Ansible-роль `firewall` має перевіряти всі 5 рівнів при кожному прогоні (ідемпотентно).
+
+## 4. Дані, томи, бекапи
 | Том | Що це | Бекап |
 |---|---|---|
-| Postgres data | основні дані (рівень ДСК) | так: `pg_dump`/pgBackRest, **шифровано**, у периметрі за §1.5, тест відновлення |
-| `wa-session` | жива прив'язка WhatsApp-акаунта | рішення замовника: або шифрований бекап, або свідомо не бекапити (втрата = повторна прив'язка через `/admin/whatsapp`) — **не втрачати при перестворенні контейнера/VM** |
+| Postgres data | основні дані (рівень ДСК) | `pg_dump`, **шифровано**, у периметрі |
+| `wa-session` | жива прив'язка WhatsApp | рішення замовника |
 | NATS data | черги (outbox у БД — джерело правди) | не обов'язково |
-| `data/` застосунку | збережені файли подань (знеособлені) | так, разом із БД |
+| `data/` застосунку | збережені файли подань | разом із БД |
 | `source_files/` | ДСК-архів | **на проді нема** |
 
-vzdump/PBS усієї VM: явно вирішити з замовником; якщо так — сховище шифроване і в периметрі.
+## 5. Процес деплою
+
+1. На dev-VM: `docker compose build` → `docker save` образів → transfer на prod-VM
+2. На prod-VM: `docker load` → Ansible `app_stack` роль оновлює compose
+3. Бекап БД перед міграціями
+4. `docker compose up -d` — міграції застосовуються на старті сервера
+5. Healthchecks → готово
 
 ## 6. Логи й моніторинг
-- Docker `log-driver: local`, ротація; journald з обмеженням розміру/строку.
-- Перевірити, що жоден сервіс не пише ПІБ/номери телефонів (тест з 09 §6 + grep логів після e2e).
-- `WA_PRINT_QR_TO_LOGS` на проді — вимкнено.
-- Мінімум: healthchecks контейнерів, вільне місце, лаг outbox/DLQ (адмін-екран уже є) — технічні
-  алерти каналом з §1.7.
+- Docker `log-driver: local`, ротація.
+- `WA_PRINT_QR_TO_LOGS` — вимкнено.
+- Перевірити, що жоден сервіс не пише ПІБ/номери телефонів.
 
-## 7. Деплой, відкат, приймальні тести
-Процес: тег у git → збірка образів на dev-VM → передача (§1.2) → `deploy.yml -e version=<тег>` →
-бекап БД перед міграціями → старт (міграції застосовуються сервером на старті) → healthchecks → готово.
-Відкат: попередній тег образів + відновлення БД з передрелізного бекапу, якщо міграції незворотні.
+## 7. Файли (Ansible)
 
-Приймальні тести (автоматизовані в плейбуку/скрипті, звіт у README):
-- з контейнера `app` будь-яке з'єднання в інтернет — **падає**;
-- з `notifier` на довільний домен — **падає**; на `web.whatsapp.com` через проксі — **проходить**;
-- скан портів з LAN/VPN: відкриті тільки 443 (і 22 з адмін-підмережі);
-- `docker compose down && up` і перестворення VM з плейбука — `wa-session` і БД на місці;
-- відновлення з бекапу на чисту VM — застосунок працює з даними;
-- у логах після повного e2e-прогону нема ПІБ/повних номерів.
+```
+infra/ansible/
+├── inventories/prod/
+│   ├── hosts.yml
+│   └── group_vars/
+│       ├── all.yml           # параметри прод-VM
+│       └── vault.yml.example  # шаблон секретів
+├── playbooks/
+│   ├── provision-prod-vm.yml  # створює VM
+│   └── prod-vm.yml            # конфігурує VM + стек
+└── roles/
+    ├── app_stack/             # compose-стек, env, volumes, nats-server.conf
+    └── cloudflare_tunnel/     # cloudflared daemon
+```
+
+## 8. NATS — авторизація, JetStream, стріми
+
+### 8.1. Конфіг-файл (`nats-server.conf`)
+
+Шаблонізується Ansible (`roles/app_stack/templates/nats-server.conf.j2`), паролі з Vault.
+Dev-значення (`app-dev-password`, `notifier-dev-password`) **не копіюються** на прод.
+
+```
+jetstream { store_dir: /data }
+authorization {
+  users: [
+    { user: app,      password: {{ vault_nats_app_password }},      permissions: { ... } }
+    { user: notifier,  password: {{ vault_nats_notifier_password }}, permissions: { ... } }
+  ]
+}
+```
+
+Анонімний доступ — заборонено (немає блоку `no_auth_user`).
+
+### 8.2. Матриця прав (subject-и)
+
+| Користувач | publish | subscribe |
+|---|---|---|
+| `app` | `vyshkil.discrepancy.>`, `vyshkil.notify.send.>`, `vyshkil.notifier.whatsapp.>`, `$JS.API.>` | `vyshkil.notify.result.>`, `_INBOX.>`, `$JS.API.>`, `$KV.>` |
+| `notifier` | `vyshkil.notify.result.>`, `vyshkil.dlq.notify.>`, `$JS.API.>`, `$KV.>`, `_INBOX.>` | `vyshkil.notify.send.>`, `vyshkil.notifier.whatsapp.>`, `_INBOX.>`, `$JS.API.>`, `$KV.>` |
+
+`$JS.API.>` — JetStream management (стріми/консюмери). `$KV.>` — KV-bucket `notifier_status`
+(стан прив'язки WhatsApp). `_INBOX.>` — request-reply.
+
+### 8.3. JetStream: стріми та консюмери
+
+Створюються програмно на старті (ідемпотентно, get-or-create):
+
+| Стрім | Subject | Хто створює | Опис |
+|---|---|---|---|
+| `NOTIFY_CMD` | `vyshkil.notify.send.v1` | notifier (`nats.ts`) | Команди сповіщень: relay → notifier |
+| `NOTIFY_RESULT` | `vyshkil.notify.result.v1` | notifier | Результати доставки: notifier → app |
+| `DLQ` | `vyshkil.dlq.>` | notifier | Dead-letter queue: невалідні / вичерпані повідомлення |
+
+**Durable consumer:** `notifier-whatsapp` на `NOTIFY_CMD`:
+- `ack_policy: explicit` — повідомлення підтверджується (ack) тільки при успішній доставці
+- `ack_wait: 30s` — timeout на ack
+- `max_deliver: 20` — після 20 невдалих спроб → DLQ + term
+- `filter_subject: vyshkil.notify.send.v1`
+
+**KV bucket:** `notifier_status` (TTL 60s, history 1) — стан прив'язки WhatsApp для SSE в UI.
+
+### 8.4. Гарантія доставки: at-least-once
+
+Повідомлення зникає з черги (`ack`) **тільки** коли доставку підтверджено:
+
+| Результат доставки | Дія | Повідомлення |
+|---|---|---|
+| `delivered` (усі контакти) | `markProcessed` + `ack` | Видалено з черги, записано в inbox |
+| `suppressed` (нема контактів) | `markProcessed` + `ack` | Не помилка каналу — нікому слати |
+| `failed` (група не знайдена, мережа) | `nak(30s)` | Повертається в чергу, повторна спроба |
+| `failed` після `max_deliver` спроб | `DLQ` + `term` | В dead-letter queue, не губиться мовчки |
+| `invalid` (невалідний zod) | `DLQ` + `term` | Не ретрається (структурна помилка) |
+| `ChannelNotReadyError` (не прив'язаний) | `nak(30s)` | Чекає прив'язки WhatsApp |
+| Інший exception | `nak(5s)` / `DLQ` на останній | Transient помилка |
+
+Inbox-дедуплікація (`inbox` таблиця): запис додається тільки при успішній доставці, тому
+повторні спроби (після nak) не блокуються як "дублікат".
+
+### 8.5. Перенесення NATS-стану з dev на прод
+
+NATS-стріми та консюмери **не потрібно переносити** — вони створюються програмно при старті
+(`ensureStream` в `nats.ts`, `bindNotifyCmdConsumer`). Достатньо:
+1. Скопіювати `nats-server.conf` (Ansible шаблонізує з prod-паролями).
+2. Запустити стек — стріми/консюмери/KV-bucket створяться автоматично.
+3. Перевірити: `nats stream ls`, `nats consumer ls NOTIFY_CMD`, `nats kv ls` (через
+   SSH-тунель на 4222, CLI `nats` з адмін-підмережі).
+
+## 9. Postgres — ізоляція доступу
+
+### 9.1. Бази та користувачі
+
+| База | Користувач | Пароль (Vault) | Призначення |
+|---|---|---|---|
+| `taktoblik` | app-user | `vault_postgres_app_password` | Застосунок (SeaORM) |
+| `notifier` | notifier | `vault_postgres_notifier_password` | Сервіс сповіщень |
+
+Створюються `docker/init-notifier-db.sql` при першій ініціалізації тому.
+Прод-паролі з Vault → `db.env` (Ansible `app_stack` роль).
+
+### 9.2. Мережева ізоляція
+
+- `listen_addresses = '*'` всередині контейнера — але контейнер підключений лише до `internal`
+  та `publish` мережі (§3.4), жодна з яких не має маршруту в інтернет.
+- Порт `5432` прив'язаний до `127.0.0.1` — ззовні VM недоступний.
+- `DOCKER-USER` chain (§3.5, рівень 2) — страховка від зміни bind-адреси.
+- `pg_hba.conf`: стандартний Alpine-образ дозволяє підключення `md5` тільки з Docker-підмереж.
+
+### 9.3. Мінімальні права
+
+Користувач `notifier` НЕ має доступу до бази `taktoblik` (і навпаки). Якщо зловмисник
+скомпрометує notifier-контейнер — він побачить лише `org_contact`, `delivery_log`, `inbox`,
+`_migrations` (3 таблиці нотифікатора), але не основні дані застосунку.
+
+## 10. Чеклист для іншого агента (розгортання прод-VM)
+
+Послідовність дій:
+
+1. **Ansible inventory** — `inventories/prod/group_vars/vault.yml` з усіма секретами (§2).
+2. **Provision** — `playbooks/provision-prod-vm.yml` (VM, VyOS-мережа, диски).
+3. **Base + Docker + Firewall** — ролі з dev, параметри prod (`group_vars/all.yml`).
+4. **nats-server.conf** — Ansible шаблонізує з prod-паролями; анонімний доступ заборонено.
+5. **Postgres init** — `init-notifier-db.sql`, prod-паролі в `db.env`.
+6. **Docker images** — `docker save` з dev → `docker load` на prod.
+7. **`docker compose up -d`** — стріми/консюмери/KV створяться автоматично.
+8. **nftables** — перевірити всі рівні §3.5.
+9. **Cloudflare tunnel** — `cloudflared` daemon, тільки порт 3000.
+10. **Smoke test** — ззовні перевірити, що 5432/4222/8222 **не** відповідають; з адмін-підмережі
+    по SSH: `nats stream ls`, `psql`, `docker compose logs`.
+11. **WhatsApp pairing** — через admin UI, QR/pairing code → перша тестова нотифікація.

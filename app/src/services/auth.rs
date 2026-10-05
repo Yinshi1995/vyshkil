@@ -199,10 +199,16 @@ pub async fn require_auth() -> Result<crate::types::auth::AuthUser, ServerFnErro
         _ => None,
     };
 
+    let is_admin = actor.map_or(false, crate::backend::policy::is_admin);
+    let can_see_org_names = is_admin || session.can_see_org_names;
+
     Ok(AuthUser {
         user_id: session.user_id,
         actor,
         display_name: session.display_name,
+        callsign: session.callsign,
+        avatar_url: session.avatar_path.map(|p| format!("/api/avatars/{}", p)),
+        can_see_org_names,
     })
 }
 

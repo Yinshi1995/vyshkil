@@ -387,12 +387,20 @@ pub async fn get_my_account() -> Result<AccountInfo, ServerFnError> {
     struct AccountWithDate {
         login: String,
         display_name: Option<String>,
+        first_name: Option<String>,
+        last_name: Option<String>,
+        rank: Option<String>,
+        phone: Option<String>,
+        callsign: Option<String>,
+        delta_nick: Option<String>,
+        avatar_path: Option<String>,
         created_at: String,
     }
 
     let account = AccountWithDate::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
-        "SELECT login, display_name, to_char(created_at, 'YYYY-MM-DD') AS created_at \
+        "SELECT login, display_name, first_name, last_name, rank, phone, callsign, \
+                delta_nick, avatar_path, to_char(created_at, 'YYYY-MM-DD') AS created_at \
          FROM user_account WHERE id = $1",
         [auth_user.user_id.into()],
     ))
@@ -410,9 +418,18 @@ pub async fn get_my_account() -> Result<AccountInfo, ServerFnError> {
         .map(|r| format!("{} ({})", r.role, r.org_label))
         .collect();
 
+    let avatar_url = account.avatar_path.as_ref().map(|p| format!("/api/avatars/{}", p));
+
     Ok(AccountInfo {
         login: account.login,
         full_name: account.display_name,
+        first_name: account.first_name,
+        last_name: account.last_name,
+        rank: account.rank,
+        phone: account.phone,
+        callsign: account.callsign,
+        delta_nick: account.delta_nick,
+        avatar_url,
         roles,
         created_at: account.created_at,
     })

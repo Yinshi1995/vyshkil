@@ -52,6 +52,17 @@ mod m20261002_000049_create_whatsapp_notification_tables;
 mod m20261002_000050_seed_comprehensive;
 mod m20261002_000051_add_must_change_password;
 mod m20261002_000052_add_group_event_notification_type;
+mod m20261004_000053_add_user_profile_fields;
+mod m20261004_000054_add_user_name_rank_avatar;
+mod m20261004_000055_add_delta_nick;
+mod m20261004_000056_add_event_created_by;
+mod m20261004_000057_create_chat_tables;
+mod m20261004_000058_add_performance_indexes;
+mod m20261005_000059_add_whatsapp_group_kind;
+mod m20261005_000060_dedup_training_group;
+mod m20261005_000062_add_can_see_org_names;
+mod m20261005_000063_add_sender_org_index;
+mod m20261005_000064_fix_admin_chat_rooms;
 
 pub struct Migrator;
 
@@ -136,6 +147,17 @@ impl MigratorTrait for Migrator {
             Box::new(m20261002_000051_add_must_change_password::Migration),
             // Новий тип нотифікації для подій груп підготовки.
             Box::new(m20261002_000052_add_group_event_notification_type::Migration),
+            Box::new(m20261004_000053_add_user_profile_fields::Migration),
+            Box::new(m20261004_000054_add_user_name_rank_avatar::Migration),
+            Box::new(m20261004_000055_add_delta_nick::Migration),
+            Box::new(m20261004_000056_add_event_created_by::Migration),
+            Box::new(m20261004_000057_create_chat_tables::Migration),
+            Box::new(m20261004_000058_add_performance_indexes::Migration),
+            Box::new(m20261005_000059_add_whatsapp_group_kind::Migration),
+            Box::new(m20261005_000060_dedup_training_group::Migration),
+            Box::new(m20261005_000062_add_can_see_org_names::Migration),
+            Box::new(m20261005_000063_add_sender_org_index::Migration),
+            Box::new(m20261005_000064_fix_admin_chat_rooms::Migration),
         ]
     }
 }

@@ -2,7 +2,7 @@
 //! workflow розбіжностей (зріз 3).
 //! Чиста логіка ("чи є незгода") — `domain::reconciliation`; тут лише SQL + запис `discrepancy`.
 
-use crate::backend::repo::{notifications, outbox};
+use crate::backend::repo::{notifications, outbox, whatsapp_routing};
 use crate::domain::reconciliation::{
     detect_horizontal, detect_vertical, AggregatedCounts, ReportedValues,
 };
@@ -194,6 +194,9 @@ pub async fn refresh_horizontal(db: &impl ConnectionTrait, group_id: i32) -> Res
                 },
             )
             .await?;
+            whatsapp_routing::dispatch_wa_notifications(
+                db, ctx.sender_org_id, "discrepancy_resolved", contracts::NotifyTemplate::DiscrepancyResolved,
+            ).await?;
         }
     }
 
@@ -244,6 +247,9 @@ pub async fn refresh_horizontal(db: &impl ConnectionTrait, group_id: i32) -> Res
             .await?;
             notify_discrepancy_opened(db, ctx.sender_org_id, "horizontal", metric_label(d.metric))
                 .await?;
+            whatsapp_routing::dispatch_wa_notifications(
+                db, ctx.sender_org_id, "discrepancy_opened", contracts::NotifyTemplate::DiscrepancyDetected,
+            ).await?;
         }
     }
 
@@ -393,6 +399,9 @@ pub async fn refresh_temporal(db: &impl ConnectionTrait, group_id: i32) -> Resul
                 .await?;
                 notify_discrepancy_opened(db, ctx.sender_org_id, "temporal", metric_label("total"))
                     .await?;
+                whatsapp_routing::dispatch_wa_notifications(
+                    db, ctx.sender_org_id, "discrepancy_opened", contracts::NotifyTemplate::DiscrepancyDetected,
+                ).await?;
             }
         }
     }
@@ -534,6 +543,9 @@ pub async fn refresh_vertical(
                 .await?;
                 notify_discrepancy_opened(db, sender_org_id, "vertical", metric_label(d.metric))
                     .await?;
+                whatsapp_routing::dispatch_wa_notifications(
+                    db, sender_org_id, "discrepancy_opened", contracts::NotifyTemplate::DiscrepancyDetected,
+                ).await?;
             }
         }
     }
@@ -617,6 +629,12 @@ pub async fn update_discrepancy_status(
         [new_status.into(), resolution_note.into(), id.into()],
     ))
     .await?;
+
+    if new_status == "resolved" {
+        whatsapp_routing::dispatch_wa_notifications(
+            db, row.org_id, "discrepancy_resolved", contracts::NotifyTemplate::DiscrepancyResolved,
+        ).await?;
+    }
 
     Ok(Some(row.org_id))
 }

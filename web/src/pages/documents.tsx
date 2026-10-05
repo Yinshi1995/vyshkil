@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DateInputUa } from "@/components/ui/date-input-ua";
+import { DatePickerUa } from "@/components/ui/date-picker-ua";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -119,6 +119,30 @@ function OrgPicker({
 // Document block types
 // ---------------------------------------------------------------------------
 
+const EXT_STYLES: Record<string, { color: string; bg: string; border: string }> = {
+  xlsx: { color: "#33b066", bg: "rgba(33, 115, 70, 0.15)", border: "rgba(33, 115, 70, 0.5)" },
+  pptx: { color: "#d4513d", bg: "rgba(183, 71, 42, 0.15)", border: "rgba(183, 71, 42, 0.5)" },
+  docx: { color: "#4a8ad4", bg: "rgba(43, 87, 154, 0.15)", border: "rgba(43, 87, 154, 0.5)" },
+};
+
+function ExtBadge({ ext, className }: { ext: string; className?: string }) {
+  const s = EXT_STYLES[ext];
+  if (!s) return <Badge variant="outline" className={className}>{ext}</Badge>;
+  return (
+    <span
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${className ?? ""}`}
+      style={{
+        color: s.color,
+        background: s.bg,
+        border: `1px solid ${s.border}`,
+        letterSpacing: "0.06em",
+      }}
+    >
+      .{ext}
+    </span>
+  );
+}
+
 interface DocBlockProps {
   title: string;
   description: string;
@@ -170,16 +194,14 @@ function DocBlock({
   }
 
   return (
-    <Card className={needsOrg ? "overflow-visible" : undefined}>
+    <Card className={`card-animate card-hover ${needsOrg ? "overflow-visible" : ""}`}>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <div className="icon-box" style={{ width: 32, height: 32 }}>
             <Icon className="h-4 w-4" />
           </div>
           {title}
-          <Badge variant="outline" className="ml-auto text-xs font-normal">
-            {iconLabel}
-          </Badge>
+          <ExtBadge ext={iconLabel} className="ml-auto" />
         </CardTitle>
       </CardHeader>
       <CardContent className={needsOrg ? "flex flex-col gap-3 overflow-visible" : "flex flex-col gap-3"}>
@@ -200,10 +222,10 @@ function DocBlock({
           )}
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Дата</Label>
-            <DateInputUa
+            <DatePickerUa
               value={date}
               onChange={setDate}
-              className="w-[140px]"
+              className="w-[180px]"
             />
           </div>
           <Button
@@ -275,16 +297,14 @@ function D4Block() {
   }
 
   return (
-    <Card>
+    <Card className="card-animate card-hover">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <div className="icon-box" style={{ width: 32, height: 32 }}>
             <Presentation className="h-4 w-4" />
           </div>
           D4 — Презентація підготовки
-          <Badge variant="outline" className="ml-auto text-xs font-normal">
-            pptx
-          </Badge>
+          <ExtBadge ext="pptx" className="ml-auto" />
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -294,10 +314,10 @@ function D4Block() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">Дата</Label>
-            <DateInputUa
+            <DatePickerUa
               value={date}
               onChange={setDate}
-              className="w-[140px]"
+              className="w-[180px]"
             />
           </div>
           <Button onClick={handleGenerate} disabled={generating} className="gap-1.5">
@@ -447,13 +467,12 @@ export function DocumentsPage() {
 
       <div className="eyebrow">Додатки корпусу (D5)</div>
 
-      <Card>
+      <Card className="card-animate card-hover">
         <CardHeader className="pb-3">
-          <button
-            type="button"
-            className="flex w-full cursor-pointer items-center gap-2 text-left"
+          <Button
+            variant="ghost"
+            className="flex w-full justify-start gap-2 p-0 h-auto"
             onClick={() => setD5Open(!d5Open)}
-            style={{ background: "none", border: "none", padding: 0 }}
           >
             <div className="icon-box" style={{ width: 32, height: 32 }}>
               <FileSpreadsheet className="h-4 w-4" />
@@ -469,7 +488,7 @@ export function DocumentsPage() {
             ) : (
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             )}
-          </button>
+          </Button>
         </CardHeader>
         {d5Open && (
           <CardContent className="flex flex-col gap-4 pt-0">

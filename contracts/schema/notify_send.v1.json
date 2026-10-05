@@ -72,7 +72,11 @@
       "description": "Шаблон сповіщення — сам текст (знеособлений, 04 §5) рендерить `notifier` за цим варіантом,\nне отримує його рядком через брокер.",
       "type": "string",
       "enum": [
-        "discrepancy_detected"
+        "discrepancy_detected",
+        "discrepancy_resolved",
+        "import_completed",
+        "submission_committed",
+        "group_event_added"
       ]
     }
   }

@@ -61,17 +61,17 @@ function SheetContent({
         data-side={side}
         data-position={position}
         className={cn(
-          "fixed z-50 flex flex-col gap-4 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg outline-none",
+          "fixed z-50 flex flex-col gap-4 overflow-x-hidden bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg outline-none",
           "transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
           "data-ending-style:opacity-0 data-starting-style:opacity-0",
           isSide && side === "right" && [
             "top-3 right-3 bottom-3 h-auto w-[calc(75%-1.5rem)] rounded-xl border",
-            "sm:max-w-sm",
+            "sm:max-w-md",
             "data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]",
           ],
           isSide && side === "left" && [
             "top-3 left-3 bottom-3 h-auto w-[calc(75%-1.5rem)] rounded-xl border",
-            "sm:max-w-sm",
+            "sm:max-w-md",
             "data-ending-style:translate-x-[-2.5rem] data-starting-style:translate-x-[-2.5rem]",
           ],
           isSide && side === "top" && [

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { api } from "@/api/client";
+import { useConfirm } from "@/components/confirm-dialog";
 import type {
   OrgHierarchyNode,
   OrgNumber,
@@ -13,6 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -40,10 +43,12 @@ import {
 } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth";
+import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 import {
   Building2,
   ChevronRight,
   ChevronDown,
+  ChevronLeft,
   Plus,
   Search,
   Trash2,
@@ -52,11 +57,15 @@ import {
   Shield,
   GitBranch,
   Hash,
+  GripVertical,
+  ExternalLink,
+  Copy,
+  Pencil,
 } from "lucide-react";
 
 const ORG_KINDS: { value: string; label: string }[] = [
   { value: "military_unit", label: "Військова частина" },
-  { value: "command", label: "Командний орган" },
+  { value: "command", label: "ОВУ" },
   { value: "virtual_group", label: "Віртуальна група" },
   { value: "subunit", label: "Підрозділ" },
   { value: "edu_institution", label: "Навчальний заклад" },
@@ -206,6 +215,10 @@ function TreeNode({
   onSelect,
   expanded,
   onToggle,
+  onDrop,
+  dragState,
+  setDragState,
+  onContextMenu,
 }: {
   data: TreeNodeData;
   depth: number;
@@ -213,40 +226,92 @@ function TreeNode({
   onSelect: (id: number) => void;
   expanded: Set<number>;
   onToggle: (id: number) => void;
+  onDrop: (draggedId: number, targetId: number) => void;
+  dragState: { draggedId: number | null; overId: number | null };
+  setDragState: (s: { draggedId: number | null; overId: number | null }) => void;
+  onContextMenu?: (e: React.MouseEvent, node: OrgHierarchyNode) => void;
 }) {
   const hasChildren = data.children.length > 0;
   const isExpanded = expanded.has(data.node.id);
   const isSelected = selectedId === data.node.id;
+  const isDragged = dragState.draggedId === data.node.id;
+  const isDropTarget = dragState.overId === data.node.id && dragState.draggedId !== data.node.id;
+
+  function isDescendant(parentId: number, childId: number, td: TreeNodeData): boolean {
+    if (td.node.id === parentId) {
+      return findInTree(td, childId);
+    }
+    return td.children.some((c) => isDescendant(parentId, childId, c));
+  }
+
+  function findInTree(td: TreeNodeData, id: number): boolean {
+    if (td.node.id === id) return true;
+    return td.children.some((c) => findInTree(c, id));
+  }
 
   return (
     <>
-      <button
-        className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-sm hover:bg-muted/50 ${
+      <div
+        className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-sm cursor-grab active:cursor-grabbing hover:bg-muted/50 transition-colors ${
           isSelected ? "bg-primary/10 font-medium text-primary" : ""
-        } ${!data.node.is_active ? "opacity-50" : ""}`}
+        } ${!data.node.is_active ? "opacity-50" : ""} ${
+          isDragged ? "opacity-40" : ""
+        } ${isDropTarget ? "ring-2 ring-primary bg-primary/5" : ""}`}
         style={{ paddingLeft: depth * 16 + 8 }}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", String(data.node.id));
+          setDragState({ draggedId: data.node.id, overId: null });
+        }}
+        onDragEnd={() => {
+          setDragState({ draggedId: null, overId: null });
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (dragState.overId !== data.node.id) {
+            setDragState({ ...dragState, overId: data.node.id });
+          }
+        }}
+        onDragLeave={() => {
+          if (dragState.overId === data.node.id) {
+            setDragState({ ...dragState, overId: null });
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const draggedId = Number(e.dataTransfer.getData("text/plain"));
+          if (draggedId && draggedId !== data.node.id) {
+            onDrop(draggedId, data.node.id);
+          }
+          setDragState({ draggedId: null, overId: null });
+        }}
         onClick={() => onSelect(data.node.id)}
+        onContextMenu={(e) => onContextMenu?.(e, data.node)}
       >
-        {hasChildren ? (
-          <button
-            className="shrink-0 p-0.5 hover:bg-muted rounded"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle(data.node.id);
-            }}
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-            )}
-          </button>
-        ) : (
-          <span className="w-[22px] shrink-0" />
-        )}
+        <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+          {hasChildren ? (
+            <button
+              className="flex h-5 w-5 items-center justify-center hover:bg-muted rounded"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle(data.node.id);
+              }}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+            </button>
+          ) : null}
+        </span>
         <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate">{data.node.short_name}</span>
-      </button>
+      </div>
       {hasChildren && isExpanded && (
         <div>
           {data.children.map((c) => (
@@ -258,6 +323,10 @@ function TreeNode({
               onSelect={onSelect}
               expanded={expanded}
               onToggle={onToggle}
+              onDrop={onDrop}
+              dragState={dragState}
+              setDragState={setDragState}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>
@@ -281,6 +350,7 @@ function BasicTab({
   const [kind, setKind] = useState(org.kind);
   const [echelon, setEchelon] = useState(org.echelon ?? "");
   const [saving, setSaving] = useState(false);
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     setName(org.short_name);
@@ -306,7 +376,13 @@ function BasicTab({
   }
 
   async function handleDeactivate() {
-    if (!confirm("Деактивувати підрозділ? Його можна буде відновити.")) return;
+    const ok = await confirm({
+      title: "Деактивувати підрозділ?",
+      description: "Підрозділ можна буде відновити пізніше.",
+      confirmLabel: "Деактивувати",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/orgs/${org.id}`);
       toast.success("Деактивовано");
@@ -318,6 +394,7 @@ function BasicTab({
 
   return (
     <div className="flex flex-col gap-5">
+      {dialog}
       <div className="flex items-center gap-3">
         <h2 className="text-lg font-semibold">{org.short_name}</h2>
         <Badge variant={org.is_active ? "default" : "secondary"}>
@@ -335,7 +412,7 @@ function BasicTab({
           <Label>Тип</Label>
           <Select value={kind} onValueChange={setKind}>
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue>{kindLabel(kind)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {ORG_KINDS.map((k) => (
@@ -430,7 +507,7 @@ function NumberTab({ orgId }: { orgId: number }) {
             onValueChange={(v) => setNumberKind(v === "__none__" ? "" : v)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="—" />
+              <SelectValue>{{ "__none__": "—", A: "А", T: "Т", NGU: "НГУ" }[numberKind || "__none__"] ?? "—"}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">—</SelectItem>
@@ -478,6 +555,7 @@ function SubordinationTab({
   const [addParentLabel, setAddParentLabel] = useState("");
   const [addAxis, setAddAxis] = useState("staff");
   const [addFrom, setAddFrom] = useState("");
+  const { confirm, prompt: promptDialog, dialog } = useConfirm();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -498,7 +576,12 @@ function SubordinationTab({
   }, [load]);
 
   async function handleClose(subId: number) {
-    const validTo = prompt("Дата закриття (YYYY-MM-DD):");
+    const validTo = await promptDialog({
+      title: "Закрити підпорядкування",
+      description: "Вкажіть дату закриття зв'язку.",
+      confirmLabel: "Закрити",
+      input: { label: "Дата закриття", type: "date" },
+    });
     if (!validTo) return;
     try {
       await api.put(`/admin/subordination/${subId}/close`, {
@@ -512,7 +595,13 @@ function SubordinationTab({
   }
 
   async function handleDeleteSub(subId: number) {
-    if (!confirm("Видалити зв'язок підпорядкування?")) return;
+    const ok = await confirm({
+      title: "Видалити підпорядкування?",
+      description: "Зв'язок підпорядкування буде видалено назавжди.",
+      confirmLabel: "Видалити",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/subordination/${subId}`);
       toast.success("Видалено");
@@ -546,6 +635,7 @@ function SubordinationTab({
 
   return (
     <div className="flex flex-col gap-5">
+      {dialog}
       <div className="flex items-center gap-2">
         <GitBranch className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-semibold">Підпорядкування</h2>
@@ -571,69 +661,64 @@ function SubordinationTab({
             Немає зв'язків підпорядкування
           </p>
         ) : (
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/50 text-muted-foreground">
-                  <th className="px-3 py-2 text-left font-medium">
-                    Керівник
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium">Вісь</th>
-                  <th className="px-3 py-2 text-left font-medium">З</th>
-                  <th className="px-3 py-2 text-left font-medium">По</th>
-                  <th className="px-3 py-2 text-right font-medium">Дії</th>
-                </tr>
-              </thead>
-              <tbody>
-                {parents.map((p) => (
-                  <tr key={p.id} className="border-t border-border">
-                    <td className="px-3 py-2">
-                      <button
-                        className="text-primary hover:underline"
-                        onClick={() => onSelectOrg(p.other_org_id)}
-                      >
-                        {p.other_org_name}
-                      </button>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge
-                        variant={
-                          p.axis === "staff" ? "default" : "secondary"
-                        }
-                        className="text-xs"
-                      >
-                        {p.axis === "staff" ? "Штатне" : "Оперативне"}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2 tabular-nums">{p.valid_from}</td>
-                    <td className="px-3 py-2 tabular-nums text-muted-foreground">
-                      {p.valid_to ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="flex justify-end gap-1">
-                        {!p.valid_to && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleClose(p.id)}
-                          >
-                            Закрити
-                          </Button>
-                        )}
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead>Керівник</TableHead>
+                <TableHead>Вісь</TableHead>
+                <TableHead>З</TableHead>
+                <TableHead>По</TableHead>
+                <TableHead className="text-right">Дії</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {parents.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>
+                    <Button
+                      variant="link"
+                      className="h-auto p-0"
+                      onClick={() => onSelectOrg(p.other_org_id)}
+                    >
+                      {p.other_org_name}
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={p.axis === "staff" ? "default" : "secondary"}
+                      className="text-xs"
+                    >
+                      {p.axis === "staff" ? "Штатне" : "Оперативне"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="tabular-nums">{p.valid_from}</TableCell>
+                  <TableCell className="tabular-nums text-muted-foreground">
+                    {p.valid_to ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      {!p.valid_to && (
                         <Button
                           variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteSub(p.id)}
+                          size="sm"
+                          onClick={() => handleClose(p.id)}
                         >
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          Закрити
                         </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteSub(p.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </div>
 
@@ -698,7 +783,7 @@ function SubordinationTab({
               <Label>Вісь підпорядкування</Label>
               <Select value={addAxis} onValueChange={setAddAxis}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>{addAxis === "staff" ? "Штатне" : "Оперативне"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="staff">Штатне</SelectItem>
@@ -718,6 +803,7 @@ function SubordinationTab({
               onClick={handleAddSub}
               disabled={!addParentOrgId || !addFrom}
             >
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
               Додати
             </Button>
           </div>
@@ -801,7 +887,7 @@ function CreateOrgDialog({
             <Label>Тип</Label>
             <Select value={kind} onValueChange={setKind}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue>{kindLabel(kind)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {ORG_KINDS.map((k) => (
@@ -841,6 +927,60 @@ function CreateOrgDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Move Confirmation Dialog
+// ---------------------------------------------------------------------------
+
+function MoveOrgDialog({
+  open,
+  onOpenChange,
+  draggedName,
+  targetName,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  draggedName: string;
+  targetName: string;
+  onConfirm: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  async function handleConfirm() {
+    setSaving(true);
+    try {
+      await onConfirm();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Змінити підпорядкування</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm">
+          Підпорядкувати <strong>{draggedName}</strong> →{" "}
+          <strong>{targetName}</strong>?
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Попереднє штатне підпорядкування буде закрито з сьогоднішньою датою.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Скасувати
+          </Button>
+          <Button onClick={handleConfirm} disabled={saving}>
+            {saving ? "Переміщення…" : "Підтвердити"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -852,6 +992,9 @@ export function OrgsPage() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
+  const [dragState, setDragState] = useState<{ draggedId: number | null; overId: number | null }>({ draggedId: null, overId: null });
+  const [moveDialog, setMoveDialog] = useState<{ draggedId: number; targetId: number } | null>(null);
+  const ctxMenu = useContextMenu();
 
   const loadTree = useCallback(() => {
     if (!isAdmin) return;
@@ -869,6 +1012,12 @@ export function OrgsPage() {
     if (!nodes) return { roots: [], orphans: [] };
     return buildTree(nodes);
   }, [nodes]);
+
+  useEffect(() => {
+    if (roots.length > 0 && expanded.size === 0) {
+      setExpanded(new Set(roots.map((r) => r.node.id)));
+    }
+  }, [roots]);
 
   const filteredRoots = useMemo(() => {
     if (!search) return roots;
@@ -925,6 +1074,85 @@ export function OrgsPage() {
     loadTree();
   }
 
+  function handleTreeDrop(draggedId: number, targetId: number) {
+    if (!nodes) return;
+    const dragged = nodes.find((n) => n.id === draggedId);
+    const target = nodes.find((n) => n.id === targetId);
+    if (!dragged || !target) return;
+    if (dragged.parent_id === targetId) return;
+
+    function isAncestor(ancestorId: number, descendantId: number): boolean {
+      let cur = nodes!.find((n) => n.id === descendantId);
+      while (cur?.parent_id) {
+        if (cur.parent_id === ancestorId) return true;
+        cur = nodes!.find((n) => n.id === cur!.parent_id);
+      }
+      return false;
+    }
+    if (isAncestor(draggedId, targetId)) {
+      toast.error("Не можна підпорядкувати підрозділ власному нащадку");
+      return;
+    }
+
+    setMoveDialog({ draggedId, targetId });
+  }
+
+  async function confirmMove() {
+    if (!moveDialog || !nodes) return;
+    const { draggedId, targetId } = moveDialog;
+    const today = new Date().toISOString().slice(0, 10);
+
+    try {
+      const sub = await api.get<{ parents: SubordinationLink[]; children: SubordinationLink[] }>(
+        `/admin/orgs/${draggedId}/subordination`
+      );
+      const activeStaff = sub.parents.find((p) => p.axis === "staff" && !p.valid_to);
+      if (activeStaff) {
+        await api.put(`/admin/subordination/${activeStaff.id}/close`, { valid_to: today });
+      }
+
+      await api.post("/admin/subordination", {
+        child_org_id: draggedId,
+        parent_org_id: targetId,
+        axis: "staff",
+        valid_from: today,
+      });
+
+      toast.success("Підпорядкування змінено");
+      setMoveDialog(null);
+      loadTree();
+    } catch {
+      toast.error("Помилка зміни підпорядкування");
+    }
+  }
+
+  function handleTreeContextMenu(e: React.MouseEvent, node: OrgHierarchyNode) {
+    const items: ContextMenuEntry[] = [
+      {
+        label: "Редагувати",
+        icon: <Pencil className="h-4 w-4" />,
+        onClick: () => { setSelectedId(node.id); setActiveTab("basic"); },
+      },
+      {
+        label: "Підпорядкування",
+        icon: <GitBranch className="h-4 w-4" />,
+        onClick: () => { setSelectedId(node.id); setActiveTab("subordination"); },
+      },
+      {
+        label: "Код ВЧ",
+        icon: <Hash className="h-4 w-4" />,
+        onClick: () => { setSelectedId(node.id); setActiveTab("number"); },
+      },
+      { separator: true },
+      {
+        label: "Копіювати назву",
+        icon: <Copy className="h-4 w-4" />,
+        onClick: () => { navigator.clipboard.writeText(node.short_name); toast.success("Скопійовано"); },
+      },
+    ];
+    ctxMenu.open(e, items);
+  }
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
@@ -936,135 +1164,170 @@ export function OrgsPage() {
     );
   }
 
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const showDetail = selectedNode !== null;
+
   if (nodes === null) {
     return (
       <div className="flex flex-col gap-4 p-6">
         <Skeleton className="h-8 w-48" />
         <div className="flex gap-4">
-          <Skeleton className="h-[600px] w-80" />
-          <Skeleton className="h-[600px] flex-1" />
+          <Skeleton className="h-[600px] w-full md:w-80" />
+          <Skeleton className="hidden md:block h-[600px] flex-1" />
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Підрозділи</h1>
-          <Badge variant="secondary">{nodes.length}</Badge>
+  const treePanel = (
+    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+      <div className="p-3 border-b border-border">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Пошук…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-8 text-sm"
+          />
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          Додати
-        </Button>
       </div>
-
-      {/* Body: Tree + Detail */}
-      <div className="flex flex-1 min-h-0">
-        {/* Tree Panel */}
-        <div className="w-80 shrink-0 border-r border-border overflow-y-auto flex flex-col">
-          {/* Search */}
-          <div className="p-3 border-b border-border">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Пошук…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 h-8 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Tree */}
-          <div className="flex-1 overflow-y-auto p-2">
-            {filteredRoots.map((r) => (
+      <ScrollArea className="flex-1 p-2">
+        {filteredRoots.map((r) => (
+          <TreeNode
+            key={r.node.id}
+            data={r}
+            depth={0}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+            expanded={expanded}
+            onToggle={handleToggle}
+            onDrop={handleTreeDrop}
+            dragState={dragState}
+            setDragState={setDragState}
+            onContextMenu={handleTreeContextMenu}
+          />
+        ))}
+        {filteredOrphans.length > 0 && (
+          <>
+            <Separator className="my-2" />
+            <p className="px-2 py-1 text-xs text-muted-foreground font-medium">
+              Без підпорядкування
+            </p>
+            {filteredOrphans.map((o) => (
               <TreeNode
-                key={r.node.id}
-                data={r}
+                key={o.node.id}
+                data={o}
                 depth={0}
                 selectedId={selectedId}
                 onSelect={handleSelect}
                 expanded={expanded}
                 onToggle={handleToggle}
+                onDrop={handleTreeDrop}
+                dragState={dragState}
+                setDragState={setDragState}
+                onContextMenu={handleTreeContextMenu}
               />
             ))}
+          </>
+        )}
+      </ScrollArea>
+    </div>
+  );
 
-            {filteredOrphans.length > 0 && (
-              <>
-                <Separator className="my-2" />
-                <p className="px-2 py-1 text-xs text-muted-foreground font-medium">
-                  Без підпорядкування
-                </p>
-                {filteredOrphans.map((o) => (
-                  <TreeNode
-                    key={o.node.id}
-                    data={o}
-                    depth={0}
-                    selectedId={selectedId}
-                    onSelect={handleSelect}
-                    expanded={expanded}
-                    onToggle={handleToggle}
-                  />
-                ))}
-              </>
-            )}
-          </div>
+  const detailPanel = selectedNode ? (
+    <div className="flex-1 overflow-y-auto p-4 md:p-6">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mb-3 md:hidden"
+        onClick={() => setSelectedId(null)}
+      >
+        <ChevronLeft className="mr-1 h-4 w-4" />
+        Назад до дерева
+      </Button>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList variant="line">
+          <TabsTrigger value="basic">
+            <Building2 className="mr-1.5 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Основне</span>
+          </TabsTrigger>
+          <TabsTrigger value="number">
+            <Hash className="mr-1.5 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Код ВЧ</span>
+          </TabsTrigger>
+          <TabsTrigger value="subordination">
+            <GitBranch className="mr-1.5 h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Підпорядкування</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="basic" className="pt-4">
+          <BasicTab org={selectedNode} onSaved={handleRefresh} />
+        </TabsContent>
+        <TabsContent value="number" className="pt-4">
+          <NumberTab orgId={selectedNode.id} />
+        </TabsContent>
+        <TabsContent value="subordination" className="pt-4">
+          <SubordinationTab
+            orgId={selectedNode.id}
+            orgName={selectedNode.short_name}
+            onSelectOrg={handleSelect}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  ) : (
+    <div className="hidden md:flex flex-col items-center justify-center flex-1 text-muted-foreground">
+      <Building2 className="mb-3 h-12 w-12 opacity-30" />
+      <p>Оберіть підрозділ зліва</p>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl md:text-2xl font-bold">Підрозділи</h1>
+          <Badge variant="secondary">{nodes.length}</Badge>
         </div>
-
-        {/* Detail Panel */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {selectedNode ? (
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList variant="line">
-                <TabsTrigger value="basic">
-                  <Building2 className="mr-1.5 h-3.5 w-3.5" />
-                  Основне
-                </TabsTrigger>
-                <TabsTrigger value="number">
-                  <Hash className="mr-1.5 h-3.5 w-3.5" />
-                  Код ВЧ
-                </TabsTrigger>
-                <TabsTrigger value="subordination">
-                  <GitBranch className="mr-1.5 h-3.5 w-3.5" />
-                  Підпорядкування
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="basic" className="pt-4">
-                <BasicTab org={selectedNode} onSaved={handleRefresh} />
-              </TabsContent>
-
-              <TabsContent value="number" className="pt-4">
-                <NumberTab orgId={selectedNode.id} />
-              </TabsContent>
-
-              <TabsContent value="subordination" className="pt-4">
-                <SubordinationTab
-                  orgId={selectedNode.id}
-                  orgName={selectedNode.short_name}
-                  onSelectOrg={handleSelect}
-                />
-              </TabsContent>
-            </Tabs>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-              <Building2 className="mb-3 h-12 w-12 opacity-30" />
-              <p>Оберіть підрозділ зліва</p>
-            </div>
-          )}
-        </div>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="sm:mr-1.5 h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Додати</span>
+        </Button>
       </div>
 
-      {/* Create Dialog */}
+      {/* Desktop: side-by-side */}
+      <div className="hidden md:flex flex-1 min-h-0">
+        <div className="w-80 shrink-0 border-r border-border flex flex-col">
+          {treePanel}
+        </div>
+        {detailPanel}
+      </div>
+
+      {/* Mobile: tree OR detail */}
+      <div className="flex md:hidden flex-1 min-h-0 flex-col">
+        {showDetail ? detailPanel : treePanel}
+      </div>
+
       <CreateOrgDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={handleRefresh}
       />
+
+      {moveDialog && nodes && (
+        <MoveOrgDialog
+          open={true}
+          onOpenChange={(open) => { if (!open) setMoveDialog(null); }}
+          draggedName={nodes.find((n) => n.id === moveDialog.draggedId)?.short_name ?? ""}
+          targetName={nodes.find((n) => n.id === moveDialog.targetId)?.short_name ?? ""}
+          onConfirm={confirmMove}
+        />
+      )}
+
+      <ContextMenuPortal state={ctxMenu.state} onClose={ctxMenu.close} />
     </div>
   );
 }

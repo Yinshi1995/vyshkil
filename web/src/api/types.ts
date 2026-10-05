@@ -8,6 +8,9 @@ export interface AuthUser {
   user_id: number;
   actor: Actor | null;
   display_name: string | null;
+  callsign: string | null;
+  avatar_url: string | null;
+  can_see_org_names: boolean;
 }
 
 export interface UserRoleRow {
@@ -35,6 +38,7 @@ export interface AdminUserRow {
   display_name: string | null;
   is_active: boolean;
   must_change_password: boolean;
+  can_see_org_names: boolean;
   roles: UserRoleRow[];
   created_at: string;
 }
@@ -155,8 +159,31 @@ export interface DiscrepancyComparison {
 export interface AccountInfo {
   login: string;
   full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  rank: string | null;
+  phone: string | null;
+  callsign: string | null;
+  delta_nick: string | null;
+  avatar_url: string | null;
   roles: string[];
   created_at: string;
+}
+
+export interface DirectoryUser {
+  user_id: number;
+  login: string;
+  display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  rank: string | null;
+  phone: string | null;
+  callsign: string | null;
+  delta_nick: string | null;
+  avatar_url: string | null;
+  is_active: boolean;
+  role: string;
+  org_label: string;
 }
 
 export interface OrgSearchResult {
@@ -206,8 +233,14 @@ export interface WaDestination {
   org_id: number;
   kind: string;
   phone_masked: string;
+  group_id: string | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface WaGroupInfo {
+  id: string;
+  name: string;
 }
 
 export interface WaSubscription {
@@ -267,6 +300,7 @@ export interface GroupEventRow {
   reason_label: string | null;
   note: string | null;
   source_label: string | null;
+  created_by_label: string | null;
 }
 
 export interface TrainingKindOption {
@@ -320,6 +354,41 @@ export interface AddEventRequest {
   occurred_on: string;
   reason_id?: number | null;
   note?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Chat types
+// ---------------------------------------------------------------------------
+
+export interface ChatRoom {
+  id: number;
+  name: string;
+  kind: string;
+  emoji: string | null;
+  unread_count: number | null;
+  last_message_body: string | null;
+  last_message_at: string | null;
+  member_count: number | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  room_id: number;
+  sender_id: number;
+  sender_label: string | null;
+  sender_callsign: string | null;
+  sender_avatar: string | null;
+  sender_role: string | null;
+  kind: string;
+  body: string;
+  media_url: string | null;
+  media_mime: string | null;
+  media_duration_sec: number | null;
+  reply_to_id: number | null;
+  reply_preview: string | null;
+  created_at: string;
+  updated_at: string | null;
+  deleted_at?: string | null;
 }
 
 // ---------------------------------------------------------------------------

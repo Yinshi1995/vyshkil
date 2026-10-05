@@ -4,7 +4,7 @@
 // реальний `async-nats` тип) дозволяє тестам давати легкий fake замість живого JetStream-
 // повідомлення.
 
-import type { Channel } from "./whatsapp/channel.ts";
+import { ChannelNotReadyError, type Channel } from "./whatsapp/channel.ts";
 import { processNotifySend } from "./delivery.ts";
 import { publishNotifyResult, MAX_DELIVER, type NatsHandles } from "./nats.ts";
 import { publishToDlq } from "./dlq.ts";
@@ -40,6 +40,17 @@ export async function handleOneMessage(
       msg.ack();
       return;
     }
+    if (outcome.status === "failed") {
+      if (msg.info.deliveryCount >= MAX_DELIVER) {
+        console.error(`notifier: доставка провалювалась ${MAX_DELIVER} спроб, DLQ`);
+        await publishToDlq(nats, "vyshkil.notify.send.v1", msg.data, "delivery failed after max retries");
+        msg.term();
+      } else {
+        console.warn(`notifier: доставка провалилась, nak 30с (спроба ${msg.info.deliveryCount}/${MAX_DELIVER})`);
+        msg.nak(30_000);
+      }
+      return;
+    }
     const resultEnvelope = {
       id: crypto.randomUUID(),
       type: "vyshkil.notify.result.v1",
@@ -61,7 +72,10 @@ export async function handleOneMessage(
     // покриває ОБИДВА випадки: WhatsApp-клієнт ще не прив'язаний (`channel.send` кидає) --
     // команда чекає (nak), доки прив'язка не відновиться й наступна спроба не вдасться; на
     // ОСТАННІЙ дозволеній спробі -- здаємось, в DLQ (не губимо мовчки).
-    if (msg.info.deliveryCount >= MAX_DELIVER) {
+    if (e instanceof ChannelNotReadyError) {
+      console.warn(`notifier: канал не готовий, nak 30с (спроба ${msg.info.deliveryCount}/${MAX_DELIVER})`);
+      msg.nak(30_000);
+    } else if (msg.info.deliveryCount >= MAX_DELIVER) {
       console.error(`notifier: вичерпано ${MAX_DELIVER} спроб, DLQ:`, e);
       await publishToDlq(nats, "vyshkil.notify.send.v1", msg.data, String(e));
       msg.term();

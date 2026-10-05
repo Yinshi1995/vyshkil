@@ -49,7 +49,7 @@ test("delivery pipeline", { skip: !hasDb }, async (t: TestContext) => {
     const first = await processNotifySend(payload, "test-msg-1", channel);
     assert.equal(first.kind, "processed");
     assert.equal(channel.sent.length, 1);
-    assert.equal(channel.sent[0]?.phone, "+380501234567");
+    assert.equal(channel.sent[0]?.destination, "+380501234567");
 
     const [logRow] = await sql`SELECT phone_masked, status FROM delivery_log WHERE org_id = ${testOrgId}`;
     assert.equal(logRow?.phone_masked, "+380*****4567");
@@ -80,6 +80,27 @@ test("delivery pipeline", { skip: !hasDb }, async (t: TestContext) => {
     const result = await processNotifySend(payload, "test-msg-no-contacts", channel);
     assert.equal(result.kind, "processed");
     if (result.kind === "processed") assert.equal(result.status, "suppressed");
+  });
+
+  await t.test("failed delivery does NOT mark inbox — allows retry", async () => {
+    const channel = new FakeChannel();
+    channel.send = async (dest, text) => {
+      channel.sent.push({ destination: dest, text });
+      return { status: "failed" as const, error: "group not found" };
+    };
+    const payload = new TextEncoder().encode(
+      JSON.stringify(envelope({ dedupe_key: "fail-retry-test" })),
+    );
+
+    const first = await processNotifySend(payload, "test-msg-fail", channel);
+    assert.equal(first.kind, "processed");
+    if (first.kind === "processed") assert.equal(first.status, "failed");
+
+    const [row] = await sql`SELECT 1 FROM inbox WHERE message_id = 'test-msg-fail'`;
+    assert.equal(row, undefined, "failed delivery must NOT be in inbox");
+
+    const retry = await processNotifySend(payload, "test-msg-fail", channel);
+    assert.equal(retry.kind, "processed", "retry processes again (not duplicate)");
   });
 
   await sql.end();

@@ -7,7 +7,13 @@
 
 import { z } from "zod";
 
-export const notifyTemplateSchema = z.enum(["discrepancy_detected"]);
+export const notifyTemplateSchema = z.enum([
+  "discrepancy_detected",
+  "discrepancy_resolved",
+  "import_completed",
+  "submission_committed",
+  "group_event_added",
+]);
 
 export const notifySendSchema = z.object({
   recipient_org_id: z.number().int(),

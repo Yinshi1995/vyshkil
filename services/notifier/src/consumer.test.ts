@@ -77,6 +77,10 @@ class FlakyChannel implements Channel {
     this.remaining = failTimes;
   }
 
+  isReady(): boolean {
+    return true;
+  }
+
   async send(_phone: string, _text: string): Promise<SendResult> {
     if (this.remaining > 0) {
       this.remaining -= 1;
@@ -122,7 +126,7 @@ test("exhausted retries (deliveryCount >= max_deliver): DLQ + term, not nak fore
   const channel = new FlakyChannel(999); // завжди кидає -- симулює постійно недоступний канал
   const msg = fakeMessage(
     new TextEncoder().encode(JSON.stringify(envelope("exhausted-1"))),
-    5, // = MAX_DELIVER
+    20, // = MAX_DELIVER
     "consumer-test-exhausted",
   );
   let dlqSubject: string | null = null;
@@ -130,6 +134,39 @@ test("exhausted retries (deliveryCount >= max_deliver): DLQ + term, not nak fore
 
   assert.deepEqual(msg.calls, ["term"], "на вичерпаній спробі -- term, НЕ нескінченний nak");
   assert.equal(dlqSubject, "vyshkil.dlq.notify.send.v1");
+});
+
+test("failed delivery (status:'failed'): nak below max_deliver, DLQ+term on exhaustion", { skip: !hasDb }, async (t) => {
+  await sql`DELETE FROM org_contact WHERE org_id = ${testOrgId}`;
+  await sql`DELETE FROM inbox WHERE message_id LIKE 'consumer-test-fail-%'`;
+  await sql`INSERT INTO org_contact (org_id, phone, channel) VALUES (${testOrgId}, '+380503333333', 'whatsapp')`;
+
+  const failChannel: Channel = {
+    isReady: () => true,
+    send: async () => ({ status: "failed" as const, error: "group not found" }),
+  };
+
+  await t.test("deliveryCount=1: nak 30s (retry), message stays in queue", async () => {
+    const msg = fakeMessage(
+      new TextEncoder().encode(JSON.stringify(envelope("fail-delivery-1"))),
+      1,
+      "consumer-test-fail-1",
+    );
+    await handleOneMessage(msg, fakeNats(), failChannel);
+    assert.deepEqual(msg.calls, ["nak:30000"]);
+  });
+
+  await t.test("deliveryCount=MAX_DELIVER: DLQ + term", async () => {
+    const msg = fakeMessage(
+      new TextEncoder().encode(JSON.stringify(envelope("fail-delivery-2"))),
+      20,
+      "consumer-test-fail-2",
+    );
+    let dlqSubject: string | null = null;
+    await handleOneMessage(msg, fakeNats((subject) => { dlqSubject = subject; }), failChannel);
+    assert.deepEqual(msg.calls, ["term"]);
+    assert.equal(dlqSubject, "vyshkil.dlq.notify.send.v1");
+  });
 
   await sql.end();
 });

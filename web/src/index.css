@@ -630,6 +630,124 @@ h3 {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
+/* --- Page transitions --- */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-transition {
+  animation: page-enter 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- Card stagger entrance --- */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.card-animate {
+  animation: card-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.card-animate:nth-child(1) { animation-delay: 0ms; }
+.card-animate:nth-child(2) { animation-delay: 60ms; }
+.card-animate:nth-child(3) { animation-delay: 120ms; }
+.card-animate:nth-child(4) { animation-delay: 180ms; }
+.card-animate:nth-child(5) { animation-delay: 240ms; }
+.card-animate:nth-child(6) { animation-delay: 300ms; }
+
+/* --- Card hover glow --- */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(201, 168, 76, 0.08);
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+}
+.light .card-hover:hover {
+  box-shadow: 0 8px 24px rgba(138, 112, 48, 0.1);
+}
+
+/* --- Table row slide-in --- */
+@keyframes row-enter {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.table-animate tbody tr {
+  animation: row-enter 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.table-animate tbody tr:nth-child(1)  { animation-delay: 0ms; }
+.table-animate tbody tr:nth-child(2)  { animation-delay: 30ms; }
+.table-animate tbody tr:nth-child(3)  { animation-delay: 60ms; }
+.table-animate tbody tr:nth-child(4)  { animation-delay: 90ms; }
+.table-animate tbody tr:nth-child(5)  { animation-delay: 120ms; }
+.table-animate tbody tr:nth-child(6)  { animation-delay: 150ms; }
+.table-animate tbody tr:nth-child(7)  { animation-delay: 180ms; }
+.table-animate tbody tr:nth-child(8)  { animation-delay: 210ms; }
+.table-animate tbody tr:nth-child(9)  { animation-delay: 240ms; }
+.table-animate tbody tr:nth-child(10) { animation-delay: 270ms; }
+.table-animate tbody tr:nth-child(n+11) { animation-delay: 300ms; }
+
+/* --- Badge pulse on destructive --- */
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.7; }
+}
+.badge-pulse {
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+/* --- Heading entrance --- */
+@keyframes heading-enter {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.page-transition h1 {
+  animation: heading-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- Smooth button interactions --- */
+button, [role="button"] {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+}
+button:active:not(:disabled), [role="button"]:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* --- Alert entrance --- */
+@keyframes alert-enter {
+  from { opacity: 0; transform: scaleY(0.9); transform-origin: top; }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+.page-transition [data-slot="alert"] {
+  animation: alert-enter 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- Stat bar grow animation --- */
+@keyframes bar-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.bar-animate {
+  transform-origin: left;
+  animation: bar-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.3s;
+}
+
+/* --- Nav link hover underline --- */
+@keyframes nav-underline {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* --- Fade-in for generic elements --- */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in {
+  animation: fade-in 0.5s ease both;
+}
+
 /* --- Scrollbar --- */
 ::-webkit-scrollbar {
   width: 8px;

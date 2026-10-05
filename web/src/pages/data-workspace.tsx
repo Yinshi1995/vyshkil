@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/context/auth";
 import { todayIso } from "@/lib/date-ua";
 import { KindBadge } from "@/components/kind-badge";
 import {
@@ -27,7 +28,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInputUa } from "@/components/ui/date-input-ua";
-import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -97,7 +97,10 @@ import {
   FileUp,
   AlertTriangle,
   Building2,
+  Copy,
+  Eye,
 } from "lucide-react";
+import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -243,6 +246,7 @@ function buildColumns(
   onUpdate: (id: number, field: string, value: string) => void,
   onDelete: (row: DataGroupRow) => void,
   onDetail: (row: DataGroupRow) => void,
+  isAdmin: boolean,
 ): ColumnDef<DataGroupRow, unknown>[] {
   return [
     col.accessor("org_label", {
@@ -252,12 +256,16 @@ function buildColumns(
         const disc = info.row.original.discrepancy_count;
         return (
           <div className="flex items-center gap-1">
-            <EditableCell
-              value={info.getValue()}
-              onSave={(v) =>
-                onUpdate(info.row.original.id, "sender_org_id", v)
-              }
-            />
+            {isAdmin ? (
+              <EditableCell
+                value={info.getValue()}
+                onSave={(v) =>
+                  onUpdate(info.row.original.id, "sender_org_id", v)
+                }
+              />
+            ) : (
+              <span className="block w-full truncate px-1 py-0.5">{info.getValue()}</span>
+            )}
             {disc > 0 && (
               <span
                 title={`${disc} розбіжн.`}
@@ -371,23 +379,27 @@ function buildColumns(
       cell: (info) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex h-7 w-7 items-center justify-center rounded hover:bg-accent">
+            <Button variant="ghost" size="icon" className="h-7 w-7">
               <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-            </button>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onDetail(info.row.original)}>
               <FileText className="mr-2 h-4 w-4" />
               Деталі
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => onDelete(info.row.original)}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Видалити
-            </DropdownMenuItem>
+            {isAdmin && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => onDelete(info.row.original)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Видалити
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -490,8 +502,9 @@ function EventTimeline({
       setEvErrors({});
       setTick((t) => t + 1);
       onChanged?.();
-    } catch {
-      setEvErrors({ _server: "Не вдалося додати подію" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Не вдалося додати подію";
+      setEvErrors({ _server: msg });
     } finally {
       setSaving(false);
     }
@@ -547,7 +560,18 @@ function EventTimeline({
                   </span>
                 )}
               </span>
-              {ev.source_label && (
+              {ev.created_by_label && (
+                <Link
+                  to={`/directory?search=${encodeURIComponent(ev.created_by_label)}`}
+                  className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] tracking-wider no-underline transition-colors hover:bg-primary/10"
+                  style={{ borderColor: "color-mix(in oklch, var(--primary) 30%, transparent)", color: "var(--primary)", fontFamily: "var(--font-heading)" }}
+                  title={`${ev.created_by_label} · ${ev.recorded_at}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {ev.created_by_label}
+                </Link>
+              )}
+              {ev.source_label && !ev.created_by_label && (
                 <span
                   className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wider"
                   style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", fontFamily: "var(--font-heading)" }}
@@ -561,13 +585,15 @@ function EventTimeline({
                   {ev.note}
                 </span>
               )}
-              <button
-                className="hidden h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:flex"
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden h-5 w-5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:flex"
                 onClick={() => handleDeleteEvent(ev.id)}
                 title="Видалити подію"
               >
                 <X className="h-3 w-3" />
-              </button>
+              </Button>
             </div>
           );
         })}
@@ -670,8 +696,10 @@ function EventTimeline({
           </div>
         </div>
       ) : (
-        <button
-          className="mt-1 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-1 text-muted-foreground hover:text-foreground"
           onClick={() => {
             setShowForm(true);
             setEvDate(todayIso());
@@ -679,7 +707,7 @@ function EventTimeline({
         >
           <Plus className="h-3.5 w-3.5" />
           Додати подію
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -874,11 +902,20 @@ const IMPORT_KINDS: { value: ImportFileKind; label: string; desc: string }[] = [
   { value: "archive", label: "Архів ВЧ", desc: "Одноразовий перенос архіву фахової підготовки" },
 ];
 
+interface ImportIssue {
+  row: number;
+  sheet: string;
+  field: string;
+  value: string;
+  message: string;
+}
+
 function ImportSection({ onImported }: { onImported: () => void }) {
   const [open, setOpen] = useState(false);
   const [fileKind, setFileKind] = useState<ImportFileKind>("fah");
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<{ type: "info" | "error" | "success"; text: string } | null>(null);
+  const [issues, setIssues] = useState<ImportIssue[]>([]);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const kindInfo = IMPORT_KINDS.find((k) => k.value === fileKind);
@@ -886,12 +923,14 @@ function ImportSection({ onImported }: { onImported: () => void }) {
   function handleFile(f: File) {
     setFile(f);
     setStatus(null);
+    setIssues([]);
   }
 
   async function handleUpload() {
     if (!file) return;
     setUploading(true);
     setStatus({ type: "info", text: "Завантаження…" });
+    setIssues([]);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -902,10 +941,12 @@ function ImportSection({ onImported }: { onImported: () => void }) {
         credentials: "same-origin",
       });
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        let msg = `HTTP ${res.status}`;
-        try { msg = JSON.parse(text).error || msg; } catch { if (text) msg = text; }
-        throw new Error(msg);
+        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        const msg = body.error || `HTTP ${res.status}`;
+        setStatus({ type: "error", text: msg });
+        if (Array.isArray(body.issues)) setIssues(body.issues);
+        toast.error(msg);
+        return;
       }
       const data = await res.json();
       const msg = `Імпортовано: ${data.imported ?? 0} записів`;
@@ -927,14 +968,15 @@ function ImportSection({ onImported }: { onImported: () => void }) {
       className="rounded-lg border"
       style={{ borderColor: "var(--border)" }}
     >
-      <button
-        className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold"
+      <Button
+        variant="ghost"
+        className="flex w-full justify-start gap-2 px-4 py-3 text-sm font-semibold"
         onClick={() => setOpen(!open)}
       >
         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         <Upload className="h-4 w-4 text-primary" />
         Імпорт з файлу
-      </button>
+      </Button>
       {open && (
         <div className="flex flex-col gap-4 border-t px-4 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="flex flex-wrap items-end gap-3">
@@ -942,20 +984,23 @@ function ImportSection({ onImported }: { onImported: () => void }) {
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Тип файлу
               </span>
-              <select
-                className="h-9 rounded-md border bg-background px-3 text-sm"
-                style={{ borderColor: "var(--border)" }}
+              <Select
                 value={fileKind}
-                onChange={(e) => {
-                  setFileKind(e.target.value as ImportFileKind);
+                onValueChange={(v) => {
+                  setFileKind(v as ImportFileKind);
                   setFile(null);
                   setStatus(null);
                 }}
               >
-                {IMPORT_KINDS.map((k) => (
-                  <option key={k.value} value={k.value}>{k.label}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue>{kindInfo?.label ?? fileKind}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {IMPORT_KINDS.map((k) => (
+                    <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {kindInfo && (
               <span className="text-xs text-muted-foreground">{kindInfo.desc}</span>
@@ -1005,14 +1050,42 @@ function ImportSection({ onImported }: { onImported: () => void }) {
           )}
 
           {status && (
-            <p
-              className="text-sm"
-              style={{
-                color: status.type === "error" ? "#D9534F" : status.type === "success" ? "#6bbd6b" : "var(--muted-foreground)",
-              }}
-            >
-              {status.text}
-            </p>
+            <div className="flex flex-col gap-2">
+              <p
+                className="text-sm"
+                style={{
+                  color: status.type === "error" ? "#D9534F" : status.type === "success" ? "#6bbd6b" : "var(--muted-foreground)",
+                }}
+              >
+                {status.text}
+              </p>
+              {issues.length > 0 && (
+                <div className="max-h-48 overflow-auto rounded-md border text-xs">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-muted">
+                      <tr>
+                        <th className="px-2 py-1 text-left font-medium">Рядок</th>
+                        <th className="px-2 py-1 text-left font-medium">Аркуш</th>
+                        <th className="px-2 py-1 text-left font-medium">Поле</th>
+                        <th className="px-2 py-1 text-left font-medium">Значення</th>
+                        <th className="px-2 py-1 text-left font-medium">Помилка</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {issues.map((issue, i) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="px-2 py-1 tabular-nums">{issue.row || "—"}</td>
+                          <td className="px-2 py-1">{issue.sheet || "—"}</td>
+                          <td className="px-2 py-1 font-medium">{issue.field}</td>
+                          <td className="max-w-[120px] truncate px-2 py-1 font-mono">{issue.value || "—"}</td>
+                          <td className="px-2 py-1 text-destructive">{issue.message}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -1158,7 +1231,7 @@ function CreateGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Нова група підготовки</DialogTitle>
           <DialogDescription>
@@ -1166,19 +1239,19 @@ function CreateGroupDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          {/* Section: Org + Kind */}
-          <div className="flex flex-col gap-3">
-            {/* Org combobox */}
+        <div className="flex flex-col gap-5">
+          {/* Org + Kind — side by side */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px]">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <Building2 className="mr-1 inline h-3 w-3" />
                 Підрозділ *
               </Label>
               <Popover open={orgCmdOpen} onOpenChange={setOrgCmdOpen}>
                 <PopoverTrigger
                   render={<Button variant="outline" className="w-full justify-start text-left font-normal" />}
                 >
-                  <Building2 className="mr-2 h-4 w-4 shrink-0" />
+                  <Building2 className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
                   {orgId ? (
                     <span className="flex-1 truncate">{orgLabel}</span>
                   ) : (
@@ -1232,10 +1305,10 @@ function CreateGroupDialog({
               <FieldError error={errors.org} />
             </div>
 
-            {/* Training kind */}
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Вид підготовки *
+                <FileText className="mr-1 inline h-3 w-3" />
+                Вид *
               </Label>
               <Select
                 value={String(kindId)}
@@ -1257,20 +1330,21 @@ function CreateGroupDialog({
             </div>
           </div>
 
-          <Separator />
-
-          {/* Section: Site + Dates */}
-          <div className="flex flex-col gap-3">
-            {/* Site combobox */}
+          {/* Site + Period — grouped */}
+          <div
+            className="flex flex-col gap-3 rounded-lg border p-3"
+            style={{ borderColor: "color-mix(in srgb, var(--border) 60%, transparent)" }}
+          >
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <MapPin className="mr-1 inline h-3 w-3" />
                 Місце проведення *
               </Label>
               <Popover open={siteCmdOpen} onOpenChange={setSiteCmdOpen}>
                 <PopoverTrigger
                   render={<Button variant="outline" className="w-full justify-start text-left font-normal" />}
                 >
-                  <MapPin className="mr-2 h-4 w-4 shrink-0" />
+                  <MapPin className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
                   {siteId ? (
                     <span className="flex-1 truncate">{siteQuery}</span>
                   ) : (
@@ -1323,16 +1397,16 @@ function CreateGroupDialog({
               <FieldError error={errors.site} />
             </div>
 
-            {/* Date range picker: з ... по ... */}
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <CalendarIcon className="mr-1 inline h-3 w-3" />
                 Період *
               </Label>
               <Popover>
                 <PopoverTrigger
                   render={<Button variant="outline" className="w-full justify-start text-left font-normal" />}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
                   {plannedStart ? (
                     plannedEnd ? (
                       <>
@@ -1373,42 +1447,37 @@ function CreateGroupDialog({
             </div>
           </div>
 
-          <Separator />
-
-          {/* Section: Counts + Note */}
-          <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Hash className="mr-1 inline h-3 w-3" />
-                  План (к-ть) *
-                </Label>
-                <Input
-                  type="number"
-                  min={1}
-                  placeholder="0"
-                  value={plannedCount}
-                  onChange={(e) => { setPlannedCount(e.target.value); setErrors((p) => { const { count, ...rest } = p; return rest; }); }}
-                />
-                <FieldError error={errors.count} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Users className="mr-1 inline h-3 w-3" />
-                  Прибуло (к-ть)
-                </Label>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="0"
-                  value={arrivedCount}
-                  onChange={(e) => { setArrivedCount(e.target.value); setErrors((p) => { const { arrived, ...rest } = p; return rest; }); }}
-                />
-                <FieldError error={errors.arrived} />
-              </div>
-            </div>
-
+          {/* Counts + Note */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <Hash className="mr-1 inline h-3 w-3" />
+                План (к-ть) *
+              </Label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="0"
+                value={plannedCount}
+                onChange={(e) => { setPlannedCount(e.target.value); setErrors((p) => { const { count, ...rest } = p; return rest; }); }}
+              />
+              <FieldError error={errors.count} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <Users className="mr-1 inline h-3 w-3" />
+                Прибуло (к-ть)
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="0"
+                value={arrivedCount}
+                onChange={(e) => { setArrivedCount(e.target.value); setErrors((p) => { const { arrived, ...rest } = p; return rest; }); }}
+              />
+              <FieldError error={errors.arrived} />
+            </div>
+            <div className="col-span-2 flex flex-col gap-1.5 sm:col-span-1">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Примітка
               </Label>
@@ -1447,6 +1516,8 @@ function CreateGroupDialog({
 // ---------------------------------------------------------------------------
 
 export function DataWorkspacePage() {
+  const { isAdmin } = useAuth();
+
   // Data state
   const [groups, setGroups] = useState<DataGroupRow[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1567,10 +1638,38 @@ export function DataWorkspacePage() {
     setDetailOpen(true);
   }, []);
 
+  const ctxMenu = useContextMenu();
+
+  function handleRowContextMenu(e: React.MouseEvent, row: DataGroupRow) {
+    const items: ContextMenuEntry[] = [
+      {
+        label: "Деталі",
+        icon: <Eye className="h-4 w-4" />,
+        onClick: () => handleDetail(row),
+      },
+      { separator: true },
+      {
+        label: "Копіювати підрозділ",
+        icon: <Copy className="h-4 w-4" />,
+        onClick: () => { navigator.clipboard.writeText(row.org_label); },
+      },
+      ...(isAdmin ? [
+        { separator: true } as ContextMenuEntry,
+        {
+          label: "Видалити",
+          icon: <Trash2 className="h-4 w-4" />,
+          variant: "destructive" as const,
+          onClick: () => setDeleteTarget(row),
+        },
+      ] : []),
+    ];
+    ctxMenu.open(e, items);
+  }
+
   // Columns
   const columns = useMemo(
-    () => buildColumns(handleUpdate, setDeleteTarget, handleDetail),
-    [handleUpdate, handleDetail],
+    () => buildColumns(handleUpdate, setDeleteTarget, handleDetail, isAdmin),
+    [handleUpdate, handleDetail, isAdmin],
   );
 
   // Table instance
@@ -1650,56 +1749,41 @@ export function DataWorkspacePage() {
             className="pl-9"
           />
           {globalFilter && (
-            <button
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 hover:bg-accent"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2"
               onClick={() => setGlobalFilter("")}
             >
               <X className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
+            </Button>
           )}
         </div>
 
         {/* Kind filter chips */}
         {kindStats.length > 1 && (
           <>
-            <button
+            <Button
+              variant={!kindFilter ? "default" : "outline"}
+              size="sm"
               onClick={() => setKindFilter(null)}
-              className="rounded-md border px-2.5 py-1 text-xs font-semibold uppercase tracking-wider transition-colors"
-              style={{
-                borderColor: !kindFilter ? "var(--primary)" : "var(--border)",
-                color: !kindFilter
-                  ? "var(--primary)"
-                  : "var(--muted-foreground)",
-                background: !kindFilter
-                  ? "color-mix(in srgb, var(--primary) 8%, transparent)"
-                  : "transparent",
-              }}
+              className="text-xs font-semibold uppercase tracking-wider"
             >
               Усі ({groups?.length ?? 0})
-            </button>
+            </Button>
             {kindStats.map(([kind, count]) => (
-              <button
+              <Button
                 key={kind}
+                variant={kindFilter === kind ? "default" : "outline"}
+                size="sm"
                 onClick={() =>
                   setKindFilter(kindFilter === kind ? null : kind)
                 }
-                className="rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors"
-                style={{
-                  letterSpacing: "0.02em",
-                  borderColor:
-                    kindFilter === kind ? "var(--primary)" : "var(--border)",
-                  color:
-                    kindFilter === kind
-                      ? "var(--primary)"
-                      : "var(--muted-foreground)",
-                  background:
-                    kindFilter === kind
-                      ? "color-mix(in srgb, var(--primary) 8%, transparent)"
-                      : "transparent",
-                }}
+                className="text-xs font-semibold"
+                style={{ letterSpacing: "0.02em" }}
               >
                 {kind} ({count})
-              </button>
+              </Button>
             ))}
           </>
         )}
@@ -1709,13 +1793,11 @@ export function DataWorkspacePage() {
         {/* Group by selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
-              className="flex h-9 items-center gap-2 rounded-md border px-3 text-sm"
+            <Button
+              variant="outline"
+              className="h-9 gap-2"
               style={{
-                borderColor: "var(--border)",
-                background: "transparent",
                 color: groupBy ? "var(--primary)" : "var(--muted-foreground)",
-                cursor: "pointer",
               }}
             >
               <Layers className="h-3.5 w-3.5" />
@@ -1727,7 +1809,7 @@ export function DataWorkspacePage() {
                     ? "За місцем"
                     : "Групувати"}
               <ChevronDown className="h-3 w-3 opacity-50" />
-            </button>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => setGroupBy(null)}>
@@ -1746,15 +1828,17 @@ export function DataWorkspacePage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Create group */}
-        <Button size="sm" onClick={() => setShowCreateDialog(true)}>
-          <Plus className="mr-1 h-4 w-4" />
-          Нова група
-        </Button>
+        {/* Create group (admin only) */}
+        {isAdmin && (
+          <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="mr-1 h-4 w-4" />
+            Нова група
+          </Button>
+        )}
       </div>
 
-      {/* Import section */}
-      <ImportSection onImported={loadGroups} />
+      {/* Import section (admin only) */}
+      {isAdmin && <ImportSection onImported={loadGroups} />}
 
       {/* Data grid */}
       {loading ? (
@@ -1769,7 +1853,7 @@ export function DataWorkspacePage() {
               ? "Нічого не знайдено за цим фільтром"
               : "Груп підготовки ще немає"}
           </p>
-          {!globalFilter && !kindFilter && (
+          {!globalFilter && !kindFilter && isAdmin && (
             <Button size="sm" onClick={() => setShowCreateDialog(true)}>
               <Plus className="mr-1 h-4 w-4" />
               Створити першу групу
@@ -1860,6 +1944,7 @@ export function DataWorkspacePage() {
                           : "color-mix(in srgb, var(--muted) 20%, transparent)",
                     }}
                     onClick={() => handleDetail(row.original)}
+                    onContextMenu={(e) => handleRowContextMenu(e, row.original)}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td
@@ -1946,6 +2031,8 @@ export function DataWorkspacePage() {
         onOpenChange={setShowCreateDialog}
         onCreated={loadGroups}
       />
+
+      <ContextMenuPortal state={ctxMenu.state} onClose={ctxMenu.close} />
     </div>
   );
 }

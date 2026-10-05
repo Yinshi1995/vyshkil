@@ -52,8 +52,8 @@ async function main() {
 
   waClient.initialize().catch((e: unknown) => {
     console.error("notifier: WhatsApp Client.initialize() провалився:", e);
+    console.error("notifier: повідомлення залишаються в черзі NATS, буде повторна спроба при перезапуску");
     purgeSession();
-    process.exit(1);
   });
 
   startHealthServer(config.healthPort, () => nats);
@@ -74,6 +74,10 @@ async function main() {
   const minGapMs = 60_000 / Math.max(config.rateLimitPerMinute, 1);
 
   for (;;) {
+    if (!channel.isReady()) {
+      await sleep(5_000);
+      continue;
+    }
     try {
       const msgs = await consumer.fetch({ max_messages: 10, expires: 5_000 });
       for await (const msg of msgs) {

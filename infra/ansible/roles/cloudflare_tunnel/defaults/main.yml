@@ -1,0 +1,4 @@
+---
+cloudflare_tunnel_service: cloudflared
+cloudflare_tunnel_user: cloudflared
+cloudflare_tunnel_config_dir: /etc/cloudflared

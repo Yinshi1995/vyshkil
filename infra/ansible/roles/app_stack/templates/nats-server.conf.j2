@@ -1,0 +1,31 @@
+# NATS auth — прод (секрети з Ansible Vault).
+# Структура та права ідентичні dev (docker/nats-server.conf), лише паролі замінені.
+
+jetstream {
+  store_dir: /data
+}
+
+authorization {
+  users: [
+    {
+      user: {{ app_stack_nats_app_user }}
+      password: {{ vault_nats_app_password }}
+      permissions: {
+        publish: {
+          allow: ["vyshkil.discrepancy.>", "vyshkil.notify.send.>", "vyshkil.notifier.whatsapp.>", "$JS.API.>"]
+        }
+        subscribe: { allow: ["vyshkil.notify.result.>", "_INBOX.>", "$JS.API.>", "$KV.>"] }
+      }
+    }
+    {
+      user: {{ app_stack_nats_notifier_user }}
+      password: {{ vault_nats_notifier_password }}
+      permissions: {
+        publish: { allow: ["vyshkil.notify.result.>", "vyshkil.dlq.notify.>", "$JS.API.>", "$KV.>", "_INBOX.>"] }
+        subscribe: {
+          allow: ["vyshkil.notify.send.>", "vyshkil.notifier.whatsapp.>", "_INBOX.>", "$JS.API.>", "$KV.>"]
+        }
+      }
+    }
+  ]
+}

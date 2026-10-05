@@ -50,11 +50,50 @@ pub(crate) async fn require_auth(db: &DatabaseConnection, headers: &HeaderMap) -
         _ => None,
     };
 
+    let is_admin = actor.map_or(false, policy::is_admin);
+    let can_see_org_names = is_admin || session.can_see_org_names;
+
     Ok(AuthUser {
         user_id: session.user_id,
         actor,
         display_name: session.display_name,
+        callsign: session.callsign,
+        avatar_url: session.avatar_path.map(|p| format!("/api/avatars/{}", p)),
+        can_see_org_names,
     })
+}
+
+async fn org_number_labels(db: &DatabaseConnection, org_ids: &[i32]) -> std::collections::HashMap<i32, String> {
+    use sea_orm::FromQueryResult;
+    #[derive(FromQueryResult)]
+    struct Row { id: i32, label: String }
+
+    if org_ids.is_empty() {
+        return Default::default();
+    }
+    let placeholders: Vec<String> = org_ids.iter().enumerate().map(|(i, _)| format!("${}", i + 1)).collect();
+    let sql = format!(
+        "SELECT id, COALESCE(\
+            CASE number_kind WHEN 'A' THEN 'А' WHEN 'T' THEN 'Т' ELSE number_kind END || number, \
+            short_name\
+         ) AS label FROM org WHERE id IN ({})",
+        placeholders.join(", ")
+    );
+    let params: Vec<sea_orm::Value> = org_ids.iter().map(|&id| id.into()).collect();
+    Row::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres, &sql, params,
+    ))
+    .all(db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|r| (r.id, r.label))
+    .collect()
+}
+
+async fn org_number_label_one(db: &DatabaseConnection, org_id: i32) -> String {
+    let map = org_number_labels(db, &[org_id]).await;
+    map.into_values().next().unwrap_or_else(|| format!("#{org_id}"))
 }
 
 pub(crate) fn require_admin_actor(user: &AuthUser) -> Result<Actor, StatusCode> {
@@ -148,7 +187,19 @@ async fn login_handler(
         .into_response();
     }
 
-    let roles = repo::auth::user_roles(db, user.id).await.unwrap_or_default();
+    let mut roles = repo::auth::user_roles(db, user.id).await.unwrap_or_default();
+    let has_admin = roles.iter().any(|r| r.role == "admin");
+    let show_names = has_admin || user.can_see_org_names;
+    if !show_names {
+        let ids: Vec<i32> = roles.iter().map(|r| r.org_id).collect();
+        let labels = org_number_labels(db, &ids).await;
+        for r in &mut roles {
+            if let Some(l) = labels.get(&r.org_id) {
+                r.org_label = l.clone();
+            }
+        }
+    }
+
     let (first_org, first_role) = roles.first().map(|r| (Some(r.org_id), Some(r.role.as_str()))).unwrap_or((None, None));
 
     let session_id = match repo::auth::create_session(db, user.id, first_org, first_role).await {
@@ -187,6 +238,9 @@ struct MeResponse {
     user_id: i32,
     actor: Option<ActorDto>,
     display_name: Option<String>,
+    callsign: Option<String>,
+    avatar_url: Option<String>,
+    can_see_org_names: bool,
 }
 
 #[derive(Serialize)]
@@ -205,17 +259,21 @@ async fn me_handler(
         use sea_orm::{ConnectionTrait, FromQueryResult};
         #[derive(FromQueryResult)]
         struct LabelRow { label: String }
-        let label = LabelRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
-            state.db.get_database_backend(),
-            "SELECT short_name AS label FROM org WHERE id = $1",
-            [actor.org_id.into()],
-        ))
-        .one(&state.db)
-        .await
-        .ok()
-        .flatten()
-        .map(|r| r.label)
-        .unwrap_or_else(|| format!("Org #{}", actor.org_id));
+        let label = if user.can_see_org_names {
+            LabelRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
+                state.db.get_database_backend(),
+                "SELECT short_name AS label FROM org WHERE id = $1",
+                [actor.org_id.into()],
+            ))
+            .one(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .map(|r| r.label)
+            .unwrap_or_else(|| format!("Org #{}", actor.org_id))
+        } else {
+            org_number_label_one(&state.db, actor.org_id).await
+        };
         Some(ActorDto {
             org_id: actor.org_id,
             role: actor.role.as_str().to_string(),
@@ -227,7 +285,10 @@ async fn me_handler(
     Ok::<_, (StatusCode, &str)>(Json(MeResponse {
         user_id: user.user_id,
         actor: actor_dto,
-        display_name: user.display_name,
+        display_name: user.display_name.clone(),
+        callsign: user.callsign.clone(),
+        avatar_url: user.avatar_url.clone(),
+        can_see_org_names: user.can_see_org_names,
     }))
 }
 
@@ -311,11 +372,20 @@ async fn account_handler(
     struct AccountRow {
         login: String,
         display_name: Option<String>,
+        first_name: Option<String>,
+        last_name: Option<String>,
+        rank: Option<String>,
+        phone: Option<String>,
+        callsign: Option<String>,
+        delta_nick: Option<String>,
+        avatar_path: Option<String>,
         created_at: String,
     }
     let row = AccountRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
-        "SELECT login, display_name, to_char(created_at, 'YYYY-MM-DD') AS created_at FROM user_account WHERE id = $1",
+        "SELECT login, display_name, first_name, last_name, rank, phone, callsign, \
+                delta_nick, avatar_path, to_char(created_at, 'YYYY-MM-DD') AS created_at \
+         FROM user_account WHERE id = $1",
         [user.user_id.into()],
     ))
     .one(&state.db)
@@ -328,12 +398,336 @@ async fn account_handler(
         .unwrap_or_default();
     let roles: Vec<String> = role_rows.into_iter().map(|r| format!("{} ({})", r.role, r.org_label)).collect();
 
+    let avatar_url = row.avatar_path.as_ref().map(|p| format!("/api/avatars/{}", p));
+
     Ok::<_, StatusCode>(Json(AccountInfo {
         login: row.login,
         full_name: row.display_name,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        rank: row.rank,
+        phone: row.phone,
+        callsign: row.callsign,
+        delta_nick: row.delta_nick,
+        avatar_url,
         roles,
         created_at: row.created_at,
     }))
+}
+
+// ---------------------------------------------------------------------------
+// Update profile
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct UpdateProfileReq {
+    first_name: Option<String>,
+    last_name: Option<String>,
+    rank: Option<String>,
+    phone: Option<String>,
+    callsign: Option<String>,
+    delta_nick: Option<String>,
+}
+
+async fn update_profile_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<UpdateProfileReq>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+
+    state.db.execute(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "UPDATE user_account SET first_name = $1, last_name = $2, rank = $3, \
+         phone = $4, callsign = $5, delta_nick = $6, updated_at = now() WHERE id = $7",
+        [
+            body.first_name.into(), body.last_name.into(), body.rank.into(),
+            body.phone.into(), body.callsign.into(), body.delta_nick.into(),
+            user.user_id.into(),
+        ],
+    ))
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------------
+// Directory — list visible users
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct DirectoryQuery {
+    include_inactive: Option<bool>,
+}
+
+async fn directory_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<DirectoryQuery>,
+) -> impl IntoResponse {
+    use sea_orm::FromQueryResult;
+
+    let user = require_auth(&state.db, &headers).await?;
+    let actor = actor_or_err(&user)?;
+
+    let visible = policy::visible_org_ids(&state.db, actor)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let is_admin = policy::is_admin(actor);
+    let show_inactive = is_admin && params.include_inactive.unwrap_or(false);
+
+    #[derive(FromQueryResult, Serialize)]
+    struct DirectoryUser {
+        user_id: i32,
+        login: String,
+        display_name: Option<String>,
+        first_name: Option<String>,
+        last_name: Option<String>,
+        rank: Option<String>,
+        phone: Option<String>,
+        callsign: Option<String>,
+        delta_nick: Option<String>,
+        avatar_url: Option<String>,
+        is_active: bool,
+        role: String,
+        org_label: String,
+    }
+
+    #[derive(FromQueryResult)]
+    struct RawDirUser {
+        user_id: i32,
+        login: String,
+        display_name: Option<String>,
+        first_name: Option<String>,
+        last_name: Option<String>,
+        rank: Option<String>,
+        phone: Option<String>,
+        callsign: Option<String>,
+        delta_nick: Option<String>,
+        avatar_path: Option<String>,
+        is_active: bool,
+        role: String,
+        org_id: i32,
+        org_label: String,
+    }
+
+    let (visibility_filter, active_filter) = match (&visible, show_inactive) {
+        (None, true) => (String::new(), String::new()),
+        (None, false) => (String::new(), " AND ua.is_active = true".to_string()),
+        (Some(ids), true) => {
+            let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            (format!(" AND EXISTS (SELECT 1 FROM user_role ur2 WHERE ur2.user_id = ua.id AND ur2.org_id IN ({list}))"), String::new())
+        }
+        (Some(ids), false) => {
+            let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            (format!(" AND EXISTS (SELECT 1 FROM user_role ur2 WHERE ur2.user_id = ua.id AND ur2.org_id IN ({list}))"), " AND ua.is_active = true".to_string())
+        }
+    };
+
+    let sql = format!(
+        "SELECT DISTINCT ON (ua.id) ua.id AS user_id, ua.login, ua.display_name, \
+                ua.first_name, ua.last_name, ua.rank, ua.phone, ua.callsign, \
+                ua.delta_nick, ua.avatar_path, ua.is_active, \
+                ur.role, ur.org_id, o.short_name AS org_label \
+         FROM user_account ua \
+         JOIN user_role ur ON ur.user_id = ua.id \
+         JOIN org o ON o.id = ur.org_id \
+         WHERE true{visibility_filter}{active_filter} \
+         ORDER BY ua.id, \
+                CASE ur.role WHEN 'admin' THEN 0 WHEN 'org_editor' THEN 1 ELSE 2 END, \
+                ur.id"
+    );
+
+    let raw_rows = RawDirUser::find_by_statement(sea_orm::Statement::from_string(
+        sea_orm::DatabaseBackend::Postgres,
+        sql,
+    ))
+    .all(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let number_labels = if user.can_see_org_names {
+        Default::default()
+    } else {
+        let ids: Vec<i32> = raw_rows.iter().map(|r| r.org_id).collect();
+        org_number_labels(&state.db, &ids).await
+    };
+    let rows: Vec<DirectoryUser> = raw_rows.into_iter().map(|r| {
+        let label = if user.can_see_org_names {
+            r.org_label
+        } else {
+            number_labels.get(&r.org_id).cloned().unwrap_or(r.org_label)
+        };
+        DirectoryUser {
+            user_id: r.user_id,
+            login: r.login,
+            display_name: r.display_name,
+            first_name: r.first_name,
+            last_name: r.last_name,
+            rank: r.rank,
+            phone: r.phone,
+            callsign: r.callsign,
+            delta_nick: r.delta_nick,
+            avatar_url: r.avatar_path.map(|p| format!("/api/avatars/{}", p)),
+            is_active: r.is_active,
+            role: r.role,
+            org_label: label,
+        }
+    }).collect();
+
+    Ok::<_, StatusCode>(Json(rows))
+}
+
+async fn can_manage_user(db: &DatabaseConnection, admin_actor: Actor, target_user_id: i32) -> Result<bool, StatusCode> {
+    use sea_orm::FromQueryResult;
+
+    let visible = policy::visible_org_ids(db, admin_actor)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    #[derive(FromQueryResult)]
+    struct RoleRow { org_id: i32, role: String }
+    let target_roles = RoleRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT org_id, role FROM user_role WHERE user_id = $1",
+        [target_user_id.into()],
+    ))
+    .all(db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if target_roles.is_empty() {
+        return Ok(false);
+    }
+    if target_roles.iter().any(|r| r.role == "admin") {
+        return Ok(false);
+    }
+    if let Some(ids) = &visible {
+        if !target_roles.iter().all(|r| ids.contains(&r.org_id)) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+// ---------------------------------------------------------------------------
+// Avatar upload & serve
+// ---------------------------------------------------------------------------
+
+async fn avatar_upload_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    mut multipart: axum::extract::Multipart,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let user = require_auth(&state.db, &headers).await?;
+
+    let mut file_bytes: Option<Vec<u8>> = None;
+    let mut content_type: Option<String> = None;
+
+    while let Some(field) = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)? {
+        if field.name() == Some("avatar") {
+            content_type = field.content_type().map(|s| s.to_string());
+            let bytes = field.bytes().await.map_err(|_| StatusCode::PAYLOAD_TOO_LARGE)?;
+            if bytes.len() > 2 * 1024 * 1024 {
+                return Err(StatusCode::PAYLOAD_TOO_LARGE);
+            }
+            file_bytes = Some(bytes.to_vec());
+        }
+    }
+
+    let bytes = file_bytes.ok_or(StatusCode::BAD_REQUEST)?;
+    let ct = content_type.unwrap_or_default();
+    let ext = match ct.as_str() {
+        "image/png" => "png",
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/webp" => "webp",
+        _ => "jpg",
+    };
+
+    let avatar_dir = std::path::Path::new("data/avatars");
+    std::fs::create_dir_all(avatar_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let filename = format!("user_{}.{}", user.user_id, ext);
+    let filepath = avatar_dir.join(&filename);
+    std::fs::write(&filepath, &bytes).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    state.db.execute(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "UPDATE user_account SET avatar_path = $1, updated_at = now() WHERE id = $2",
+        [filename.clone().into(), user.user_id.into()],
+    ))
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    Ok(Json(serde_json::json!({ "avatar_url": format!("/api/avatars/{}?v={}", filename, ts) })))
+}
+
+async fn avatar_delete_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+
+    use sea_orm::FromQueryResult;
+    #[derive(FromQueryResult)]
+    struct AvatarRow { avatar_path: Option<String> }
+
+    let old = AvatarRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT avatar_path FROM user_account WHERE id = $1",
+        [user.user_id.into()],
+    ))
+    .one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(row) = old {
+        if let Some(path) = row.avatar_path {
+            let _ = std::fs::remove_file(format!("data/avatars/{}", path));
+        }
+    }
+
+    state.db.execute(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "UPDATE user_account SET avatar_path = NULL, updated_at = now() WHERE id = $1",
+        [user.user_id.into()],
+    ))
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+}
+
+async fn avatar_serve_handler(
+    Path(filename): Path<String>,
+) -> impl IntoResponse {
+    let safe_name = filename.replace(['/', '\\', '.', '.'], "");
+    let filepath = format!("data/avatars/{}", filename);
+    let path = std::path::Path::new(&filepath);
+
+    if !path.exists() || safe_name.is_empty() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let bytes = std::fs::read(path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let ct = if filename.ends_with(".png") {
+        "image/png"
+    } else if filename.ends_with(".webp") {
+        "image/webp"
+    } else {
+        "image/jpeg"
+    };
+
+    Ok((
+        [(axum::http::header::CONTENT_TYPE, ct), (axum::http::header::CACHE_CONTROL, "public, max-age=60")],
+        bytes,
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -513,19 +907,20 @@ async fn dashboard_stats_handler(
     #[derive(FromQueryResult)]
     struct SubRow {
         id: i64,
+        org_id: i32,
         org_label: String,
         source_type: String,
         updated_at: String,
     }
     let subs_sql = match &visible {
-        None => "SELECT s.id::bigint AS id, COALESCE(o.short_name, '') AS org_label, \
+        None => "SELECT s.id::bigint AS id, s.reporting_org_id AS org_id, COALESCE(o.short_name, '') AS org_label, \
                  s.source_type, to_char(s.updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at \
                  FROM submission s JOIN org o ON o.id = s.reporting_org_id \
                  ORDER BY s.updated_at DESC LIMIT 5".to_string(),
         Some(ids) => {
             let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
             format!(
-                "SELECT s.id::bigint AS id, COALESCE(o.short_name, '') AS org_label, \
+                "SELECT s.id::bigint AS id, s.reporting_org_id AS org_id, COALESCE(o.short_name, '') AS org_label, \
                  s.source_type, to_char(s.updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at \
                  FROM submission s JOIN org o ON o.id = s.reporting_org_id \
                  WHERE s.reporting_org_id IN ({list}) \
@@ -544,20 +939,21 @@ async fn dashboard_stats_handler(
     #[derive(FromQueryResult)]
     struct DiscRow {
         id: i64,
+        org_id: i32,
         org_label: String,
         metric_label: String,
         status: String,
         created_at: String,
     }
     let discs_sql = match &visible {
-        None => "SELECT d.id::bigint AS id, COALESCE(o.short_name, '') AS org_label, \
+        None => "SELECT d.id::bigint AS id, d.org_id, COALESCE(o.short_name, '') AS org_label, \
                  d.metric AS metric_label, d.status, to_char(d.created_at, 'DD.MM.YYYY HH24:MI') AS created_at \
                  FROM discrepancy d JOIN org o ON o.id = d.org_id \
                  ORDER BY d.created_at DESC LIMIT 5".to_string(),
         Some(ids) => {
             let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
             format!(
-                "SELECT d.id::bigint AS id, COALESCE(o.short_name, '') AS org_label, \
+                "SELECT d.id::bigint AS id, d.org_id, COALESCE(o.short_name, '') AS org_label, \
                  d.metric AS metric_label, d.status, to_char(d.created_at, 'DD.MM.YYYY HH24:MI') AS created_at \
                  FROM discrepancy d JOIN org o ON o.id = d.org_id \
                  WHERE d.org_id IN ({list}) \
@@ -579,13 +975,437 @@ async fn dashboard_stats_handler(
         total_submissions: row.sub_count,
         total_discrepancies: row.disc_count,
         groups_by_kind: kinds.into_iter().map(|k| KindCountDto { kind: k.kind, count: k.count }).collect(),
-        recent_submissions: recent_subs.into_iter().map(|s| RecentSubDto {
-            id: s.id, org_label: s.org_label, source_type: s.source_type, updated_at: s.updated_at,
-        }).collect(),
-        recent_discrepancies: recent_discs.into_iter().map(|d| RecentDiscDto {
-            id: d.id, org_label: d.org_label, metric_label: d.metric_label, status: d.status, created_at: d.created_at,
+        recent_submissions: {
+            let labels = if user.can_see_org_names { Default::default() } else {
+                let ids: Vec<i32> = recent_subs.iter().map(|s| s.org_id).collect();
+                org_number_labels(&state.db, &ids).await
+            };
+            recent_subs.into_iter().map(|s| {
+                let label = if user.can_see_org_names { s.org_label } else { labels.get(&s.org_id).cloned().unwrap_or(s.org_label) };
+                RecentSubDto { id: s.id, org_label: label, source_type: s.source_type, updated_at: s.updated_at }
+            }).collect()
+        },
+        recent_discrepancies: {
+            let labels = if user.can_see_org_names { Default::default() } else {
+                let ids: Vec<i32> = recent_discs.iter().map(|d| d.org_id).collect();
+                org_number_labels(&state.db, &ids).await
+            };
+            recent_discs.into_iter().map(|d| {
+                let label = if user.can_see_org_names { d.org_label } else { labels.get(&d.org_id).cloned().unwrap_or(d.org_label) };
+                RecentDiscDto { id: d.id, org_label: label, metric_label: d.metric_label, status: d.status, created_at: d.created_at }
+            }).collect()
+        },
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard: pipeline (training funnel)
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct PipelineDto {
+    planned: i64,
+    arrived: i64,
+    in_training: i64,
+    completed: i64,
+    attrition: i64,
+}
+
+async fn dashboard_pipeline_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
+
+    let user = require_auth(&state.db, &headers).await?;
+    let actor = actor_or_err(&user)?;
+
+    let visible = policy::visible_org_ids(&state.db, actor)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let filter = match &visible {
+        None => String::new(),
+        Some(ids) => {
+            let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            format!(" AND tg.sender_org_id IN ({list})")
+        }
+    };
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        planned: i64,
+        arrived: i64,
+        started: i64,
+        completed: i64,
+        attrition: i64,
+    }
+
+    let sql = format!(
+        "SELECT \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'planned' THEN ge.count END), 0) AS planned, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'arrived' THEN ge.count END), 0) AS arrived, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'started' THEN ge.count END), 0) AS started, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'completed' THEN ge.count END), 0) AS completed, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'attrition' THEN ge.count END), 0) AS attrition \
+         FROM group_event ge \
+         JOIN training_group tg ON tg.id = ge.group_id \
+         WHERE true{filter}"
+    );
+
+    let row = Row::find_by_statement(Statement::from_string(
+        state.db.get_database_backend(), sql,
+    ))
+    .one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .unwrap_or(Row { planned: 0, arrived: 0, started: 0, completed: 0, attrition: 0 });
+
+    Ok::<_, StatusCode>(Json(PipelineDto {
+        planned: row.planned,
+        arrived: row.arrived,
+        in_training: row.started,
+        completed: row.completed,
+        attrition: row.attrition,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard: by-org breakdown
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct OrgBreakdownDto {
+    org_name: String,
+    group_count: i64,
+    planned: i64,
+    completed: i64,
+    attrition: i64,
+}
+
+async fn dashboard_by_org_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
+
+    let user = require_auth(&state.db, &headers).await?;
+    let actor = actor_or_err(&user)?;
+
+    let visible = policy::visible_org_ids(&state.db, actor)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let filter = match &visible {
+        None => String::new(),
+        Some(ids) => {
+            let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            format!(" WHERE tg.sender_org_id IN ({list})")
+        }
+    };
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        org_id: i32,
+        org_name: String,
+        group_count: i64,
+        planned: i64,
+        completed: i64,
+        attrition: i64,
+    }
+
+    let sql = format!(
+        "SELECT \
+            o.id AS org_id, \
+            COALESCE(o.short_name, '') AS org_name, \
+            COUNT(DISTINCT tg.id) AS group_count, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'planned' THEN ge.count END), 0) AS planned, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'completed' THEN ge.count END), 0) AS completed, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'attrition' THEN ge.count END), 0) AS attrition \
+         FROM training_group tg \
+         JOIN org o ON o.id = tg.sender_org_id \
+         LEFT JOIN group_event ge ON ge.group_id = tg.id \
+         {filter} \
+         GROUP BY o.id, o.short_name \
+         ORDER BY planned DESC \
+         LIMIT 20"
+    );
+
+    let rows = Row::find_by_statement(Statement::from_string(
+        state.db.get_database_backend(), sql,
+    ))
+    .all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let labels = if user.can_see_org_names { Default::default() } else {
+        let ids: Vec<i32> = rows.iter().map(|r| r.org_id).collect();
+        org_number_labels(&state.db, &ids).await
+    };
+    let dtos: Vec<OrgBreakdownDto> = rows.into_iter().map(|r| {
+        let name = if user.can_see_org_names { r.org_name } else { labels.get(&r.org_id).cloned().unwrap_or(r.org_name) };
+        OrgBreakdownDto { org_name: name, group_count: r.group_count, planned: r.planned, completed: r.completed, attrition: r.attrition }
+    }).collect();
+
+    Ok::<_, StatusCode>(Json(dtos))
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard: timeline (events per week)
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct TimelineDto {
+    week: String,
+    planned: i64,
+    started: i64,
+    completed: i64,
+    attrition: i64,
+}
+
+async fn dashboard_timeline_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
+
+    let user = require_auth(&state.db, &headers).await?;
+    let actor = actor_or_err(&user)?;
+
+    let visible = policy::visible_org_ids(&state.db, actor)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let filter = match &visible {
+        None => String::new(),
+        Some(ids) => {
+            let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            format!(" AND tg.sender_org_id IN ({list})")
+        }
+    };
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        week: String,
+        planned: i64,
+        started: i64,
+        completed: i64,
+        attrition: i64,
+    }
+
+    let sql = format!(
+        "SELECT \
+            to_char(date_trunc('week', ge.occurred_on), 'YYYY-MM-DD') AS week, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'planned' THEN ge.count END), 0) AS planned, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'started' THEN ge.count END), 0) AS started, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'completed' THEN ge.count END), 0) AS completed, \
+            COALESCE(SUM(CASE WHEN ge.event_type = 'attrition' THEN ge.count END), 0) AS attrition \
+         FROM group_event ge \
+         JOIN training_group tg ON tg.id = ge.group_id \
+         WHERE ge.occurred_on >= CURRENT_DATE - INTERVAL '6 months'{filter} \
+         GROUP BY date_trunc('week', ge.occurred_on) \
+         ORDER BY week"
+    );
+
+    let rows = Row::find_by_statement(Statement::from_string(
+        state.db.get_database_backend(), sql,
+    ))
+    .all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let dtos: Vec<TimelineDto> = rows.into_iter().map(|r| TimelineDto {
+        week: r.week, planned: r.planned, started: r.started,
+        completed: r.completed, attrition: r.attrition,
+    }).collect();
+
+    Ok::<_, StatusCode>(Json(dtos))
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard: discrepancies chart
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct DiscChartDto {
+    by_status: Vec<DiscStatusDto>,
+    by_org: Vec<DiscOrgDto>,
+}
+
+#[derive(Serialize)]
+struct DiscStatusDto {
+    status: String,
+    count: i64,
+}
+
+#[derive(Serialize)]
+struct DiscOrgDto {
+    org_name: String,
+    open: i64,
+    resolved: i64,
+    accepted: i64,
+}
+
+async fn dashboard_disc_chart_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
+
+    let user = require_auth(&state.db, &headers).await?;
+    let actor = actor_or_err(&user)?;
+
+    let visible = policy::visible_org_ids(&state.db, actor)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let filter = match &visible {
+        None => String::new(),
+        Some(ids) => {
+            let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            format!(" WHERE d.org_id IN ({list})")
+        }
+    };
+
+    #[derive(FromQueryResult)]
+    struct StatusRow {
+        status: String,
+        count: i64,
+    }
+    let status_sql = format!(
+        "SELECT d.status, count(*) AS count FROM discrepancy d{filter} \
+         GROUP BY d.status ORDER BY count DESC"
+    );
+    let by_status = StatusRow::find_by_statement(Statement::from_string(
+        state.db.get_database_backend(), status_sql,
+    ))
+    .all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let filter2 = match &visible {
+        None => String::new(),
+        Some(ids) => {
+            let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            format!(" AND d.org_id IN ({list})")
+        }
+    };
+
+    #[derive(FromQueryResult)]
+    struct OrgRow {
+        org_id: i32,
+        org_name: String,
+        open: i64,
+        resolved: i64,
+        accepted: i64,
+    }
+    let org_sql = format!(
+        "SELECT o.id AS org_id, COALESCE(o.short_name, '') AS org_name, \
+            COALESCE(SUM(CASE WHEN d.status = 'open' THEN 1 END), 0) AS open, \
+            COALESCE(SUM(CASE WHEN d.status = 'resolved' THEN 1 END), 0) AS resolved, \
+            COALESCE(SUM(CASE WHEN d.status = 'accepted' THEN 1 END), 0) AS accepted \
+         FROM discrepancy d \
+         JOIN org o ON o.id = d.org_id \
+         WHERE true{filter2} \
+         GROUP BY o.id, o.short_name \
+         ORDER BY open DESC \
+         LIMIT 15"
+    );
+    let by_org = OrgRow::find_by_statement(Statement::from_string(
+        state.db.get_database_backend(), org_sql,
+    ))
+    .all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let org_labels = if user.can_see_org_names { Default::default() } else {
+        let ids: Vec<i32> = by_org.iter().map(|r| r.org_id).collect();
+        org_number_labels(&state.db, &ids).await
+    };
+    Ok::<_, StatusCode>(Json(DiscChartDto {
+        by_status: by_status.into_iter().map(|r| DiscStatusDto { status: r.status, count: r.count }).collect(),
+        by_org: by_org.into_iter().map(|r| {
+            let name = if user.can_see_org_names { r.org_name } else { org_labels.get(&r.org_id).cloned().unwrap_or(r.org_name) };
+            DiscOrgDto { org_name: name, open: r.open, resolved: r.resolved, accepted: r.accepted }
         }).collect(),
     }))
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard: staffing overview
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct StaffingDto {
+    org_name: String,
+    category: String,
+    authorized: i64,
+    assigned: i64,
+}
+
+async fn dashboard_staffing_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
+
+    let user = require_auth(&state.db, &headers).await?;
+    let actor = actor_or_err(&user)?;
+
+    let visible = policy::visible_org_ids(&state.db, actor)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let filter = match &visible {
+        None => String::new(),
+        Some(ids) => {
+            let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            format!(" AND ss.org_id IN ({list})")
+        }
+    };
+
+    #[derive(FromQueryResult)]
+    struct Row {
+        org_id: i32,
+        org_name: String,
+        category: String,
+        authorized: i64,
+        assigned: i64,
+    }
+
+    let sql = format!(
+        "WITH latest AS ( \
+            SELECT DISTINCT ON (org_id, category) id, org_id, category \
+            FROM staffing_snapshot \
+            ORDER BY org_id, category, as_of DESC \
+         ) \
+         SELECT ss.org_id, COALESCE(o.short_name, '') AS org_name, \
+                ss.category, \
+                COALESCE((SELECT sm.value::bigint FROM staffing_metric sm WHERE sm.snapshot_id = ss.id AND sm.metric = 'by_tos'), 0) AS authorized, \
+                COALESCE((SELECT sm.value::bigint FROM staffing_metric sm WHERE sm.snapshot_id = ss.id AND sm.metric = 'by_list'), 0) AS assigned \
+         FROM latest ss \
+         JOIN org o ON o.id = ss.org_id \
+         WHERE true{filter} \
+         ORDER BY org_name, category"
+    );
+
+    let rows = Row::find_by_statement(Statement::from_string(
+        state.db.get_database_backend(), sql,
+    ))
+    .all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let labels = if user.can_see_org_names { Default::default() } else {
+        let ids: Vec<i32> = rows.iter().map(|r| r.org_id).collect();
+        org_number_labels(&state.db, &ids).await
+    };
+    let dtos: Vec<StaffingDto> = rows.into_iter().map(|r| {
+        let name = if user.can_see_org_names { r.org_name } else { labels.get(&r.org_id).cloned().unwrap_or(r.org_name) };
+        StaffingDto { org_name: name, category: r.category, authorized: r.authorized, assigned: r.assigned }
+    }).collect();
+
+    Ok::<_, StatusCode>(Json(dtos))
 }
 
 // ---------------------------------------------------------------------------
@@ -663,9 +1483,19 @@ async fn org_groups_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let groups = repo::auth::list_training_groups(&state.db, Some(&subtree))
+    let mut groups = repo::auth::list_training_groups(&state.db, Some(&subtree))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !user.can_see_org_names {
+        let ids: Vec<i32> = groups.iter().map(|g| g.org_id).collect();
+        let labels = org_number_labels(&state.db, &ids).await;
+        for g in &mut groups {
+            if let Some(lbl) = labels.get(&g.org_id) {
+                g.org_label = lbl.clone();
+            }
+        }
+    }
 
     Ok(Json(groups))
 }
@@ -734,10 +1564,20 @@ async fn discrepancies_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let filtered = match visible {
+    let mut filtered: Vec<_> = match visible {
         None => rows,
         Some(ids) => rows.into_iter().filter(|r| ids.contains(&r.org_id)).collect(),
     };
+
+    if !user.can_see_org_names {
+        let ids: Vec<i32> = filtered.iter().map(|r| r.org_id).collect();
+        let labels = org_number_labels(&state.db, &ids).await;
+        for r in &mut filtered {
+            if let Some(lbl) = labels.get(&r.org_id) {
+                r.org_label = lbl.clone();
+            }
+        }
+    }
 
     Ok::<_, StatusCode>(Json(filtered))
 }
@@ -862,14 +1702,18 @@ struct ResetPasswordReq {
 async fn admin_reset_password_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(user_id): Path<i32>,
+    Path(target_id): Path<i32>,
     Json(body): Json<ResetPasswordReq>,
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
-    require_admin_actor(&user)?;
+    let admin = require_admin_actor(&user)?;
+
+    if !can_manage_user(&state.db, admin, target_id).await? {
+        return Err(StatusCode::FORBIDDEN);
+    }
 
     let password_hash = hash_password(&body.temp_password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    repo::auth::reset_password(&state.db, user_id, &password_hash)
+    repo::auth::reset_password(&state.db, target_id, &password_hash)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
@@ -878,10 +1722,14 @@ async fn admin_reset_password_handler(
 async fn admin_toggle_active_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(user_id): Path<i32>,
+    Path(target_id): Path<i32>,
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
-    require_admin_actor(&user)?;
+    let admin = require_admin_actor(&user)?;
+
+    if !can_manage_user(&state.db, admin, target_id).await? {
+        return Err(StatusCode::FORBIDDEN);
+    }
 
     use sea_orm::FromQueryResult;
     #[derive(FromQueryResult)]
@@ -889,14 +1737,45 @@ async fn admin_toggle_active_handler(
     let row = ActiveRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
         "SELECT is_active FROM user_account WHERE id = $1",
-        [user_id.into()],
+        [target_id.into()],
     ))
     .one(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::NOT_FOUND)?;
 
-    repo::auth::toggle_active(&state.db, user_id, !row.is_active)
+    repo::auth::toggle_active(&state.db, target_id, !row.is_active)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+}
+
+async fn admin_toggle_org_names_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(target_id): Path<i32>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let admin = require_admin_actor(&user)?;
+
+    if !can_manage_user(&state.db, admin, target_id).await? {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    use sea_orm::FromQueryResult;
+    #[derive(FromQueryResult)]
+    struct FlagRow { can_see_org_names: bool }
+    let row = FlagRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT can_see_org_names FROM user_account WHERE id = $1",
+        [target_id.into()],
+    ))
+    .one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::NOT_FOUND)?;
+
+    repo::auth::set_can_see_org_names(&state.db, target_id, !row.can_see_org_names)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
@@ -1500,6 +2379,10 @@ async fn generate_d5_terminy_handler(
 const SUBJECT_PAIR_CODE: &str = "vyshkil.notifier.whatsapp.pair.code";
 const SUBJECT_LOGOUT: &str = "vyshkil.notifier.whatsapp.logout";
 const SUBJECT_TEST: &str = "vyshkil.notifier.whatsapp.test";
+const SUBJECT_GROUPS_LIST: &str = "vyshkil.notifier.whatsapp.groups.list";
+const SUBJECT_CONTACTS_UPSERT: &str = "vyshkil.notifier.whatsapp.contacts.upsert";
+const SUBJECT_CONTACTS_REMOVE: &str = "vyshkil.notifier.whatsapp.contacts.remove";
+const SUBJECT_CONTACTS_SYNC: &str = "vyshkil.notifier.whatsapp.contacts.sync";
 
 fn nats_client(state: &AppState) -> Result<bus::async_nats::Client, StatusCode> {
     state
@@ -1508,6 +2391,41 @@ fn nats_client(state: &AppState) -> Result<bus::async_nats::Client, StatusCode> 
         .expect("shared NATS mutex отруєний")
         .clone()
         .ok_or(StatusCode::SERVICE_UNAVAILABLE)
+}
+
+pub async fn sync_wa_contacts(db: &sea_orm::DatabaseConnection, nats: &bus::SharedNatsClient) {
+    let client = match nats.lock().expect("shared NATS mutex отруєний").clone() {
+        Some(c) => c,
+        None => return,
+    };
+    let rows = match repo::whatsapp_routing::all_destinations_for_sync(db).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("sync_wa_contacts: не вдалось прочитати whatsapp_destination: {e}");
+            return;
+        }
+    };
+    let contacts: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "org_id": r.org_id,
+                "phone": r.phone,
+                "kind": r.kind,
+                "active": r.is_active,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({ "contacts": contacts }).to_string();
+    match bus::request(&client, SUBJECT_CONTACTS_SYNC, payload.into_bytes()).await {
+        Ok(resp) => {
+            let body = String::from_utf8_lossy(&resp);
+            tracing::info!("sync_wa_contacts: відповідь нотифікатора: {body}");
+        }
+        Err(e) => {
+            tracing::warn!("sync_wa_contacts: NATS request failed: {e}");
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -1582,6 +2500,22 @@ async fn whatsapp_test_handler(
     Ok::<_, StatusCode>(raw_str)
 }
 
+async fn whatsapp_groups_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    require_admin_actor(&user)?;
+
+    let client = nats_client(&state)?;
+    let raw = bus::request(&client, SUBJECT_GROUPS_LIST, b"{}".to_vec())
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let raw_str = String::from_utf8(raw).map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    Ok::<_, StatusCode>(raw_str)
+}
+
 // ---------------------------------------------------------------------------
 // Binary response helpers
 // ---------------------------------------------------------------------------
@@ -1642,9 +2576,19 @@ async fn all_groups_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let groups = repo::auth::list_training_groups(&state.db, visible.as_deref())
+    let mut groups = repo::auth::list_training_groups(&state.db, visible.as_deref())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !user.can_see_org_names {
+        let ids: Vec<i32> = groups.iter().map(|g| g.org_id).collect();
+        let labels = org_number_labels(&state.db, &ids).await;
+        for g in &mut groups {
+            if let Some(lbl) = labels.get(&g.org_id) {
+                g.org_label = lbl.clone();
+            }
+        }
+    }
 
     Ok::<_, StatusCode>(Json(groups))
 }
@@ -1686,9 +2630,31 @@ async fn data_groups_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let groups = repo::groups::list_groups_extended(&state.db, visible.as_deref())
+    let mut groups = repo::groups::list_groups_extended(&state.db, visible.as_deref())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !user.can_see_org_names {
+        let mut all_ids: Vec<i32> = groups.iter().map(|g| g.sender_org_id).collect();
+        for g in &groups {
+            if let Some(oid) = g.organizer_org_id {
+                all_ids.push(oid);
+            }
+        }
+        all_ids.sort_unstable();
+        all_ids.dedup();
+        let labels = org_number_labels(&state.db, &all_ids).await;
+        for g in &mut groups {
+            if let Some(lbl) = labels.get(&g.sender_org_id) {
+                g.org_label = lbl.clone();
+            }
+            if let Some(oid) = g.organizer_org_id {
+                if let Some(lbl) = labels.get(&oid) {
+                    g.organizer_label = lbl.clone();
+                }
+            }
+        }
+    }
 
     Ok::<_, StatusCode>(Json(groups))
 }
@@ -1763,21 +2729,25 @@ async fn data_add_event_handler(
     headers: HeaderMap,
     Path(group_id): Path<i32>,
     Json(body): Json<AddEventBody>,
-) -> impl IntoResponse {
-    let user = require_auth(&state.db, &headers).await?;
-    let _actor = require_admin_actor(&user)?;
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let user = require_auth(&state.db, &headers).await
+        .map_err(|s| (s, Json(serde_json::json!({ "error": "Не авторизовано" }))))?;
+    let _actor = require_admin_actor(&user)
+        .map_err(|s| (s, Json(serde_json::json!({ "error": "Недостатньо прав" }))))?;
 
     if body.count <= 0 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "К-ть має бути > 0" }))));
     }
     if body.occurred_on.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Дата обов'язкова" }))));
     }
 
-    let txn = state.db.begin().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    policy::set_session_actor(&txn, _actor).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let txn = state.db.begin().await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка сервера" }))))?;
+    policy::set_session_actor(&txn, _actor).await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка сервера" }))))?;
 
-    let id = repo::groups::add_group_event(
+    let id = match repo::groups::add_group_event(
         &txn,
         group_id,
         &body.event_type,
@@ -1785,11 +2755,21 @@ async fn data_add_event_handler(
         &body.occurred_on,
         body.reason_id,
         body.note.as_deref(),
+        Some(user.user_id),
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    {
+        Ok(id) => id,
+        Err(sea_orm::DbErr::Custom(msg)) => {
+            return Err((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({ "error": msg }))));
+        }
+        Err(_) => {
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка сервера" }))));
+        }
+    };
 
-    txn.commit().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    txn.commit().await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка сервера" }))))?;
 
     let event_label = match body.event_type.as_str() {
         "planned" => "План",
@@ -1815,7 +2795,7 @@ async fn data_add_event_handler(
     let _ = repo::reconciliation::refresh_horizontal(&state.db, group_id).await;
     let _ = repo::reconciliation::refresh_temporal(&state.db, group_id).await;
 
-    Ok::<_, StatusCode>(Json(serde_json::json!({ "id": id })))
+    Ok(Json(serde_json::json!({ "id": id })))
 }
 
 async fn data_delete_event_handler(
@@ -1868,18 +2848,20 @@ async fn data_create_group_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<CreateGroupBody>,
-) -> impl IntoResponse {
-    let user = require_auth(&state.db, &headers).await?;
-    let _actor = require_admin_actor(&user)?;
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let user = require_auth(&state.db, &headers).await
+        .map_err(|s| (s, Json(serde_json::json!({ "error": "Не авторизовано" }))))?;
+    let _actor = require_admin_actor(&user)
+        .map_err(|s| (s, Json(serde_json::json!({ "error": "Недостатньо прав" }))))?;
 
     if body.planned_count <= 0 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "К-ть за планом має бути > 0" }))));
     }
     if body.arrived_count < 0 || body.in_training_count < 0 {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "К-ть не може бути від'ємною" }))));
     }
     if body.planned_start.is_empty() || body.planned_end.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Дати обов'язкові" }))));
     }
 
     let id = repo::groups::create_group_with_events(
@@ -1903,9 +2885,16 @@ async fn data_create_group_handler(
         body.in_training_count,
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        if let sea_orm::DbErr::Custom(msg) = &e {
+            if msg.contains("вже існує") {
+                return (StatusCode::CONFLICT, Json(serde_json::json!({ "error": msg })));
+            }
+        }
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка створення групи" })))
+    })?;
 
-    Ok::<_, StatusCode>(Json(serde_json::json!({ "id": id })))
+    Ok(Json(serde_json::json!({ "id": id })))
 }
 
 async fn training_kinds_handler(
@@ -2056,9 +3045,17 @@ async fn import_upload_handler(
 
     let today = chrono::Utc::now().date_naive();
 
+    let no_data_err = |kind_label: &str| {
+        (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({
+            "error": format!("Файл не містить розпізнаних даних типу «{}». Перевірте тип файлу або структуру таблиці.", kind_label),
+            "issues": []
+        })))
+    };
+
     let imported: i64 = match kind.as_str() {
         "fah" => {
             let raw = app::backend::import::fah::extract(&bytes).map_err(parse_err)?;
+            if raw.is_empty() { return Err(no_data_err("Фах")); }
             let rows = repo::imports_fah::resolve_rows(db, raw).await.map_err(ise)?;
             let validated = validate_import_rows(&rows, today)?;
             let txn = db.begin().await.map_err(ise)?;
@@ -2072,6 +3069,7 @@ async fn import_upload_handler(
         "bps" => {
             let raw = app::backend::import::bps::extract(&bytes)
                 .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": e.0}))))?;
+            if raw.is_empty() { return Err(no_data_err("БпС")); }
             let rows = repo::imports_bps::resolve_rows(db, raw).await.map_err(ise)?;
             let validated = validate_import_rows(&rows, today)?;
             let txn = db.begin().await.map_err(ise)?;
@@ -2085,6 +3083,7 @@ async fn import_upload_handler(
         "terminy" => {
             let raw = app::backend::import::terminy::extract(&bytes)
                 .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": e.0}))))?;
+            if raw.bzvp.is_empty() && raw.special.is_empty() && raw.adapt.is_empty() { return Err(no_data_err("Терміни")); }
             let rows = repo::imports_terminy::resolve_rows(db, raw).await.map_err(ise)?;
             let validated = validate_import_rows(&rows, today)?;
             let txn = db.begin().await.map_err(ise)?;
@@ -2098,6 +3097,7 @@ async fn import_upload_handler(
         "archive" => {
             let raw = app::backend::import::vch_archive::extract(&bytes)
                 .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": e.0}))))?;
+            if raw.is_empty() { return Err(no_data_err("Архів ВЧ")); }
             let rows = repo::imports_vch_archive::resolve_rows(db, raw).await.map_err(ise)?;
             let validated = validate_import_rows(&rows, today)?;
             let txn = db.begin().await.map_err(ise)?;
@@ -2111,6 +3111,7 @@ async fn import_upload_handler(
         "kvid" => {
             let raw = app::backend::import::kvid::extract(&bytes)
                 .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": e.0}))))?;
+            if raw.is_empty() { return Err(no_data_err("КВід")); }
             let rows = repo::imports_kvid::resolve_rows(db, raw).await.map_err(ise)?;
             let txn = db.begin().await.map_err(ise)?;
             policy::set_session_actor(&txn, _actor).await.map_err(ise)?;
@@ -2130,6 +3131,7 @@ async fn import_upload_handler(
         "ivs" => {
             let raw = app::backend::import::ivs::extract(&bytes)
                 .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": e.0}))))?;
+            if raw.staffing.is_empty() && raw.internships.is_empty() && raw.courses.is_empty() { return Err(no_data_err("ІВС")); }
             let resolved = repo::imports_ivs::resolve_rows(db, raw).await.map_err(ise)?;
             let txn = db.begin().await.map_err(ise)?;
             policy::set_session_actor(&txn, _actor).await.map_err(ise)?;
@@ -2160,21 +3162,78 @@ async fn import_upload_handler(
 type ImportValidated = Vec<(app::types::submission::GroupFormRow, repo::groups::ValidatedRow)>;
 type ApiError = (StatusCode, Json<serde_json::Value>);
 
+fn parse_import_note(note: &str) -> (String, u32) {
+    if let Some(rest) = note.strip_prefix("Імпорт: ") {
+        if let Some(pos) = rest.rfind(' ') {
+            let sheet = rest[..pos].to_string();
+            let row = rest[pos + 1..].parse().unwrap_or(0);
+            return (sheet, row);
+        }
+    }
+    (String::new(), 0)
+}
+
+fn collect_unresolved_issues(rows: &[app::types::submission::GroupFormRow]) -> Vec<serde_json::Value> {
+    let mut issues = Vec::new();
+    for row in rows {
+        let (sheet, row_num) = parse_import_note(&row.note);
+        if row.sender_org_id.is_none() && !row.sender_org_label.is_empty() {
+            issues.push(serde_json::json!({
+                "row": row_num, "sheet": sheet,
+                "field": "Частина",
+                "value": row.sender_org_label,
+                "message": "не знайдено в довіднику організацій"
+            }));
+        }
+        if row.site_id.is_none() && !row.site_label.is_empty() {
+            issues.push(serde_json::json!({
+                "row": row_num, "sheet": sheet,
+                "field": "Місце",
+                "value": row.site_label,
+                "message": "не знайдено в довіднику організацій/полігонів"
+            }));
+        }
+        if row.vos_id.is_none() && row.position_id.is_none() && row.course_id.is_none()
+            && !row.vos_position_course_label.is_empty()
+        {
+            issues.push(serde_json::json!({
+                "row": row_num, "sheet": sheet,
+                "field": "ВОС/Посада",
+                "value": row.vos_position_course_label,
+                "message": "не знайдено в довідниках ВОС, посад або курсів"
+            }));
+        }
+    }
+    issues
+}
+
 fn validate_import_rows(
     rows: &[app::types::submission::GroupFormRow],
     today: chrono::NaiveDate,
 ) -> Result<ImportValidated, ApiError> {
+    let mut issues = collect_unresolved_issues(rows);
+
     let mut out = Vec::with_capacity(rows.len());
-    let mut errors = Vec::new();
-    for (i, row) in rows.iter().enumerate() {
+    for row in rows {
+        let (sheet, row_num) = parse_import_note(&row.note);
         match repo::groups::validate_row(row, today) {
             Ok(v) => out.push((row.clone(), v)),
-            Err((field, msg)) => errors.push(format!("Рядок {}: {} — {}", i + 1, field, msg)),
+            Err((field, msg)) => {
+                issues.push(serde_json::json!({
+                    "row": row_num, "sheet": sheet,
+                    "field": field, "value": "",
+                    "message": msg
+                }));
+            }
         }
     }
-    if !errors.is_empty() {
-        let msg = format!("{} помилок валідації:\n{}", errors.len(), errors.into_iter().take(10).collect::<Vec<_>>().join("\n"));
-        return Err((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": msg}))));
+    if !issues.is_empty() {
+        let total = issues.len();
+        issues.truncate(50);
+        return Err((StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({
+            "error": format!("Знайдено {} помилок у файлі", total),
+            "issues": issues
+        }))));
     }
     Ok(out)
 }
@@ -2219,6 +3278,7 @@ async fn wa_destinations_handler(
 struct AddDestBody {
     kind: String,
     phone_masked: String,
+    group_id: Option<String>,
 }
 
 async fn wa_add_destination_handler(
@@ -2233,9 +3293,30 @@ async fn wa_add_destination_handler(
     }
     let id = repo::whatsapp_routing::add_destination(
         &state.db, Some(user.user_id), actor.org_id, &body.kind, body.phone_masked.trim(),
+        body.group_id.as_deref(),
     )
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Sync to notifier's org_contact via NATS (best-effort, doesn't block response)
+    if let Ok(client) = nats_client(&state) {
+        let phone = if body.kind == "group" {
+            body.group_id.as_deref()
+                .filter(|g| !g.trim().is_empty())
+                .unwrap_or(body.phone_masked.trim())
+                .to_string()
+        } else {
+            body.phone_masked.trim().to_string()
+        };
+        let payload = serde_json::json!({
+            "org_id": actor.org_id,
+            "phone": phone,
+            "kind": body.kind,
+            "active": true,
+        }).to_string();
+        let _ = bus::request(&client, SUBJECT_CONTACTS_UPSERT, payload.into_bytes()).await;
+    }
+
     Ok::<_, StatusCode>(Json(serde_json::json!({ "id": id })))
 }
 
@@ -2249,6 +3330,13 @@ async fn wa_delete_destination_handler(
     let ok = repo::whatsapp_routing::delete_destination(&state.db, dest_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if ok {
+        let db = state.db.clone();
+        let nats = state.nats.clone();
+        tokio::spawn(async move { sync_wa_contacts(&db, &nats).await });
+    }
+
     Ok::<_, StatusCode>(Json(serde_json::json!({ "ok": ok })))
 }
 
@@ -2264,6 +3352,13 @@ async fn wa_toggle_destination_handler(
     let ok = repo::whatsapp_routing::toggle_destination(&state.db, dest_id, active)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if ok {
+        let db = state.db.clone();
+        let nats = state.nats.clone();
+        tokio::spawn(async move { sync_wa_contacts(&db, &nats).await });
+    }
+
     Ok::<_, StatusCode>(Json(serde_json::json!({ "ok": ok })))
 }
 
@@ -2552,11 +3647,26 @@ async fn admin_org_tree_handler(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
-    let _actor = require_admin_actor(&user)?;
+    let actor = require_admin_actor(&user)?;
     let tree = repo::orgs::admin_hierarchy(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok::<_, StatusCode>(Json(tree))
+    let ids = policy::manageable_org_ids(&state.db, actor)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let filtered: Vec<_> = tree
+        .into_iter()
+        .filter(|n| ids.contains(&n.id))
+        .map(|mut n| {
+            if let Some(pid) = n.parent_id {
+                if !ids.contains(&pid) {
+                    n.parent_id = None;
+                }
+            }
+            n
+        })
+        .collect();
+    Ok::<_, StatusCode>(Json(filtered))
 }
 
 #[derive(Deserialize)]
@@ -2586,7 +3696,13 @@ async fn admin_update_org_handler(
     Json(body): Json<CreateOrgReq>,
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
-    let _actor = require_admin_actor(&user)?;
+    let actor = require_admin_actor(&user)?;
+    if !policy::can_manage_org(&state.db, actor, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
     repo::orgs::update_org(&state.db, id, &body.short_name, &body.kind, body.echelon.as_deref())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2599,7 +3715,13 @@ async fn admin_delete_org_handler(
     Path(id): Path<i32>,
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
-    let _actor = require_admin_actor(&user)?;
+    let actor = require_admin_actor(&user)?;
+    if !policy::can_manage_org(&state.db, actor, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
     repo::orgs::delete_org(&state.db, id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2632,7 +3754,13 @@ async fn admin_org_number_put_handler(
     Json(body): Json<UpdateOrgNumberReq>,
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
-    let _actor = require_admin_actor(&user)?;
+    let actor = require_admin_actor(&user)?;
+    if !policy::can_manage_org(&state.db, actor, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
     repo::orgs::update_org_number(
         &state.db,
         id,
@@ -2650,7 +3778,13 @@ async fn admin_org_subordination_handler(
     Path(id): Path<i32>,
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
-    let _actor = require_admin_actor(&user)?;
+    let actor = require_admin_actor(&user)?;
+    if !policy::can_manage_org(&state.db, actor, id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let (parents, children) = repo::orgs::org_subordination_links(&state.db, id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2671,7 +3805,13 @@ async fn admin_create_subordination_handler(
     Json(body): Json<CreateSubordinationReq>,
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
-    let _actor = require_admin_actor(&user)?;
+    let actor = require_admin_actor(&user)?;
+    if !policy::can_manage_org(&state.db, actor, body.parent_org_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let id = repo::orgs::create_subordination(
         &state.db,
         body.child_org_id,
@@ -2753,10 +3893,18 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/auth/me", get(me_handler))
         .route("/api/auth/switch-actor", post(switch_actor_handler))
         .route("/api/auth/change-password", post(change_password_handler))
-        .route("/api/auth/account", get(account_handler))
+        .route("/api/auth/account", get(account_handler).put(update_profile_handler))
+        .route("/api/auth/avatar", post(avatar_upload_handler).delete(avatar_delete_handler))
+        .route("/api/avatars/:filename", get(avatar_serve_handler))
         .route("/api/auth/request-account", post(request_account_handler))
+        .route("/api/directory", get(directory_handler))
         // Dashboard
         .route("/api/dashboard/stats", get(dashboard_stats_handler))
+        .route("/api/dashboard/pipeline", get(dashboard_pipeline_handler))
+        .route("/api/dashboard/by-org", get(dashboard_by_org_handler))
+        .route("/api/dashboard/timeline", get(dashboard_timeline_handler))
+        .route("/api/dashboard/discrepancies-chart", get(dashboard_disc_chart_handler))
+        .route("/api/dashboard/staffing", get(dashboard_staffing_handler))
         // Orgs
         .route("/api/orgs/search", get(org_search_handler))
         .route("/api/orgs/:org_id", get(org_detail_handler))
@@ -2810,6 +3958,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/admin/users", post(admin_create_user_handler))
         .route("/api/admin/users/:user_id/reset-password", post(admin_reset_password_handler))
         .route("/api/admin/users/:user_id/toggle-active", post(admin_toggle_active_handler))
+        .route("/api/admin/users/:user_id/toggle-org-names", post(admin_toggle_org_names_handler))
         // Admin: Dictionaries
         .route("/api/admin/dictionaries", get(admin_dictionaries_handler))
         .route("/api/admin/dictionaries/vos", post(admin_create_vos_handler))
@@ -2837,6 +3986,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/admin/whatsapp/pair", post(whatsapp_pair_handler))
         .route("/api/admin/whatsapp/logout", post(whatsapp_logout_handler))
         .route("/api/admin/whatsapp/test", post(whatsapp_test_handler))
+        .route("/api/admin/whatsapp/groups", get(whatsapp_groups_handler))
         // WhatsApp routing
         .route("/api/whatsapp/destinations", get(wa_destinations_handler))
         .route("/api/whatsapp/destinations", post(wa_add_destination_handler))

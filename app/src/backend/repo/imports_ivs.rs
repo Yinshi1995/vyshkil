@@ -94,7 +94,7 @@ async fn resolve_internships(
             organizer_org_label: String::new(),
             basis_doc_number: String::new(),
             basis_doc_date_raw: String::new(),
-            note: "Імпорт: ІВС, стажування".to_string(),
+            note: format!("Імпорт: ІВС-Стажування {}", raw.row_number),
         });
     }
     Ok(out)
@@ -142,7 +142,7 @@ async fn resolve_courses(
             organizer_org_label: String::new(),
             basis_doc_number: String::new(),
             basis_doc_date_raw: String::new(),
-            note: "Імпорт: ІВС, курс".to_string(),
+            note: format!("Імпорт: ІВС-Курс {}", raw.row_number),
         });
     }
     Ok(out)

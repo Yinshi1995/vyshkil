@@ -25,6 +25,7 @@ use crate::domain::normalize::normalize;
 
 #[derive(Debug, Clone)]
 pub struct RawBzvpRow {
+    pub row_number: u32,
     pub org_raw: String,
     pub count_raw: String,
     pub term_raw: String,
@@ -34,6 +35,7 @@ pub struct RawBzvpRow {
 
 #[derive(Debug, Clone)]
 pub struct RawSpecialRow {
+    pub row_number: u32,
     pub org_raw: String,
     pub count_raw: String,
     pub term_raw: String,
@@ -45,6 +47,7 @@ pub struct RawSpecialRow {
 
 #[derive(Debug, Clone)]
 pub struct RawAdaptRow {
+    pub row_number: u32,
     pub org_raw: String,
     pub count_raw: String,
     pub term_raw: String,
@@ -94,7 +97,7 @@ fn parse_sheet(rows: &[Vec<Data>]) -> TerminyExtract {
     let mut out = TerminyExtract::default();
     let mut current_org = String::new();
 
-    for row in rows.iter().skip(data_start) {
+    for (idx, row) in rows.iter().enumerate().skip(data_start) {
         let a_text = cell_text(row, 0);
         if normalize(&a_text).contains("всього") {
             continue; // "Всього за …:" -- реальні числа в тих самих колонках, не дані.
@@ -107,8 +110,10 @@ fn parse_sheet(rows: &[Vec<Data>]) -> TerminyExtract {
             continue; // до першого підрозділу (не мало б статись після detect_header_row).
         }
 
+        let excel_row = (idx + 1) as u32;
         if let Some(count_raw) = positive_count(row, 2) {
             out.bzvp.push(RawBzvpRow {
+                row_number: excel_row,
                 org_raw: current_org.clone(),
                 count_raw,
                 term_raw: cell_text(row, 3),
@@ -118,6 +123,7 @@ fn parse_sheet(rows: &[Vec<Data>]) -> TerminyExtract {
         }
         if let Some(count_raw) = positive_count(row, 6) {
             out.special.push(RawSpecialRow {
+                row_number: excel_row,
                 org_raw: current_org.clone(),
                 count_raw,
                 term_raw: cell_text(row, 7),
@@ -127,6 +133,7 @@ fn parse_sheet(rows: &[Vec<Data>]) -> TerminyExtract {
         }
         if let Some(count_raw) = positive_count(row, 10) {
             out.adapt.push(RawAdaptRow {
+                row_number: excel_row,
                 org_raw: current_org.clone(),
                 count_raw,
                 term_raw: cell_text(row, 11),

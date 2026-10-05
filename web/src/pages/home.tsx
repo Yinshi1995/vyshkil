@@ -61,7 +61,7 @@ function StatCard({
   const iconColor = accent ? "var(--destructive)" : tint ?? "var(--primary)";
   return (
     <Link to={href} className="group block">
-      <Card className="transition-all duration-300 group-hover:scale-[1.02]">
+      <Card className="card-animate card-hover transition-all duration-300 group-hover:scale-[1.02]">
         <CardContent className="flex items-center gap-4 p-5">
           <div
             className="icon-box"
@@ -95,7 +95,7 @@ function KindBreakdown({ data }: { data: DashboardStats["groups_by_kind"] }) {
   const total = data.reduce((s, d) => s + d.count, 0);
 
   return (
-    <Card>
+    <Card className="card-animate">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <BarChart3 className="h-4 w-4 text-primary" />
@@ -119,7 +119,7 @@ function KindBreakdown({ data }: { data: DashboardStats["groups_by_kind"] }) {
                 style={{ background: `color-mix(in srgb, ${barColor} 12%, transparent)` }}
               >
                 <div
-                  className="h-full rounded-full transition-all duration-700"
+                  className="bar-animate h-full rounded-full"
                   style={{
                     width: `${pct}%`,
                     background: barColor,
@@ -156,7 +156,7 @@ function RecentActivity({ stats }: { stats: DashboardStats }) {
 
   if (items.length === 0) {
     return (
-      <Card>
+      <Card className="card-animate">
         <CardContent className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
           <Activity className="h-8 w-8 opacity-40" />
           <p className="text-sm">Поки що немає активності</p>
@@ -166,7 +166,7 @@ function RecentActivity({ stats }: { stats: DashboardStats }) {
   }
 
   return (
-    <Card>
+    <Card className="card-animate">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Clock className="h-4 w-4 text-primary" />
@@ -218,7 +218,7 @@ function QuickActions() {
   ];
 
   return (
-    <Card>
+    <Card className="card-animate">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Activity className="h-4 w-4 text-primary" />

@@ -31,13 +31,6 @@ pub async fn run(db: DatabaseConnection, nats_url: String, shared: SharedNatsCli
             match bus::connect(&nats_url).await {
                 Ok(c) => {
                     let js = bus::jetstream(&c);
-                    // Ідемпотентно (get-or-create) -- relay володіє схемою `EVENTS` (09 §3.3:
-                    // "app" публікує доменні події), notifier аналогічно забезпечує СВОЇ стріми
-                    // (`NOTIFY_CMD`/`NOTIFY_RESULT`) на власному старті.
-                    // Вузько (не "vyshkil.>"): JetStream забороняє ДВОМ стрімам ділити
-                    // перекриті subject-и, а `NOTIFY_CMD`/`NOTIFY_RESULT` (окремі стріми,
-                    // §3.3-таблиця) теж під префіксом `vyshkil.*` -- широкий wildcard тут зробив
-                    // би їх недостворюваними пізніше.
                     if let Err(e) = bus::ensure_stream(
                         &js,
                         subjects::stream::EVENTS,
@@ -48,9 +41,26 @@ pub async fn run(db: DatabaseConnection, nats_url: String, shared: SharedNatsCli
                         tracing::warn!("relay: не вдалось забезпечити стрім EVENTS: {e}");
                         continue;
                     }
-                    tracing::info!("relay: з'єднано з NATS ({nats_url}), стрім EVENTS готовий");
+                    if let Err(e) = bus::ensure_stream(
+                        &js,
+                        subjects::stream::NOTIFY_CMD,
+                        vec![subjects::NOTIFY_SEND_V1.to_string()],
+                    )
+                    .await
+                    {
+                        tracing::warn!("relay: не вдалось забезпечити стрім NOTIFY_CMD: {e}");
+                        continue;
+                    }
+                    tracing::info!("relay: з'єднано з NATS ({nats_url}), стріми EVENTS/NOTIFY_CMD готові");
                     *shared.lock().expect("shared NATS mutex отруєний") = Some(c.clone());
-                    client = Some(c);
+                    client = Some(c.clone());
+
+                    let db2 = db.clone();
+                    let shared2 = shared.clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        crate::api::sync_wa_contacts(&db2, &shared2).await;
+                    });
                 }
                 Err(e) => {
                     tracing::warn!("relay: не вдалось з'єднатися з NATS ({nats_url}): {e}");

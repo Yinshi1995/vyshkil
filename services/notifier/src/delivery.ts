@@ -41,15 +41,18 @@ export async function processNotifySend(
     for (const contact of contacts) {
       const result = await channel.send(contact.phone, text);
       if (result.status !== "delivered") anyFailed = true;
+      const isGroup = contact.kind === "group";
       await insertDeliveryLog(tx, {
         orgId,
-        phoneMasked: maskPhone(contact.phone),
+        phoneMasked: isGroup ? contact.phone : maskPhone(contact.phone),
         template,
         status: result.status,
         error: result.error,
       });
     }
-    await markProcessed(tx, messageId);
+    if (!anyFailed) {
+      await markProcessed(tx, messageId);
+    }
   });
 
   // Немає активних контактів -- нічого фізично не надсилалось, це не помилка каналу.
