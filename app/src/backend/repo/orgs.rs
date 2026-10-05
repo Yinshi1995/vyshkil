@@ -48,6 +48,7 @@ pub async fn search_orgs(
     struct Row {
         org_id: i32,
         short_name: String,
+        masked_label: String,
         matched_raw: String,
         is_exact: bool,
     }
@@ -59,6 +60,7 @@ pub async fn search_orgs(
             SELECT
                 o.id AS org_id,
                 o.short_name,
+                COALESCE(o.masked_label, o.short_name) AS masked_label,
                 a.raw AS matched_raw,
                 a.uses_count,
                 (a.norm = $1) AS is_exact,
@@ -77,7 +79,7 @@ pub async fn search_orgs(
                 ) AS rn
             FROM matches
         )
-        SELECT org_id, short_name, matched_raw, is_exact
+        SELECT org_id, short_name, masked_label, matched_raw, is_exact
         FROM ranked
         WHERE rn = 1
         ORDER BY is_exact DESC, uses_count DESC, sim DESC
@@ -93,6 +95,7 @@ pub async fn search_orgs(
         .map(|r| OrgSearchResult {
             org_id: r.org_id,
             label: r.short_name,
+            masked_label: r.masked_label,
             matched_raw: r.matched_raw,
             is_exact: r.is_exact,
         })
@@ -109,16 +112,17 @@ async fn default_org_listing(db: &DatabaseConnection) -> Result<Vec<OrgSearchRes
     struct Row {
         org_id: i32,
         short_name: String,
+        masked_label: String,
     }
     let stmt = Statement::from_string(
         db.get_database_backend(),
-        "SELECT id AS org_id, short_name FROM org \
+        "SELECT id AS org_id, short_name, COALESCE(masked_label, short_name) AS masked_label FROM org \
          WHERE deleted_at IS NULL ORDER BY short_name LIMIT 30",
     );
     let rows = Row::find_by_statement(stmt).all(db).await?;
     Ok(rows
         .into_iter()
-        .map(|r| OrgSearchResult { org_id: r.org_id, label: r.short_name, matched_raw: String::new(), is_exact: false })
+        .map(|r| OrgSearchResult { org_id: r.org_id, label: r.short_name, masked_label: r.masked_label, matched_raw: String::new(), is_exact: false })
         .collect())
 }
 
@@ -149,6 +153,7 @@ pub async fn resolve_org(db: &DatabaseConnection, raw: &str) -> Result<Option<Or
     struct Row {
         org_id: i32,
         short_name: String,
+        masked_label: String,
         matched_raw: String,
         matched_norm: String,
         is_exact: bool,
@@ -161,6 +166,7 @@ pub async fn resolve_org(db: &DatabaseConnection, raw: &str) -> Result<Option<Or
             SELECT
                 o.id AS org_id,
                 o.short_name,
+                COALESCE(o.masked_label, o.short_name) AS masked_label,
                 a.raw AS matched_raw,
                 a.norm AS matched_norm,
                 a.uses_count,
@@ -180,7 +186,7 @@ pub async fn resolve_org(db: &DatabaseConnection, raw: &str) -> Result<Option<Or
                 ) AS rn
             FROM matches
         )
-        SELECT org_id, short_name, matched_raw, matched_norm, is_exact
+        SELECT org_id, short_name, masked_label, matched_raw, matched_norm, is_exact
         FROM ranked
         WHERE rn = 1
         ORDER BY is_exact DESC, uses_count DESC, sim DESC
@@ -197,6 +203,7 @@ pub async fn resolve_org(db: &DatabaseConnection, raw: &str) -> Result<Option<Or
         .map(|r| OrgSearchResult {
             org_id: r.org_id,
             label: r.short_name,
+            masked_label: r.masked_label,
             matched_raw: r.matched_raw,
             is_exact: r.is_exact,
         }))

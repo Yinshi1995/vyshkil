@@ -6,7 +6,7 @@ import { useAuth } from "@/context/auth";
 import { useTheme } from "@/context/theme";
 import { useConfirm } from "@/components/confirm-dialog";
 import { api } from "@/api/client";
-import type { AdminUserRow, AccountInfo, WhatsAppStatus, WaDestination, WaSubscription, NotificationType, DictionariesOverview, DictionaryEntry } from "@/api/types";
+import type { AdminUserRow, AccountInfo, WhatsAppStatus, WaDestination, WaSubscription, NotificationType, DictionariesOverview, DictionaryEntry, CityRow, VenueRow } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -664,7 +664,7 @@ function WhatsAppSection() {
             <div className="flex flex-col items-center gap-3 py-2">
               <div className="eyebrow">Відскануйте QR-код у WhatsApp</div>
               <div
-                className="rounded-lg border border-border bg-white p-3"
+                className="rounded-lg border border-border bg-white p-3 max-w-full overflow-hidden [&>svg]:max-w-full [&>svg]:h-auto"
                 dangerouslySetInnerHTML={{ __html: status!.qr_svg! }}
               />
             </div>
@@ -1440,63 +1440,43 @@ function OrgCombobox({
   );
 }
 
-function TrainingSitesTab({
-  entries,
-  onRefresh,
-}: {
-  entries: DictionaryEntry[];
-  onRefresh: () => void;
-}) {
+function CitiesTab() {
+  const [cities, setCities] = useState<CityRow[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editEntry, setEditEntry] = useState<DictionaryEntry | null>(null);
-  const [locality, setLocality] = useState("");
-  const [orgId, setOrgId] = useState<number | null>(null);
-  const [orgLabel, setOrgLabel] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [name, setName] = useState("");
   const { confirm: confirmDel, dialog: confirmDelDialog } = useConfirm();
 
+  const load = useCallback(() => {
+    api.get<CityRow[]>("/admin/cities").then(setCities).catch(() => {});
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
   function openAdd() {
-    setEditEntry(null);
-    setLocality("");
-    setOrgId(null);
-    setOrgLabel("");
+    setEditId(null);
+    setName("");
     setDialogOpen(true);
   }
 
-  function openEdit(entry: DictionaryEntry) {
-    setEditEntry(entry);
-    setLocality(entry.label);
-    setOrgLabel(entry.extra ?? "");
-    setOrgId(entry.extra_id ?? null);
+  function openEdit(city: CityRow) {
+    setEditId(city.id);
+    setName(city.name);
     setDialogOpen(true);
   }
 
   async function handleSave() {
-    if (!locality.trim()) return;
+    if (!name.trim()) return;
     try {
-      if (editEntry) {
-        const body: { org_id: number; locality: string } = {
-          org_id: orgId ?? 0,
-          locality: locality.trim(),
-        };
-        if (!orgId) {
-          toast.error("Оберіть підрозділ");
-          return;
-        }
-        await api.put(`/admin/dictionaries/training_site/${editEntry.id}`, body);
+      if (editId) {
+        await api.put(`/admin/cities/${editId}`, { name: name.trim() });
         toast.success("Оновлено");
       } else {
-        if (!orgId) {
-          toast.error("Оберіть підрозділ");
-          return;
-        }
-        await api.post("/admin/dictionaries/training_site", {
-          org_id: orgId,
-          locality: locality.trim(),
-        });
+        await api.post("/admin/cities", { name: name.trim() });
         toast.success("Додано");
       }
       setDialogOpen(false);
-      onRefresh();
+      load();
     } catch {
       toast.error("Помилка збереження");
     }
@@ -1504,18 +1484,18 @@ function TrainingSitesTab({
 
   async function handleDelete(id: number) {
     const ok = await confirmDel({
-      title: "Видалити місце підготовки?",
-      description: "Це можливо лише якщо немає пов'язаних груп підготовки.",
+      title: "Видалити місто?",
+      description: "Це можливо лише якщо немає пов'язаних місць навчання.",
       confirmLabel: "Видалити",
       variant: "destructive",
     });
     if (!ok) return;
     try {
-      await api.delete(`/admin/dictionaries/training_site/${id}`);
+      await api.delete(`/admin/cities/${id}`);
       toast.success("Видалено");
-      onRefresh();
+      load();
     } catch {
-      toast.error("Не вдалося видалити — можливо, є пов'язані групи підготовки");
+      toast.error("Не вдалося видалити — можливо, є пов'язані місця");
     }
   }
 
@@ -1524,8 +1504,8 @@ function TrainingSitesTab({
       {confirmDelDialog}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-medium">Місця проведення підготовки</h3>
-          <p className="text-xs text-muted-foreground">{entries.length} записів</p>
+          <h3 className="text-sm font-medium">Міста</h3>
+          <p className="text-xs text-muted-foreground">{cities.length} записів</p>
         </div>
         <Button variant="outline" size="sm" onClick={openAdd}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -1533,12 +1513,12 @@ function TrainingSitesTab({
         </Button>
       </div>
 
-      {entries.length === 0 ? (
+      {cities.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12">
           <MapPin className="mb-2 h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">Записів немає</p>
+          <p className="text-sm text-muted-foreground">Міст немає</p>
           <Button variant="link" size="sm" className="mt-1" onClick={openAdd}>
-            Додати перше місце
+            Додати перше місто
           </Button>
         </div>
       ) : (
@@ -1548,22 +1528,20 @@ function TrainingSitesTab({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Місце</TableHead>
-                    <TableHead>Підрозділ</TableHead>
+                    <TableHead>Назва</TableHead>
                     <TableHead className="w-[80px] text-right">Дії</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entries.map((ts) => (
-                    <TableRow key={ts.id}>
-                      <TableCell className="text-sm">{ts.label}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{ts.extra ?? "—"}</TableCell>
+                  {cities.map((c) => (
+                    <TableRow key={c.id}>
+                      <TableCell className="text-sm">{c.name}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" title="Редагувати" onClick={() => openEdit(ts)}>
+                          <Button variant="ghost" size="icon" title="Редагувати" onClick={() => openEdit(c)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" title="Видалити" onClick={() => handleDelete(ts.id)}>
+                          <Button variant="ghost" size="icon" title="Видалити" onClick={() => handleDelete(c.id)}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
                         </div>
@@ -1580,30 +1558,237 @@ function TrainingSitesTab({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editEntry ? "Редагувати місце" : "Додати місце підготовки"}</DialogTitle>
+            <DialogTitle>{editId ? "Редагувати місто" : "Додати місто"}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4 pt-2">
             <div className="flex flex-col gap-1.5">
-              <Label>Назва місця</Label>
+              <Label>Назва міста</Label>
               <Input
-                placeholder="напр. ПП «Рівне»"
-                value={locality}
-                onChange={(e) => setLocality(e.target.value)}
+                placeholder="напр. Стрий"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <Button onClick={handleSave} disabled={!name.trim()}>
+              {editId ? "Зберегти" : "Додати"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+const VENUE_KIND_LABELS: Record<string, string> = {
+  training_center: "Навчальний центр",
+  vvnz: "ВВНЗ",
+};
+
+function VenuesTab() {
+  const [venues, setVenues] = useState<VenueRow[]>([]);
+  const [cities, setCities] = useState<CityRow[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [kind, setKind] = useState("training_center");
+  const [name, setName] = useState("");
+  const [shortName, setShortName] = useState("");
+  const [militaryNumber, setMilitaryNumber] = useState("");
+  const [cityId, setCityId] = useState<number | null>(null);
+  const { confirm: confirmDel, dialog: confirmDelDialog } = useConfirm();
+
+  const load = useCallback(() => {
+    api.get<VenueRow[]>("/admin/venues").then(setVenues).catch(() => {});
+    api.get<CityRow[]>("/admin/cities").then(setCities).catch(() => {});
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openAdd() {
+    setEditId(null);
+    setKind("training_center");
+    setName("");
+    setShortName("");
+    setMilitaryNumber("");
+    setCityId(null);
+    setDialogOpen(true);
+  }
+
+  function openEdit(v: VenueRow) {
+    setEditId(v.id);
+    setKind(v.kind);
+    setName(v.name);
+    setShortName(v.short_name ?? "");
+    setMilitaryNumber(v.military_number ?? "");
+    setCityId(v.city_id);
+    setDialogOpen(true);
+  }
+
+  async function handleSave() {
+    if (!name.trim() || !cityId) return;
+    try {
+      const body = {
+        kind,
+        name: name.trim(),
+        short_name: shortName.trim() || null,
+        military_number: militaryNumber.trim() || null,
+        city_id: cityId,
+        org_id: null,
+      };
+      if (editId) {
+        await api.put(`/admin/venues/${editId}`, body);
+        toast.success("Оновлено");
+      } else {
+        await api.post("/admin/venues", body);
+        toast.success("Додано");
+      }
+      setDialogOpen(false);
+      load();
+    } catch {
+      toast.error("Помилка збереження");
+    }
+  }
+
+  async function handleDelete(id: number) {
+    const ok = await confirmDel({
+      title: "Видалити місце навчання?",
+      description: "Це можливо лише якщо немає пов'язаних груп підготовки.",
+      confirmLabel: "Видалити",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/admin/venues/${id}`);
+      toast.success("Видалено");
+      load();
+    } catch {
+      toast.error("Не вдалося видалити — можливо, є пов'язані групи");
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {confirmDelDialog}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-medium">Місця навчання (НЦ / ВВНЗ)</h3>
+          <p className="text-xs text-muted-foreground">{venues.length} записів</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={openAdd}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Додати
+        </Button>
+      </div>
+
+      {venues.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12">
+          <MapPin className="mb-2 h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">Записів немає</p>
+          <Button variant="link" size="sm" className="mt-1" onClick={openAdd}>
+            Додати перше місце
+          </Button>
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Тип</TableHead>
+                    <TableHead>Назва</TableHead>
+                    <TableHead>Місто</TableHead>
+                    <TableHead className="w-[80px] text-right">Дії</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {venues.map((v) => (
+                    <TableRow key={v.id}>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {VENUE_KIND_LABELS[v.kind] ?? v.kind}
+                      </TableCell>
+                      <TableCell className="text-sm">{v.name}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{v.city_name}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" title="Редагувати" onClick={() => openEdit(v)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" title="Видалити" onClick={() => handleDelete(v.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editId ? "Редагувати місце" : "Додати місце навчання"}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 pt-2">
+            <div className="flex flex-col gap-1.5">
+              <Label>Тип</Label>
+              <Select value={kind} onValueChange={setKind}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="training_center">Навчальний центр</SelectItem>
+                  <SelectItem value="vvnz">ВВНЗ</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Назва</Label>
+              <Input
+                placeholder="напр. НЦ СВ «Десна»"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Підрозділ (НЦ / ПП)</Label>
-              <OrgCombobox
-                value={orgId}
-                label={orgLabel}
-                onChange={(id, label) => {
-                  setOrgId(id);
-                  setOrgLabel(label);
-                }}
+              <Label>Скорочена назва</Label>
+              <Input
+                placeholder="необов'язково"
+                value={shortName}
+                onChange={(e) => setShortName(e.target.value)}
               />
             </div>
-            <Button onClick={handleSave} disabled={!locality.trim() || !orgId}>
-              {editEntry ? "Зберегти" : "Додати"}
+            <div className="flex flex-col gap-1.5">
+              <Label>Номер в/ч</Label>
+              <Input
+                placeholder="необов'язково"
+                value={militaryNumber}
+                onChange={(e) => setMilitaryNumber(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Місто</Label>
+              <Select
+                value={cityId ? String(cityId) : ""}
+                onValueChange={(v) => setCityId(Number(v))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Оберіть місто" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cities.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleSave} disabled={!name.trim() || !cityId}>
+              {editId ? "Зберегти" : "Додати"}
             </Button>
           </div>
         </DialogContent>
@@ -1767,11 +1952,11 @@ function DictionariesSection() {
                 </Badge>
               </TabsTrigger>
             ))}
-            <TabsTrigger value="training_sites">
-              Місця
-              <Badge variant="secondary" className="ml-1.5 h-5 min-w-5 px-1 text-[10px]">
-                {overview.training_sites.length}
-              </Badge>
+            <TabsTrigger value="cities">
+              Міста
+            </TabsTrigger>
+            <TabsTrigger value="venues">
+              Місця навчання
             </TabsTrigger>
           </TabsList>
         </div>
@@ -1788,11 +1973,11 @@ function DictionariesSection() {
           </TabsContent>
         ))}
 
-        <TabsContent value="training_sites" className="pt-3">
-          <TrainingSitesTab
-            entries={overview.training_sites}
-            onRefresh={load}
-          />
+        <TabsContent value="cities" className="pt-3">
+          <CitiesTab />
+        </TabsContent>
+        <TabsContent value="venues" className="pt-3">
+          <VenuesTab />
         </TabsContent>
       </Tabs>
 

@@ -272,8 +272,12 @@ export interface DataGroupRow {
   vos_label: string;
   position_id: number | null;
   course_id: number | null;
-  site_id: number;
+  site_id: number | null;
+  venue_type: string | null;
+  training_venue_id: number | null;
+  city_id: number | null;
   site_label: string;
+  city_label: string;
   organizer_org_id: number | null;
   organizer_label: string;
   planned_start: string;
@@ -317,7 +321,10 @@ export interface AttritionReasonOption {
 export interface CreateGroupRequest {
   sender_org_id: number;
   training_kind_id: number;
-  site_id: number;
+  site_id?: number | null;
+  venue_type?: string;
+  training_venue_id?: number | null;
+  city_id?: number | null;
   vos_id?: number | null;
   position_id?: number | null;
   course_id?: number | null;
@@ -332,6 +339,31 @@ export interface CreateGroupRequest {
   planned_count: number;
   arrived_count?: number;
   in_training_count?: number;
+}
+
+export interface VenueRow {
+  id: number;
+  kind: string;
+  name: string;
+  short_name: string | null;
+  military_number: string | null;
+  city_id: number;
+  city_name: string;
+  org_id: number | null;
+  is_active: boolean;
+}
+
+export interface VenueSearchRow {
+  id: number;
+  kind: string;
+  name: string;
+  city_id: number;
+  city_name: string;
+}
+
+export interface CityRow {
+  id: number;
+  name: string;
 }
 
 export interface UpdateGroupRequest {

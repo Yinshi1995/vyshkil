@@ -63,6 +63,8 @@ mod m20261005_000060_dedup_training_group;
 mod m20261005_000062_add_can_see_org_names;
 mod m20261005_000063_add_sender_org_index;
 mod m20261005_000064_fix_admin_chat_rooms;
+mod m20261005_000065_create_training_venue_model;
+mod m20261005_000066_add_org_masked_label;
 
 pub struct Migrator;
 
@@ -158,6 +160,11 @@ impl MigratorTrait for Migrator {
             Box::new(m20261005_000062_add_can_see_org_names::Migration),
             Box::new(m20261005_000063_add_sender_org_index::Migration),
             Box::new(m20261005_000064_fix_admin_chat_rooms::Migration),
+            // Структуровані місця навчання: city + training_venue замість training_site.
+            Box::new(m20261005_000065_create_training_venue_model::Migration),
+            // Generated column org.masked_label — маскований лейбл (А-номер або short_name),
+            // обчислюється Postgres, індексований pg_trgm — замість окремого запиту org_number_labels.
+            Box::new(m20261005_000066_add_org_masked_label::Migration),
         ]
     }
 }

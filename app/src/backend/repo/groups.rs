@@ -684,6 +684,8 @@ pub struct DataGroupRow {
     pub id: i32,
     pub sender_org_id: i32,
     pub org_label: String,
+    #[serde(skip_serializing)]
+    pub org_masked_label: String,
     pub training_kind_id: i32,
     pub training_kind: String,
     pub bzvp_program_id: Option<i32>,
@@ -691,10 +693,16 @@ pub struct DataGroupRow {
     pub vos_label: String,
     pub position_id: Option<i32>,
     pub course_id: Option<i32>,
-    pub site_id: i32,
+    pub site_id: Option<i32>,
+    pub venue_type: Option<String>,
+    pub training_venue_id: Option<i32>,
+    pub city_id: Option<i32>,
     pub site_label: String,
+    pub city_label: String,
     pub organizer_org_id: Option<i32>,
     pub organizer_label: String,
+    #[serde(skip_serializing)]
+    pub organizer_masked_label: String,
     pub planned_start: String,
     pub planned_end: String,
     pub equipment_text: String,
@@ -717,6 +725,7 @@ pub async fn list_groups_extended(
         SELECT tg.id, \
         tg.sender_org_id, \
         COALESCE(o.short_name, 'org#' || tg.sender_org_id::text) AS org_label, \
+        COALESCE(o.masked_label, o.short_name, 'org#' || tg.sender_org_id::text) AS org_masked_label, \
         tg.training_kind_id, \
         COALESCE(tk.name, '') AS training_kind, \
         tg.bzvp_program_id, \
@@ -725,9 +734,14 @@ pub async fn list_groups_extended(
         tg.position_id, \
         tg.course_id, \
         tg.site_id, \
-        COALESCE(ts.locality, so.short_name, '') AS site_label, \
+        tg.venue_type, \
+        tg.training_venue_id, \
+        tg.city_id, \
+        COALESCE(tv.name, ts.locality, so.short_name, '') AS site_label, \
+        COALESCE(ct.name, '') AS city_label, \
         tg.organizer_org_id, \
         COALESCE(oo.short_name, '') AS organizer_label, \
+        COALESCE(oo.masked_label, oo.short_name, '') AS organizer_masked_label, \
         COALESCE(to_char(tg.planned_start, 'DD.MM.YYYY'), '') AS planned_start, \
         COALESCE(to_char(tg.planned_end, 'DD.MM.YYYY'), '') AS planned_end, \
         COALESCE(tg.equipment_text, '') AS equipment_text, \
@@ -748,6 +762,8 @@ pub async fn list_groups_extended(
         LEFT JOIN vos v ON v.id = tg.vos_id \
         LEFT JOIN \"position\" p ON p.id = tg.position_id \
         LEFT JOIN course c ON c.id = tg.course_id \
+        LEFT JOIN training_venue tv ON tv.id = tg.training_venue_id \
+        LEFT JOIN city ct ON ct.id = tg.city_id \
         LEFT JOIN training_site ts ON ts.id = tg.site_id \
         LEFT JOIN org so ON so.id = ts.org_id \
         LEFT JOIN org oo ON oo.id = tg.organizer_org_id";
@@ -792,6 +808,7 @@ pub async fn update_group_field(
         "site_id", "organizer_org_id", "bzvp_program_id",
         "planned_start", "planned_end", "equipment_text", "basis_doc_number",
         "basis_doc_date", "note",
+        "venue_type", "training_venue_id", "city_id",
     ];
     if !allowed.contains(&field) {
         return Ok(false);
@@ -1036,7 +1053,7 @@ pub async fn create_group_with_events(
     db: &DatabaseConnection,
     sender_org_id: i32,
     training_kind_id: i32,
-    site_id: i32,
+    site_id: Option<i32>,
     vos_id: Option<i32>,
     position_id: Option<i32>,
     course_id: Option<i32>,
@@ -1051,6 +1068,9 @@ pub async fn create_group_with_events(
     planned_count: i32,
     arrived_count: i32,
     in_training_count: i32,
+    venue_type: Option<&str>,
+    training_venue_id: Option<i32>,
+    city_id: Option<i32>,
 ) -> Result<i32, DbErr> {
     #[derive(FromQueryResult)]
     struct NewId {
@@ -1060,21 +1080,26 @@ pub async fn create_group_with_events(
     let existing = NewId::find_by_statement(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
         "SELECT id FROM training_group \
-         WHERE sender_org_id = $1 AND training_kind_id = $2 AND site_id = $3 \
-           AND planned_start = $4::date AND planned_end = $5::date \
-           AND COALESCE(vos_id, 0) = COALESCE($6, 0) \
-           AND COALESCE(course_id, 0) = COALESCE($7, 0) \
-           AND COALESCE(bzvp_program_id, 0) = COALESCE($8, 0) \
+         WHERE sender_org_id = $1 AND training_kind_id = $2 \
+           AND planned_start = $3::date AND planned_end = $4::date \
+           AND COALESCE(vos_id, 0) = COALESCE($5, 0) \
+           AND COALESCE(course_id, 0) = COALESCE($6, 0) \
+           AND COALESCE(bzvp_program_id, 0) = COALESCE($7, 0) \
+           AND COALESCE(venue_type, '') = COALESCE($8, '') \
+           AND COALESCE(training_venue_id, 0) = COALESCE($9, 0) \
+           AND COALESCE(city_id, 0) = COALESCE($10, 0) \
          LIMIT 1",
         [
             sender_org_id.into(),
             training_kind_id.into(),
-            site_id.into(),
             planned_start.into(),
             planned_end.into(),
             vos_id.into(),
             course_id.into(),
             bzvp_program_id.into(),
+            venue_type.into(),
+            training_venue_id.into(),
+            city_id.into(),
         ],
     ))
     .one(db)
@@ -1096,8 +1121,10 @@ pub async fn create_group_with_events(
         "INSERT INTO training_group \
             (sender_org_id, training_kind_id, bzvp_program_id, vos_id, position_id, \
              course_id, equipment_text, site_id, organizer_org_id, planned_start, \
-             planned_end, basis_doc_number, basis_doc_date, note) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13::date, $14) \
+             planned_end, basis_doc_number, basis_doc_date, note, \
+             venue_type, training_venue_id, city_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13::date, $14, \
+                 $15, $16, $17) \
          RETURNING id",
         [
             sender_org_id.into(),
@@ -1114,6 +1141,9 @@ pub async fn create_group_with_events(
             basis_doc_number.into(),
             basis_date_val,
             note.into(),
+            venue_type.into(),
+            training_venue_id.into(),
+            city_id.into(),
         ],
     ))
     .one(db)

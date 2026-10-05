@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 pub struct OrgSearchResult {
     pub org_id: i32,
     pub label: String,
+    #[serde(skip_serializing, default)]
+    pub masked_label: String,
     pub matched_raw: String,
     pub is_exact: bool,
 }

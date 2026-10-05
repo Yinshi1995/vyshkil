@@ -26,7 +26,6 @@ import {
   Sun,
   Bell,
   Check,
-  Upload,
   Users as UsersIcon,
   MessageCircle,
   BarChart3,
@@ -52,6 +51,7 @@ interface NavItem {
 
 const PRIMARY_NAV: NavItem[] = [
   { href: "/orgs", label: "Підрозділи", icon: Building2, adminOnly: true },
+  { href: "/data", label: "Облік", icon: Table },
   { href: "/training", label: "Підготовка", icon: FileText },
   { href: "/dashboard", label: "Аналітика", icon: BarChart3 },
   { href: "/discrepancies", label: "Розбіжності", icon: AlertTriangle },
@@ -59,9 +59,7 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const MORE_NAV: NavItem[] = [
-  { href: "/data", label: "Дані", icon: Table },
   { href: "/documents", label: "Документи", icon: FileCheck },
-  { href: "/import", label: "Імпорт", icon: Upload, adminOnly: true },
   { href: "/directory", label: "Люди", icon: UsersIcon },
 ];
 

@@ -15,4 +15,5 @@ pub mod outbox;
 pub mod reconciliation;
 pub mod staffing;
 pub mod submissions;
+pub mod venues;
 pub mod whatsapp_routing;

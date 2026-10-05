@@ -65,14 +65,16 @@ function SheetContent({
           "transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
           "data-ending-style:opacity-0 data-starting-style:opacity-0",
           isSide && side === "right" && [
-            "top-3 right-3 bottom-3 h-auto w-[calc(75%-1.5rem)] rounded-xl border",
-            "sm:max-w-md",
-            "data-ending-style:translate-x-[2.5rem] data-starting-style:translate-x-[2.5rem]",
+            "inset-3 h-auto w-auto rounded-xl border",
+            "sm:inset-auto sm:top-3 sm:right-3 sm:bottom-3 sm:left-auto sm:w-[min(75%-1.5rem,28rem)]",
+            "data-ending-style:translate-y-[2.5rem] sm:data-ending-style:translate-y-0 sm:data-ending-style:translate-x-[2.5rem]",
+            "data-starting-style:translate-y-[2.5rem] sm:data-starting-style:translate-y-0 sm:data-starting-style:translate-x-[2.5rem]",
           ],
           isSide && side === "left" && [
-            "top-3 left-3 bottom-3 h-auto w-[calc(75%-1.5rem)] rounded-xl border",
-            "sm:max-w-md",
-            "data-ending-style:translate-x-[-2.5rem] data-starting-style:translate-x-[-2.5rem]",
+            "inset-3 h-auto w-auto rounded-xl border",
+            "sm:inset-auto sm:top-3 sm:left-3 sm:bottom-3 sm:right-auto sm:w-[min(75%-1.5rem,28rem)]",
+            "data-ending-style:translate-y-[2.5rem] sm:data-ending-style:translate-y-0 sm:data-ending-style:translate-x-[-2.5rem]",
+            "data-starting-style:translate-y-[2.5rem] sm:data-starting-style:translate-y-0 sm:data-starting-style:translate-x-[-2.5rem]",
           ],
           isSide && side === "top" && [
             "inset-x-0 top-0 h-auto border-b",

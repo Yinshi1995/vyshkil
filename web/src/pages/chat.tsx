@@ -519,7 +519,7 @@ function MediaContent({
         <img
           src={url}
           alt=""
-          className="max-w-[320px] max-h-[240px] rounded-lg cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
+          className="max-w-full sm:max-w-[320px] max-h-[240px] rounded-lg cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
           style={{
             border: "1px solid var(--border)",
             boxShadow: "0 2px 12px rgba(0,0,0,0.3)",

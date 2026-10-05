@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use app::backend::{policy, repo};
 use app::types::actor::{Actor, Role};
 use app::types::auth::{AccountInfo, AuthUser, LoginResponse};
+use contracts::NotifyTemplate;
 
 use crate::state::AppState;
 
@@ -73,10 +74,7 @@ async fn org_number_labels(db: &DatabaseConnection, org_ids: &[i32]) -> std::col
     }
     let placeholders: Vec<String> = org_ids.iter().enumerate().map(|(i, _)| format!("${}", i + 1)).collect();
     let sql = format!(
-        "SELECT id, COALESCE(\
-            CASE number_kind WHEN 'A' THEN 'А' WHEN 'T' THEN 'Т' ELSE number_kind END || number, \
-            short_name\
-         ) AS label FROM org WHERE id IN ({})",
+        "SELECT id, masked_label AS label FROM org WHERE id IN ({})",
         placeholders.join(", ")
     );
     let params: Vec<sea_orm::Value> = org_ids.iter().map(|&id| id.into()).collect();
@@ -509,7 +507,6 @@ async fn directory_handler(
         avatar_path: Option<String>,
         is_active: bool,
         role: String,
-        org_id: i32,
         org_label: String,
     }
 
@@ -526,11 +523,12 @@ async fn directory_handler(
         }
     };
 
+    let org_label_col = if user.can_see_org_names { "o.short_name" } else { "o.masked_label" };
     let sql = format!(
         "SELECT DISTINCT ON (ua.id) ua.id AS user_id, ua.login, ua.display_name, \
                 ua.first_name, ua.last_name, ua.rank, ua.phone, ua.callsign, \
                 ua.delta_nick, ua.avatar_path, ua.is_active, \
-                ur.role, ur.org_id, o.short_name AS org_label \
+                ur.role, {org_label_col} AS org_label \
          FROM user_account ua \
          JOIN user_role ur ON ur.user_id = ua.id \
          JOIN org o ON o.id = ur.org_id \
@@ -548,18 +546,7 @@ async fn directory_handler(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let number_labels = if user.can_see_org_names {
-        Default::default()
-    } else {
-        let ids: Vec<i32> = raw_rows.iter().map(|r| r.org_id).collect();
-        org_number_labels(&state.db, &ids).await
-    };
     let rows: Vec<DirectoryUser> = raw_rows.into_iter().map(|r| {
-        let label = if user.can_see_org_names {
-            r.org_label
-        } else {
-            number_labels.get(&r.org_id).cloned().unwrap_or(r.org_label)
-        };
         DirectoryUser {
             user_id: r.user_id,
             login: r.login,
@@ -573,7 +560,7 @@ async fn directory_handler(
             avatar_url: r.avatar_path.map(|p| format!("/api/avatars/{}", p)),
             is_active: r.is_active,
             role: r.role,
-            org_label: label,
+            org_label: r.org_label,
         }
     }).collect();
 
@@ -904,23 +891,25 @@ async fn dashboard_stats_handler(
     .await
     .unwrap_or_default();
 
+    let org_label_col = if user.can_see_org_names { "o.short_name" } else { "o.masked_label" };
+
     #[derive(FromQueryResult)]
     struct SubRow {
         id: i64,
-        org_id: i32,
         org_label: String,
         source_type: String,
         updated_at: String,
     }
     let subs_sql = match &visible {
-        None => "SELECT s.id::bigint AS id, s.reporting_org_id AS org_id, COALESCE(o.short_name, '') AS org_label, \
+        None => format!(
+                "SELECT s.id::bigint AS id, COALESCE({org_label_col}, '') AS org_label, \
                  s.source_type, to_char(s.updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at \
                  FROM submission s JOIN org o ON o.id = s.reporting_org_id \
-                 ORDER BY s.updated_at DESC LIMIT 5".to_string(),
+                 ORDER BY s.updated_at DESC LIMIT 5"),
         Some(ids) => {
             let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
             format!(
-                "SELECT s.id::bigint AS id, s.reporting_org_id AS org_id, COALESCE(o.short_name, '') AS org_label, \
+                "SELECT s.id::bigint AS id, COALESCE({org_label_col}, '') AS org_label, \
                  s.source_type, to_char(s.updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at \
                  FROM submission s JOIN org o ON o.id = s.reporting_org_id \
                  WHERE s.reporting_org_id IN ({list}) \
@@ -939,21 +928,21 @@ async fn dashboard_stats_handler(
     #[derive(FromQueryResult)]
     struct DiscRow {
         id: i64,
-        org_id: i32,
         org_label: String,
         metric_label: String,
         status: String,
         created_at: String,
     }
     let discs_sql = match &visible {
-        None => "SELECT d.id::bigint AS id, d.org_id, COALESCE(o.short_name, '') AS org_label, \
+        None => format!(
+                "SELECT d.id::bigint AS id, COALESCE({org_label_col}, '') AS org_label, \
                  d.metric AS metric_label, d.status, to_char(d.created_at, 'DD.MM.YYYY HH24:MI') AS created_at \
                  FROM discrepancy d JOIN org o ON o.id = d.org_id \
-                 ORDER BY d.created_at DESC LIMIT 5".to_string(),
+                 ORDER BY d.created_at DESC LIMIT 5"),
         Some(ids) => {
             let list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
             format!(
-                "SELECT d.id::bigint AS id, d.org_id, COALESCE(o.short_name, '') AS org_label, \
+                "SELECT d.id::bigint AS id, COALESCE({org_label_col}, '') AS org_label, \
                  d.metric AS metric_label, d.status, to_char(d.created_at, 'DD.MM.YYYY HH24:MI') AS created_at \
                  FROM discrepancy d JOIN org o ON o.id = d.org_id \
                  WHERE d.org_id IN ({list}) \
@@ -975,26 +964,12 @@ async fn dashboard_stats_handler(
         total_submissions: row.sub_count,
         total_discrepancies: row.disc_count,
         groups_by_kind: kinds.into_iter().map(|k| KindCountDto { kind: k.kind, count: k.count }).collect(),
-        recent_submissions: {
-            let labels = if user.can_see_org_names { Default::default() } else {
-                let ids: Vec<i32> = recent_subs.iter().map(|s| s.org_id).collect();
-                org_number_labels(&state.db, &ids).await
-            };
-            recent_subs.into_iter().map(|s| {
-                let label = if user.can_see_org_names { s.org_label } else { labels.get(&s.org_id).cloned().unwrap_or(s.org_label) };
-                RecentSubDto { id: s.id, org_label: label, source_type: s.source_type, updated_at: s.updated_at }
-            }).collect()
-        },
-        recent_discrepancies: {
-            let labels = if user.can_see_org_names { Default::default() } else {
-                let ids: Vec<i32> = recent_discs.iter().map(|d| d.org_id).collect();
-                org_number_labels(&state.db, &ids).await
-            };
-            recent_discs.into_iter().map(|d| {
-                let label = if user.can_see_org_names { d.org_label } else { labels.get(&d.org_id).cloned().unwrap_or(d.org_label) };
-                RecentDiscDto { id: d.id, org_label: label, metric_label: d.metric_label, status: d.status, created_at: d.created_at }
-            }).collect()
-        },
+        recent_submissions: recent_subs.into_iter().map(|s| {
+            RecentSubDto { id: s.id, org_label: s.org_label, source_type: s.source_type, updated_at: s.updated_at }
+        }).collect(),
+        recent_discrepancies: recent_discs.into_iter().map(|d| {
+            RecentDiscDto { id: d.id, org_label: d.org_label, metric_label: d.metric_label, status: d.status, created_at: d.created_at }
+        }).collect(),
     }))
 }
 
@@ -1106,7 +1081,6 @@ async fn dashboard_by_org_handler(
 
     #[derive(FromQueryResult)]
     struct Row {
-        org_id: i32,
         org_name: String,
         group_count: i64,
         planned: i64,
@@ -1114,10 +1088,10 @@ async fn dashboard_by_org_handler(
         attrition: i64,
     }
 
+    let org_label_col = if user.can_see_org_names { "o.short_name" } else { "o.masked_label" };
     let sql = format!(
         "SELECT \
-            o.id AS org_id, \
-            COALESCE(o.short_name, '') AS org_name, \
+            COALESCE({org_label_col}, '') AS org_name, \
             COUNT(DISTINCT tg.id) AS group_count, \
             COALESCE(SUM(CASE WHEN ge.event_type = 'planned' THEN ge.count END), 0) AS planned, \
             COALESCE(SUM(CASE WHEN ge.event_type = 'completed' THEN ge.count END), 0) AS completed, \
@@ -1126,7 +1100,7 @@ async fn dashboard_by_org_handler(
          JOIN org o ON o.id = tg.sender_org_id \
          LEFT JOIN group_event ge ON ge.group_id = tg.id \
          {filter} \
-         GROUP BY o.id, o.short_name \
+         GROUP BY o.id, {org_label_col} \
          ORDER BY planned DESC \
          LIMIT 20"
     );
@@ -1138,13 +1112,8 @@ async fn dashboard_by_org_handler(
     .await
     .unwrap_or_default();
 
-    let labels = if user.can_see_org_names { Default::default() } else {
-        let ids: Vec<i32> = rows.iter().map(|r| r.org_id).collect();
-        org_number_labels(&state.db, &ids).await
-    };
     let dtos: Vec<OrgBreakdownDto> = rows.into_iter().map(|r| {
-        let name = if user.can_see_org_names { r.org_name } else { labels.get(&r.org_id).cloned().unwrap_or(r.org_name) };
-        OrgBreakdownDto { org_name: name, group_count: r.group_count, planned: r.planned, completed: r.completed, attrition: r.attrition }
+        OrgBreakdownDto { org_name: r.org_name, group_count: r.group_count, planned: r.planned, completed: r.completed, attrition: r.attrition }
     }).collect();
 
     Ok::<_, StatusCode>(Json(dtos))
@@ -1291,23 +1260,23 @@ async fn dashboard_disc_chart_handler(
         }
     };
 
+    let org_label_col = if user.can_see_org_names { "o.short_name" } else { "o.masked_label" };
     #[derive(FromQueryResult)]
     struct OrgRow {
-        org_id: i32,
         org_name: String,
         open: i64,
         resolved: i64,
         accepted: i64,
     }
     let org_sql = format!(
-        "SELECT o.id AS org_id, COALESCE(o.short_name, '') AS org_name, \
+        "SELECT COALESCE({org_label_col}, '') AS org_name, \
             COALESCE(SUM(CASE WHEN d.status = 'open' THEN 1 END), 0) AS open, \
             COALESCE(SUM(CASE WHEN d.status = 'resolved' THEN 1 END), 0) AS resolved, \
             COALESCE(SUM(CASE WHEN d.status = 'accepted' THEN 1 END), 0) AS accepted \
          FROM discrepancy d \
          JOIN org o ON o.id = d.org_id \
          WHERE true{filter2} \
-         GROUP BY o.id, o.short_name \
+         GROUP BY o.id, {org_label_col} \
          ORDER BY open DESC \
          LIMIT 15"
     );
@@ -1318,15 +1287,10 @@ async fn dashboard_disc_chart_handler(
     .await
     .unwrap_or_default();
 
-    let org_labels = if user.can_see_org_names { Default::default() } else {
-        let ids: Vec<i32> = by_org.iter().map(|r| r.org_id).collect();
-        org_number_labels(&state.db, &ids).await
-    };
     Ok::<_, StatusCode>(Json(DiscChartDto {
         by_status: by_status.into_iter().map(|r| DiscStatusDto { status: r.status, count: r.count }).collect(),
         by_org: by_org.into_iter().map(|r| {
-            let name = if user.can_see_org_names { r.org_name } else { org_labels.get(&r.org_id).cloned().unwrap_or(r.org_name) };
-            DiscOrgDto { org_name: name, open: r.open, resolved: r.resolved, accepted: r.accepted }
+            DiscOrgDto { org_name: r.org_name, open: r.open, resolved: r.resolved, accepted: r.accepted }
         }).collect(),
     }))
 }
@@ -1364,9 +1328,10 @@ async fn dashboard_staffing_handler(
         }
     };
 
+    let org_label_col = if user.can_see_org_names { "o.short_name" } else { "o.masked_label" };
+
     #[derive(FromQueryResult)]
     struct Row {
-        org_id: i32,
         org_name: String,
         category: String,
         authorized: i64,
@@ -1379,7 +1344,7 @@ async fn dashboard_staffing_handler(
             FROM staffing_snapshot \
             ORDER BY org_id, category, as_of DESC \
          ) \
-         SELECT ss.org_id, COALESCE(o.short_name, '') AS org_name, \
+         SELECT COALESCE({org_label_col}, '') AS org_name, \
                 ss.category, \
                 COALESCE((SELECT sm.value::bigint FROM staffing_metric sm WHERE sm.snapshot_id = ss.id AND sm.metric = 'by_tos'), 0) AS authorized, \
                 COALESCE((SELECT sm.value::bigint FROM staffing_metric sm WHERE sm.snapshot_id = ss.id AND sm.metric = 'by_list'), 0) AS assigned \
@@ -1396,13 +1361,8 @@ async fn dashboard_staffing_handler(
     .await
     .unwrap_or_default();
 
-    let labels = if user.can_see_org_names { Default::default() } else {
-        let ids: Vec<i32> = rows.iter().map(|r| r.org_id).collect();
-        org_number_labels(&state.db, &ids).await
-    };
     let dtos: Vec<StaffingDto> = rows.into_iter().map(|r| {
-        let name = if user.can_see_org_names { r.org_name } else { labels.get(&r.org_id).cloned().unwrap_or(r.org_name) };
-        StaffingDto { org_name: name, category: r.category, authorized: r.authorized, assigned: r.assigned }
+        StaffingDto { org_name: r.org_name, category: r.category, authorized: r.authorized, assigned: r.assigned }
     }).collect();
 
     Ok::<_, StatusCode>(Json(dtos))
@@ -1818,9 +1778,15 @@ async fn org_search_handler(
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
     let query = params.q.unwrap_or_default();
-    let results = repo::orgs::search_orgs(&state.db, &query)
+    let mut results = repo::orgs::search_orgs(&state.db, &query)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !user.can_see_org_names {
+        for r in &mut results {
+            r.label = std::mem::take(&mut r.masked_label);
+        }
+    }
 
     if params.scope.as_deref() == Some("visible") {
         let actor = actor_or_err(&user)?;
@@ -2635,24 +2601,9 @@ async fn data_groups_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if !user.can_see_org_names {
-        let mut all_ids: Vec<i32> = groups.iter().map(|g| g.sender_org_id).collect();
-        for g in &groups {
-            if let Some(oid) = g.organizer_org_id {
-                all_ids.push(oid);
-            }
-        }
-        all_ids.sort_unstable();
-        all_ids.dedup();
-        let labels = org_number_labels(&state.db, &all_ids).await;
         for g in &mut groups {
-            if let Some(lbl) = labels.get(&g.sender_org_id) {
-                g.org_label = lbl.clone();
-            }
-            if let Some(oid) = g.organizer_org_id {
-                if let Some(lbl) = labels.get(&oid) {
-                    g.organizer_label = lbl.clone();
-                }
-            }
+            g.org_label = std::mem::take(&mut g.org_masked_label);
+            g.organizer_label = std::mem::take(&mut g.organizer_masked_label);
         }
     }
 
@@ -2790,6 +2741,9 @@ async fn data_add_event_handler(
             Some(&format!("Група #{group_id}, дата {}", body.occurred_on)),
             Some("/data"),
         ).await;
+        let _ = repo::whatsapp_routing::dispatch_wa_notifications(
+            &state.db, org_id, "group_event_added", NotifyTemplate::GroupEventAdded,
+        ).await;
     }
 
     let _ = repo::reconciliation::refresh_horizontal(&state.db, group_id).await;
@@ -2825,7 +2779,11 @@ async fn data_delete_event_handler(
 struct CreateGroupBody {
     sender_org_id: i32,
     training_kind_id: i32,
-    site_id: i32,
+    #[serde(default)]
+    site_id: Option<i32>,
+    venue_type: Option<String>,
+    training_venue_id: Option<i32>,
+    city_id: Option<i32>,
     vos_id: Option<i32>,
     position_id: Option<i32>,
     course_id: Option<i32>,
@@ -2883,6 +2841,9 @@ async fn data_create_group_handler(
         body.planned_count,
         body.arrived_count,
         body.in_training_count,
+        body.venue_type.as_deref(),
+        body.training_venue_id,
+        body.city_id,
     )
     .await
     .map_err(|e| {
@@ -2893,6 +2854,14 @@ async fn data_create_group_handler(
         }
         (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка створення групи" })))
     })?;
+
+    let _ = repo::notifications::insert(
+        &state.db, body.sender_org_id, "group_event", "Створено нову групу підготовки",
+        None, Some("/data"),
+    ).await;
+    let _ = repo::whatsapp_routing::dispatch_wa_notifications(
+        &state.db, body.sender_org_id, "group_event_added", NotifyTemplate::GroupEventAdded,
+    ).await;
 
     Ok(Json(serde_json::json!({ "id": id })))
 }
@@ -2942,11 +2911,29 @@ async fn site_search_handler(
     let q = params.q.unwrap_or_default();
     let limit = params.limit.unwrap_or(10).min(20) as i64;
 
-    let sites = repo::groups::search_training_sites(&state.db, &q, limit)
+    let venues = repo::venues::search_venues(&state.db, &q, limit)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok::<_, StatusCode>(Json(sites))
+    Ok::<_, StatusCode>(Json(venues))
+}
+
+async fn city_search_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<SearchQuery>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = actor_or_err(&user)?;
+
+    let q = params.q.unwrap_or_default();
+    let limit = params.limit.unwrap_or(10).min(20) as i64;
+
+    let cities = repo::venues::search_cities(&state.db, &q, limit)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok::<_, StatusCode>(Json(cities))
 }
 
 // ---------------------------------------------------------------------------
@@ -3155,6 +3142,16 @@ async fn import_upload_handler(
         }
         _ => return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "Unknown kind"})))),
     };
+
+    if imported > 0 {
+        let _ = repo::notifications::insert(
+            db, _actor.org_id, "import", &format!("Імпорт «{kind}»: {imported} записів"),
+            None, Some("/data"),
+        ).await;
+        let _ = repo::whatsapp_routing::dispatch_wa_notifications(
+            db, _actor.org_id, "import_completed", NotifyTemplate::ImportCompleted,
+        ).await;
+    }
 
     Ok(Json(serde_json::json!({ "imported": imported })))
 }
@@ -3589,7 +3586,122 @@ async fn admin_delete_dict_handler(
 }
 
 // ---------------------------------------------------------------------------
-// Admin: Training Site CRUD (місця підготовки)
+// Admin: City CRUD
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct CityReq { name: String }
+
+async fn admin_cities_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = require_admin_actor(&user)?;
+    let rows = repo::venues::list_cities(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(Json(rows))
+}
+
+async fn admin_create_city_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<CityReq>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = require_admin_actor(&user)?;
+    let id = repo::venues::create_city(&state.db, &body.name).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(Json(serde_json::json!({ "id": id })))
+}
+
+async fn admin_update_city_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i32>,
+    Json(body): Json<CityReq>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = require_admin_actor(&user)?;
+    repo::venues::update_city(&state.db, id, &body.name).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+}
+
+async fn admin_delete_city_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i32>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = require_admin_actor(&user)?;
+    repo::venues::delete_city(&state.db, id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------------
+// Admin: Training Venue CRUD (навчальні центри, ВВНЗ)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct VenueReq {
+    kind: String,
+    name: String,
+    short_name: Option<String>,
+    military_number: Option<String>,
+    city_id: i32,
+    org_id: Option<i32>,
+}
+
+async fn admin_venues_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = require_admin_actor(&user)?;
+    let rows = repo::venues::list_venues(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(Json(rows))
+}
+
+async fn admin_create_venue_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<VenueReq>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = require_admin_actor(&user)?;
+    let id = repo::venues::create_venue(
+        &state.db, &body.kind, &body.name, body.short_name.as_deref(),
+        body.military_number.as_deref(), body.city_id, body.org_id,
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(Json(serde_json::json!({ "id": id })))
+}
+
+async fn admin_update_venue_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i32>,
+    Json(body): Json<VenueReq>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = require_admin_actor(&user)?;
+    repo::venues::update_venue(
+        &state.db, id, &body.kind, &body.name, body.short_name.as_deref(),
+        body.military_number.as_deref(), body.city_id, body.org_id,
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+}
+
+async fn admin_delete_venue_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i32>,
+) -> impl IntoResponse {
+    let user = require_auth(&state.db, &headers).await?;
+    let _actor = require_admin_actor(&user)?;
+    repo::venues::delete_venue(&state.db, id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------------
+// Admin: Training Site CRUD (legacy — deprecated, kept for backward compat)
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -3942,6 +4054,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/data/training-kinds", get(training_kinds_handler))
         .route("/api/data/attrition-reasons", get(attrition_reasons_handler))
         .route("/api/data/training-sites", get(site_search_handler))
+        .route("/api/data/cities", get(city_search_handler))
         // Admin: Org hierarchy
         .route("/api/admin/orgs/tree", get(admin_org_tree_handler))
         .route("/api/admin/orgs", post(admin_create_org_handler))
@@ -3967,7 +4080,17 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/admin/dictionaries/equipment", post(admin_create_equipment_handler))
         .route("/api/admin/dictionaries/equipment/:id", axum::routing::put(admin_update_equipment_handler))
         .route("/api/admin/dictionaries/equipment/:id", axum::routing::delete(admin_delete_equipment_handler))
-        // Admin: Training Sites
+        // Admin: Cities
+        .route("/api/admin/cities", get(admin_cities_handler))
+        .route("/api/admin/cities", post(admin_create_city_handler))
+        .route("/api/admin/cities/:id", axum::routing::put(admin_update_city_handler))
+        .route("/api/admin/cities/:id", axum::routing::delete(admin_delete_city_handler))
+        // Admin: Training Venues
+        .route("/api/admin/venues", get(admin_venues_handler))
+        .route("/api/admin/venues", post(admin_create_venue_handler))
+        .route("/api/admin/venues/:id", axum::routing::put(admin_update_venue_handler))
+        .route("/api/admin/venues/:id", axum::routing::delete(admin_delete_venue_handler))
+        // Admin: Training Sites (legacy)
         .route("/api/admin/dictionaries/training_site", post(admin_create_training_site_handler))
         .route("/api/admin/dictionaries/training_site/:id", axum::routing::put(admin_update_training_site_handler))
         .route("/api/admin/dictionaries/training_site/:id", axum::routing::delete(admin_delete_training_site_handler))

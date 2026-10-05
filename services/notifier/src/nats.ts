@@ -83,7 +83,9 @@ export async function bindNotifyCmdConsumer({ js, jsm }: NatsHandles) {
   try {
     await jsm.consumers.add(NOTIFY_CMD_STREAM, cfg);
   } catch {
-    await jsm.consumers.delete(NOTIFY_CMD_STREAM, DURABLE_CONSUMER);
+    try {
+      await jsm.consumers.delete(NOTIFY_CMD_STREAM, DURABLE_CONSUMER);
+    } catch { /* consumer may not exist */ }
     await jsm.consumers.add(NOTIFY_CMD_STREAM, cfg);
   }
   return js.consumers.get(NOTIFY_CMD_STREAM, DURABLE_CONSUMER);

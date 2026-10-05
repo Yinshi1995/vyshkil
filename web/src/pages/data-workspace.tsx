@@ -23,6 +23,9 @@ import { api } from "@/api/client";
 import type {
   DataGroupRow,
   GroupEventRow,
+  VenueSearchRow,
+  CityRow,
+  AdminSubmissionRow,
 } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +41,18 @@ import { format, parse } from "date-fns";
 import { uk } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { sourceTypeLabel, statusLabel, statusVariant } from "@/lib/labels";
 import {
   Command,
   CommandInput,
@@ -99,6 +114,11 @@ import {
   Building2,
   Copy,
   Eye,
+  Clock,
+  Download,
+  CheckCircle2,
+  FileWarning,
+  GraduationCap,
 } from "lucide-react";
 import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 
@@ -294,10 +314,12 @@ function buildColumns(
     }) as ColumnDef<DataGroupRow, unknown>,
     col.accessor("site_label", {
       header: "Місце",
-      size: 140,
-      cell: (info) => (
-        <span className="truncate text-sm">{info.getValue() || "—"}</span>
-      ),
+      size: 180,
+      cell: (info) => {
+        const row = info.row.original;
+        const parts = [info.getValue(), row.city_label].filter(Boolean);
+        return <span className="truncate text-sm">{parts.join(", ") || "—"}</span>;
+      },
     }) as ColumnDef<DataGroupRow, unknown>,
     col.accessor("planned_start", {
       header: "З",
@@ -745,7 +767,13 @@ function DetailPanel({
           {/* Info fields */}
           <div className="grid grid-cols-2 gap-3">
             <Field icon={FileText} label="ВОС / курс" value={group.vos_label} />
-            <Field icon={MapPin} label="Місце" value={group.site_label} />
+            <Field
+              icon={MapPin}
+              label="Місце"
+              value={
+                [group.site_label, group.city_label].filter(Boolean).join(", ") || "—"
+              }
+            />
             <Field
               icon={CalendarIcon}
               label="Період"
@@ -891,14 +919,14 @@ function CountBox({
 // Import Excel Section
 // ---------------------------------------------------------------------------
 
-type ImportFileKind = "fah" | "bps" | "terminy" | "kvid" | "ivs" | "archive";
+type ImportFileKind = "fah" | "bps" | "kvid" | "terminy" | "ivs" | "archive";
 
 const IMPORT_KINDS: { value: ImportFileKind; label: string; desc: string }[] = [
-  { value: "fah", label: "Фахова", desc: "Пройшли/Проходять фахову підготовку" },
-  { value: "bps", label: "БпС", desc: "Завершилась/Навчаються безпілотні системи" },
-  { value: "terminy", label: "Терміни", desc: "БЗВП/Фахова/Адаптація — терміни, к-ть, місце" },
+  { value: "fah", label: "Фах", desc: "Фахова підготовка (зведена таблиця)" },
+  { value: "bps", label: "БпС", desc: "Бойова підготовка складових (зведена таблиця)" },
   { value: "kvid", label: "КВід", desc: "Укомплектованість командирами відділень" },
-  { value: "ivs", label: "ІВС", desc: "Інструктори + стажування/курси" },
+  { value: "terminy", label: "Терміни", desc: "Терміни підготовки (БЗВП/фахова/адаптація)" },
+  { value: "ivs", label: "ІВС", desc: "Укомплектованість інструкторів + стажування/курси" },
   { value: "archive", label: "Архів ВЧ", desc: "Одноразовий перенос архіву фахової підготовки" },
 ];
 
@@ -910,56 +938,223 @@ interface ImportIssue {
   message: string;
 }
 
+interface ImportError {
+  message: string;
+  issues: ImportIssue[];
+}
+
+const FIELD_STYLE: Record<string, { icon: typeof Building2; color: string }> = {
+  "Частина": { icon: Building2, color: "border-blue-500/50 bg-blue-500/10 text-blue-400" },
+  "Місце": { icon: MapPin, color: "border-emerald-500/50 bg-emerald-500/10 text-emerald-400" },
+  "ВОС/Посада": { icon: GraduationCap, color: "border-violet-500/50 bg-violet-500/10 text-violet-400" },
+};
+
+function FieldBadge({ field }: { field: string }) {
+  const style = FIELD_STYLE[field];
+  if (!style) return <Badge variant="outline" className="text-xs">{field}</Badge>;
+  const Icon = style.icon;
+  return (
+    <Badge variant="outline" className={`text-xs ${style.color}`}>
+      <Icon className="mr-1 h-3 w-3" />
+      {field}
+    </Badge>
+  );
+}
+
+function ImportDropZone({
+  fileName,
+  onFile,
+  disabled,
+}: {
+  fileName: string | null;
+  onFile: (file: File) => void;
+  disabled?: boolean;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    if (disabled) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) onFile(file);
+  }
+
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      onClick={() => !disabled && inputRef.current?.click()}
+      className="cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors"
+      style={{
+        borderColor: dragOver ? "#c9a84c" : "rgba(138,133,119,0.3)",
+        background: dragOver ? "rgba(201,168,76,0.04)" : "transparent",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+        className="hidden"
+        disabled={disabled}
+      />
+      <div className="flex flex-col items-center gap-3">
+        <div className="icon-box" style={{ width: 48, height: 48 }}>
+          {fileName ? <FileUp className="h-6 w-6" /> : <Upload className="h-6 w-6" />}
+        </div>
+        {fileName ? (
+          <div>
+            <p className="text-sm font-medium">{fileName}</p>
+            <p className="text-xs text-muted-foreground">Натисніть або перетягніть інший файл</p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm font-medium">Перетягніть файл сюди</p>
+            <p className="text-xs text-muted-foreground">або натисніть для вибору (.xlsx)</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecentSubmissions() {
+  const [subs, setSubs] = useState<AdminSubmissionRow[] | null>(null);
+
+  useEffect(() => {
+    api
+      .get<AdminSubmissionRow[]>("/submissions/recent")
+      .then(setSubs)
+      .catch(() => setSubs([]));
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <Clock className="h-4 w-4" />
+        Останні подання
+      </div>
+      {subs === null ? (
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+        </div>
+      ) : subs.length === 0 ? (
+        <p className="py-4 text-center text-sm text-muted-foreground">
+          Подань ще немає
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Підрозділ</TableHead>
+                <TableHead>Тип</TableHead>
+                <TableHead>Статус</TableHead>
+                <TableHead>Станом на</TableHead>
+                <TableHead>Оновлено</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {subs.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="font-medium">{s.org_label}</TableCell>
+                  <TableCell>{sourceTypeLabel(s.source_type)}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(s.status)}>
+                      {statusLabel(s.status)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{s.as_of_date}</TableCell>
+                  <TableCell>{s.updated_at}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ImportSection({ onImported }: { onImported: () => void }) {
   const [open, setOpen] = useState(false);
   const [fileKind, setFileKind] = useState<ImportFileKind>("fah");
+  const [fileName, setFileName] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<{ type: "info" | "error" | "success"; text: string } | null>(null);
-  const [issues, setIssues] = useState<ImportIssue[]>([]);
   const [uploading, setUploading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [result, setResult] = useState<{ imported: number } | null>(null);
+  const [error, setError] = useState<ImportError | null>(null);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const kindInfo = IMPORT_KINDS.find((k) => k.value === fileKind);
 
   function handleFile(f: File) {
+    setFileName(f.name);
     setFile(f);
-    setStatus(null);
-    setIssues([]);
+    setResult(null);
+    setError(null);
   }
 
   async function handleUpload() {
     if (!file) return;
     setUploading(true);
-    setStatus({ type: "info", text: "Завантаження…" });
-    setIssues([]);
+    setResult(null);
+    setError(null);
     try {
       const formData = new FormData();
-      formData.append("file", file);
       formData.append("kind", fileKind);
+      formData.append("file", file);
       const res = await fetch("/api/import/upload", {
         method: "POST",
         body: formData,
-        credentials: "same-origin",
+        credentials: "include",
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        const msg = body.error || `HTTP ${res.status}`;
-        setStatus({ type: "error", text: msg });
-        if (Array.isArray(body.issues)) setIssues(body.issues);
-        toast.error(msg);
+        const body = await res.json().catch(() => ({ error: `Помилка ${res.status}` }));
+        setError({
+          message: body.error || `Помилка ${res.status}`,
+          issues: Array.isArray(body.issues) ? body.issues : [],
+        });
+        toast.error(body.error || `Помилка ${res.status}`);
         return;
       }
       const data = await res.json();
-      const msg = `Імпортовано: ${data.imported ?? 0} записів`;
-      setStatus({ type: "success", text: msg });
-      toast.success(msg);
+      setResult({ imported: data.imported ?? 0 });
       setFile(null);
+      setFileName(null);
+      toast.success(`Імпортовано ${data.imported ?? 0} записів`);
       onImported();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Помилка імпорту";
-      setStatus({ type: "error", text: msg });
+      const msg = err instanceof Error ? err.message : "Невідома помилка";
+      setError({ message: msg, issues: [] });
       toast.error(msg);
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleDownloadTemplate() {
+    setDownloadingTemplate(true);
+    try {
+      const res = await fetch("/api/import/template", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Помилка ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "import-template.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Не вдалося завантажити зразок");
+    } finally {
+      setDownloadingTemplate(false);
     }
   }
 
@@ -978,115 +1173,130 @@ function ImportSection({ onImported }: { onImported: () => void }) {
         Імпорт з файлу
       </Button>
       {open && (
-        <div className="flex flex-col gap-4 border-t px-4 py-4" style={{ borderColor: "var(--border)" }}>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Тип файлу
-              </span>
-              <Select
-                value={fileKind}
-                onValueChange={(v) => {
-                  setFileKind(v as ImportFileKind);
-                  setFile(null);
-                  setStatus(null);
-                }}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue>{kindInfo?.label ?? fileKind}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {IMPORT_KINDS.map((k) => (
-                    <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="flex flex-col gap-5 border-t px-4 py-4" style={{ borderColor: "var(--border)" }}>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Тип файлу
+            </span>
+            <Select
+              value={fileKind}
+              onValueChange={(v) => {
+                setFileKind(v as ImportFileKind);
+                setFileName(null);
+                setFile(null);
+                setResult(null);
+                setError(null);
+              }}
+            >
+              <SelectTrigger className="w-full max-w-sm">
+                <SelectValue placeholder="Оберіть тип">
+                  {kindInfo?.label}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {IMPORT_KINDS.map((k) => (
+                  <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {kindInfo && (
-              <span className="text-xs text-muted-foreground">{kindInfo.desc}</span>
+              <p className="text-xs text-muted-foreground">{kindInfo.desc}</p>
             )}
           </div>
 
-          <div
-            className="cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors hover:border-primary/40"
-            style={{ borderColor: file ? "#c9a84c" : "rgba(138,133,119,0.3)" }}
-            onClick={() => inputRef.current?.click()}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const f = e.dataTransfer.files?.[0];
-              if (f) handleFile(f);
-            }}
-          >
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-              className="hidden"
-            />
-            <div className="flex flex-col items-center gap-2">
-              {file ? (
-                <>
-                  <FileUp className="h-6 w-6 text-primary" />
-                  <p className="text-sm font-medium">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">Натисніть для зміни файлу</p>
-                </>
-              ) : (
-                <>
-                  <Upload className="h-6 w-6 text-muted-foreground" />
-                  <p className="text-sm">Перетягніть файл або натисніть для вибору</p>
-                  <p className="text-xs text-muted-foreground">.xlsx</p>
-                </>
-              )}
-            </div>
-          </div>
+          <ImportDropZone fileName={fileName} onFile={handleFile} disabled={uploading} />
 
-          {file && (
-            <Button onClick={handleUpload} disabled={uploading} size="sm" className="self-start">
-              {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-              Імпортувати
-            </Button>
-          )}
-
-          {status && (
-            <div className="flex flex-col gap-2">
-              <p
-                className="text-sm"
-                style={{
-                  color: status.type === "error" ? "#D9534F" : status.type === "success" ? "#6bbd6b" : "var(--muted-foreground)",
-                }}
-              >
-                {status.text}
-              </p>
-              {issues.length > 0 && (
-                <div className="max-h-48 overflow-auto rounded-md border text-xs">
-                  <table className="w-full">
-                    <thead className="sticky top-0 bg-muted">
-                      <tr>
-                        <th className="px-2 py-1 text-left font-medium">Рядок</th>
-                        <th className="px-2 py-1 text-left font-medium">Аркуш</th>
-                        <th className="px-2 py-1 text-left font-medium">Поле</th>
-                        <th className="px-2 py-1 text-left font-medium">Значення</th>
-                        <th className="px-2 py-1 text-left font-medium">Помилка</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {issues.map((issue, i) => (
-                        <tr key={i} className="border-t border-border">
-                          <td className="px-2 py-1 tabular-nums">{issue.row || "—"}</td>
-                          <td className="px-2 py-1">{issue.sheet || "—"}</td>
-                          <td className="px-2 py-1 font-medium">{issue.field}</td>
-                          <td className="max-w-[120px] truncate px-2 py-1 font-mono">{issue.value || "—"}</td>
-                          <td className="px-2 py-1 text-destructive">{issue.message}</td>
-                        </tr>
+          {error && (
+            <div className="flex flex-col gap-3">
+              <Alert variant="destructive">
+                <FileWarning className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{error.message}</span>
+                  {error.issues.length > 0 && (
+                    <Badge variant="destructive" className="ml-2 tabular-nums badge-pulse">
+                      {error.issues.length} {error.issues.length === 1 ? "проблема" : error.issues.length < 5 ? "проблеми" : "проблем"}
+                    </Badge>
+                  )}
+                </AlertDescription>
+              </Alert>
+              {error.issues.length > 0 && (
+                <div className="max-h-80 overflow-auto rounded-md border border-destructive/30">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b-destructive/30 bg-destructive/5">
+                        <TableHead className="w-20">Рядок</TableHead>
+                        <TableHead className="w-28">Аркуш</TableHead>
+                        <TableHead className="w-32">Поле</TableHead>
+                        <TableHead>Значення</TableHead>
+                        <TableHead>Помилка</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {error.issues.map((issue, i) => (
+                        <TableRow key={i} className="border-b-destructive/10 hover:bg-destructive/5">
+                          <TableCell>
+                            {issue.row ? (
+                              <Badge variant="outline" className="tabular-nums border-amber-500/50 bg-amber-500/10 text-amber-400">
+                                #{issue.row}
+                              </Badge>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{issue.sheet || "—"}</TableCell>
+                          <TableCell>
+                            <FieldBadge field={issue.field} />
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate font-mono text-xs text-amber-300/80">
+                            {issue.value || "—"}
+                          </TableCell>
+                          <TableCell className="text-sm text-destructive">{issue.message}</TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </div>
           )}
+
+          {result && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>Імпортовано {result.imported} записів</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleUpload}
+              disabled={!file || uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Завантаження...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-1.5 h-4 w-4" />
+                  Імпортувати
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate}
+            >
+              {downloadingTemplate ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-1.5 h-4 w-4" />
+              )}
+              Завантажити зразок
+            </Button>
+          </div>
+
+          <RecentSubmissions />
         </div>
       )}
     </div>
@@ -1122,19 +1332,28 @@ function CreateGroupDialog({
   const [orgId, setOrgId] = useState<number | null>(null);
   const [orgLabel, setOrgLabel] = useState("");
   const [kindId, setKindId] = useState<number>(1);
-  const [siteQuery, setSiteQuery] = useState("");
-  const [siteId, setSiteId] = useState<number | null>(null);
+  const [venueType, setVenueType] = useState<string>("");
+  const [venueQuery, setVenueQuery] = useState("");
+  const [venueId, setVenueId] = useState<number | null>(null);
+  const [venueLabel, setVenueLabel] = useState("");
+  const [venueCityId, setVenueCityId] = useState<number | null>(null);
+  const [venueCityLabel, setVenueCityLabel] = useState("");
+  const [cityQuery, setCityQuery] = useState("");
+  const [cityId, setCityId] = useState<number | null>(null);
+  const [cityLabel, setCityLabel] = useState("");
   const [plannedStart, setPlannedStart] = useState("");
   const [plannedEnd, setPlannedEnd] = useState("");
   const [plannedCount, setPlannedCount] = useState("");
   const [arrivedCount, setArrivedCount] = useState("");
   const [note, setNote] = useState("");
 
-  // Org/site search
+  // Org/venue/city search
   const [orgResults, setOrgResults] = useState<{ org_id: number; label: string }[]>([]);
-  const [siteResults, setSiteResults] = useState<{ id: number; label: string }[]>([]);
+  const [venueResults, setVenueResults] = useState<VenueSearchRow[]>([]);
+  const [cityResults, setCityResults] = useState<CityRow[]>([]);
   const [orgCmdOpen, setOrgCmdOpen] = useState(false);
-  const [siteCmdOpen, setSiteCmdOpen] = useState(false);
+  const [venueCmdOpen, setVenueCmdOpen] = useState(false);
+  const [cityCmdOpen, setCityCmdOpen] = useState(false);
 
   useEffect(() => {
     if (open && !kinds) {
@@ -1159,25 +1378,50 @@ function CreateGroupDialog({
   }, [orgQuery]);
 
   useEffect(() => {
-    if (siteQuery.length < 2) {
-      setSiteResults([]);
+    if (venueQuery.length < 2) {
+      setVenueResults([]);
       return;
     }
     const t = setTimeout(() => {
       api
-        .get<{ id: number; label: string }[]>(
-          `/data/training-sites?q=${encodeURIComponent(siteQuery)}&limit=5`,
+        .get<VenueSearchRow[]>(
+          `/data/training-sites?q=${encodeURIComponent(venueQuery)}&limit=8`,
         )
-        .then(setSiteResults)
-        .catch(() => setSiteResults([]));
+        .then((res) => {
+          const kind = venueType === "vvnz" ? "vvnz" : "training_center";
+          setVenueResults(res.filter((v) => v.kind === kind));
+        })
+        .catch(() => setVenueResults([]));
     }, 300);
     return () => clearTimeout(t);
-  }, [siteQuery]);
+  }, [venueQuery, venueType]);
+
+  useEffect(() => {
+    if (cityQuery.length < 2) {
+      setCityResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      api
+        .get<CityRow[]>(
+          `/data/cities?q=${encodeURIComponent(cityQuery)}&limit=8`,
+        )
+        .then(setCityResults)
+        .catch(() => setCityResults([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [cityQuery]);
 
   function validate(): Record<string, string> {
     const e: Record<string, string> = {};
     if (!orgId) e.org = "Оберіть підрозділ";
-    if (!siteId) e.site = "Оберіть місце проведення";
+    if (!venueType) e.venue_type = "Оберіть тип місця";
+    if (venueType === "training_center" || venueType === "vvnz") {
+      if (!venueId) e.venue = "Оберіть місце проведення";
+    }
+    if (venueType === "unit_base" && !cityId) {
+      e.city = "Оберіть місто";
+    }
     if (!plannedStart) e.start = "Обов'язкове поле";
     if (!plannedEnd) e.end = "Обов'язкове поле";
     if (plannedStart && plannedEnd && plannedEnd < plannedStart) {
@@ -1199,10 +1443,13 @@ function CreateGroupDialog({
 
     setSaving(true);
     try {
+      const resolvedCityId = venueType === "unit_base" ? cityId : venueCityId;
       await api.post("/data/groups", {
         sender_org_id: orgId,
         training_kind_id: kindId,
-        site_id: siteId,
+        venue_type: venueType || undefined,
+        training_venue_id: venueType === "unit_base" ? undefined : venueId,
+        city_id: resolvedCityId,
         planned_start: plannedStart,
         planned_end: plannedEnd,
         planned_count: parseInt(plannedCount, 10),
@@ -1214,8 +1461,15 @@ function CreateGroupDialog({
       setOrgQuery("");
       setOrgId(null);
       setOrgLabel("");
-      setSiteQuery("");
-      setSiteId(null);
+      setVenueType("");
+      setVenueQuery("");
+      setVenueId(null);
+      setVenueLabel("");
+      setVenueCityId(null);
+      setVenueCityLabel("");
+      setCityQuery("");
+      setCityId(null);
+      setCityLabel("");
       setPlannedStart("");
       setPlannedEnd("");
       setPlannedCount("");
@@ -1330,72 +1584,196 @@ function CreateGroupDialog({
             </div>
           </div>
 
-          {/* Site + Period — grouped */}
+          {/* Venue + Period — grouped */}
           <div
             className="flex flex-col gap-3 rounded-lg border p-3"
             style={{ borderColor: "color-mix(in srgb, var(--border) 60%, transparent)" }}
           >
+            {/* Venue type selector */}
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <MapPin className="mr-1 inline h-3 w-3" />
-                Місце проведення *
+                Тип місця *
               </Label>
-              <Popover open={siteCmdOpen} onOpenChange={setSiteCmdOpen}>
-                <PopoverTrigger
-                  render={<Button variant="outline" className="w-full justify-start text-left font-normal" />}
-                >
-                  <MapPin className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                  {siteId ? (
-                    <span className="flex-1 truncate">{siteQuery}</span>
-                  ) : (
-                    <span className="flex-1 text-muted-foreground">Пошук місця…</span>
-                  )}
-                  {siteId && (
-                    <span
-                      className="ml-auto rounded-md p-0.5 text-muted-foreground hover:text-foreground"
-                      onClick={(e) => { e.stopPropagation(); setSiteId(null); setSiteQuery(""); }}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </span>
-                  )}
-                </PopoverTrigger>
-                <PopoverContent className="w-[--anchor-width] p-0" align="start">
-                  <Command shouldFilter={false}>
-                    <CommandInput
-                      placeholder="Почніть вводити місце…"
-                      value={siteQuery}
-                      onValueChange={setSiteQuery}
-                    />
-                    <CommandList>
-                      {siteQuery.length >= 2 && siteResults.length === 0 && (
-                        <CommandEmpty>Не знайдено</CommandEmpty>
-                      )}
-                      {siteQuery.length < 2 && (
-                        <CommandEmpty>Введіть мін. 2 символи</CommandEmpty>
-                      )}
-                      <CommandGroup>
-                        {siteResults.map((r) => (
-                          <CommandItem
-                            key={r.id}
-                            value={String(r.id)}
-                            onSelect={() => {
-                              setSiteId(r.id);
-                              setSiteQuery(r.label);
-                              setSiteResults([]);
-                              setSiteCmdOpen(false);
-                            }}
-                          >
-                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                            {r.label}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <FieldError error={errors.site} />
+              <Select
+                value={venueType}
+                onValueChange={(v) => {
+                  setVenueType(v);
+                  setVenueId(null);
+                  setVenueLabel("");
+                  setVenueQuery("");
+                  setVenueCityId(null);
+                  setVenueCityLabel("");
+                  setCityId(null);
+                  setCityLabel("");
+                  setCityQuery("");
+                  setErrors((p) => { const { venue_type, venue, city, ...rest } = p; return rest; });
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {venueType === "training_center"
+                      ? "Навчальний центр"
+                      : venueType === "vvnz"
+                        ? "ВВНЗ"
+                        : venueType === "unit_base"
+                          ? "На базі в/ч"
+                          : "Оберіть тип…"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="training_center">Навчальний центр</SelectItem>
+                  <SelectItem value="vvnz">ВВНЗ</SelectItem>
+                  <SelectItem value="unit_base">На базі в/ч</SelectItem>
+                </SelectContent>
+              </Select>
+              <FieldError error={errors.venue_type} />
             </div>
+
+            {/* Venue autocomplete (for training_center / vvnz) */}
+            {(venueType === "training_center" || venueType === "vvnz") && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <MapPin className="mr-1 inline h-3 w-3" />
+                  {venueType === "vvnz" ? "ВВНЗ" : "Навчальний центр"} *
+                </Label>
+                <Popover open={venueCmdOpen} onOpenChange={setVenueCmdOpen}>
+                  <PopoverTrigger
+                    render={<Button variant="outline" className="w-full justify-start text-left font-normal" />}
+                  >
+                    <MapPin className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                    {venueId ? (
+                      <span className="flex-1 truncate">{venueLabel}</span>
+                    ) : (
+                      <span className="flex-1 text-muted-foreground">Пошук…</span>
+                    )}
+                    {venueId && (
+                      <span
+                        className="ml-auto rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setVenueId(null);
+                          setVenueLabel("");
+                          setVenueQuery("");
+                          setVenueCityId(null);
+                          setVenueCityLabel("");
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--anchor-width] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Почніть вводити назву…"
+                        value={venueQuery}
+                        onValueChange={setVenueQuery}
+                      />
+                      <CommandList>
+                        {venueQuery.length >= 2 && venueResults.length === 0 && (
+                          <CommandEmpty>Не знайдено</CommandEmpty>
+                        )}
+                        {venueQuery.length < 2 && (
+                          <CommandEmpty>Введіть мін. 2 символи</CommandEmpty>
+                        )}
+                        <CommandGroup>
+                          {venueResults.map((r) => (
+                            <CommandItem
+                              key={r.id}
+                              value={String(r.id)}
+                              onSelect={() => {
+                                setVenueId(r.id);
+                                setVenueLabel(`${r.name} (${r.city_name})`);
+                                setVenueCityId(r.city_id);
+                                setVenueCityLabel(r.city_name);
+                                setVenueQuery("");
+                                setVenueResults([]);
+                                setVenueCmdOpen(false);
+                              }}
+                            >
+                              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span>{r.name}</span>
+                              <span className="ml-auto text-xs text-muted-foreground">{r.city_name}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {venueCityLabel && (
+                  <span className="text-xs text-muted-foreground">м. {venueCityLabel}</span>
+                )}
+                <FieldError error={errors.venue} />
+              </div>
+            )}
+
+            {/* City autocomplete (for unit_base) */}
+            {venueType === "unit_base" && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <MapPin className="mr-1 inline h-3 w-3" />
+                  Місто *
+                </Label>
+                <Popover open={cityCmdOpen} onOpenChange={setCityCmdOpen}>
+                  <PopoverTrigger
+                    render={<Button variant="outline" className="w-full justify-start text-left font-normal" />}
+                  >
+                    <MapPin className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                    {cityId ? (
+                      <span className="flex-1 truncate">{cityLabel}</span>
+                    ) : (
+                      <span className="flex-1 text-muted-foreground">Пошук міста…</span>
+                    )}
+                    {cityId && (
+                      <span
+                        className="ml-auto rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => { e.stopPropagation(); setCityId(null); setCityLabel(""); setCityQuery(""); }}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--anchor-width] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Почніть вводити місто…"
+                        value={cityQuery}
+                        onValueChange={setCityQuery}
+                      />
+                      <CommandList>
+                        {cityQuery.length >= 2 && cityResults.length === 0 && (
+                          <CommandEmpty>Не знайдено</CommandEmpty>
+                        )}
+                        {cityQuery.length < 2 && (
+                          <CommandEmpty>Введіть мін. 2 символи</CommandEmpty>
+                        )}
+                        <CommandGroup>
+                          {cityResults.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              value={String(c.id)}
+                              onSelect={() => {
+                                setCityId(c.id);
+                                setCityLabel(c.name);
+                                setCityQuery("");
+                                setCityResults([]);
+                                setCityCmdOpen(false);
+                              }}
+                            >
+                              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                              {c.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <FieldError error={errors.city} />
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1725,7 +2103,7 @@ export function DataWorkspacePage() {
     <div className="flex h-full flex-col gap-4">
       {/* Header + Stats */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Робочий стіл даних</h1>
+        <h1 className="text-2xl font-bold">Облік</h1>
         {groups !== null && groups.length > 0 && (
           <div className="flex flex-wrap gap-5">
             <Stat label="груп" value={stats.groups} />

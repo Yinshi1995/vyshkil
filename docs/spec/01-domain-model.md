@@ -48,10 +48,47 @@ date: 2026-09-27
 ### `org_name_history`
 `org_id, short_name, valid_from, valid_to` — перейменування (напр. "брез" → "нц").
 
-### `training_site` — місце проведення
+### Місця навчання
+
+#### `city` — довідник населених пунктів
+`id, name (unique)`. Адмін-only CRUD. Використовується як місто/населений пункт для прив'язки
+venue і поточного місця дислокації org. Нечіткий пошук (pg_trgm) для введення з помилками.
+
+#### `training_venue` — стаціонарні місця навчання (полігони/НЦ, ВВНЗ)
+
+| Поле | Зміст |
+|---|---|
+| `id` | bigint identity |
+| `kind` | `training_center` (Навчальний центр) або `vvnz` (ВВНЗ) |
+| `name` | "НЦ СВ «Десна»", "ПП «Широкий Лан»", "Академія сухопутних військ" |
+| `short_name` | скорочена назва для таблиць, nullable |
+| `military_number` | номер в/ч (без префікса), nullable — є у НЦ, яких немає в org |
+| `city_id` | FK → city — фіксоване місто, не змінюється (об'єкт стаціонарний) |
+| `org_id` | FK → org, nullable — зв'язок з org-записом НЦ (якщо є), для сумісності |
+| `is_active` | bool, default true |
+
+Нечіткий пошук по `name` через pg_trgm. Адмін-only CRUD (таб «Довідники» в налаштуваннях).
+
+#### `org.current_city_id` — поточне місце дислокації
+FK → city, nullable. Оновлює адмін коли частина переміщується. Використовується як default
+при venue_type = 'unit_base'.
+
+#### Venue у групі підготовки
+`training_group` і `reported_group` замість старого `site_id` мають:
+
+| Поле | Зміст |
+|---|---|
+| `venue_type` | `training_center`, `vvnz`, `unit_base` — де саме проходить навчання |
+| `training_venue_id` | FK → training_venue, nullable — заповнено для polygon_nc/vvnz |
+| `city_id` | FK → city — завжди заповнено: для venue — з venue.city_id; для unit_base — з org.current_city_id або вручну |
+
+Старий `training_site` зберігається для зворотної сумісності (referenced by legacy data),
+нові записи його не використовують. `site_id` стає nullable.
+
+#### `training_site` (legacy) — місце проведення (deprecated)
 Одна організація може мати багато місць (у А1890 — 10 населених пунктів).
 `id, org_id, locality (нас. пункт, може бути null), note`. Унікальність `(org_id, locality)`.
-Коли навчання на базі самої ВЧ — `training_site` цієї ВЧ з `locality = null`.
+Заміщено `training_venue` + `city`. Існуючі записи мігровані автоматично.
 
 ### `subordination` — підпорядкування з історією
 | Поле | Зміст |

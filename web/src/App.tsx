@@ -19,7 +19,6 @@ const DocumentsPage = lazy(() => import("@/pages/documents").then(m => ({ defaul
 const DiscrepanciesPage = lazy(() => import("@/pages/discrepancies").then(m => ({ default: m.DiscrepanciesPage })));
 const SettingsPage = lazy(() => import("@/pages/settings").then(m => ({ default: m.SettingsPage })));
 const DataWorkspacePage = lazy(() => import("@/pages/data-workspace").then(m => ({ default: m.DataWorkspacePage })));
-const ImportPage = lazy(() => import("@/pages/import").then(m => ({ default: m.ImportPage })));
 const OrgsPage = lazy(() => import("@/pages/orgs").then(m => ({ default: m.OrgsPage })));
 const DirectoryPage = lazy(() => import("@/pages/directory").then(m => ({ default: m.DirectoryPage })));
 const ChatPage = lazy(() => import("@/pages/chat").then(m => ({ default: m.ChatPage })));
@@ -70,7 +69,6 @@ function AppRoutes() {
                         <Route path="/documents" element={<DocumentsPage />} />
                         <Route path="/discrepancies" element={<DiscrepanciesPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
-                        <Route path="/import" element={<ImportPage />} />
                         <Route path="/directory" element={<DirectoryPage />} />
                         <Route path="/chat" element={<ChatPage />} />
                         <Route path="/dashboard" element={<DashboardPage />} />
