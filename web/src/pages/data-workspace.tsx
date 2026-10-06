@@ -2276,6 +2276,23 @@ function CreateGroupDialog({
           </div>
         )}
 
+        {!isFormValid && !duplicates && (
+          <div className="text-xs text-muted-foreground rounded border border-border/50 px-3 py-2">
+            <span className="font-semibold" style={{ color: "#D9534F" }}>Не заповнено:</span>{" "}
+            {[
+              !orgId && "підрозділ",
+              !venueType && "тип місця",
+              venueType && venueType !== "unit_base" && !venueId && (venueType === "vvnz" ? "ВВНЗ" : "навч. центр"),
+              venueType === "unit_base" && !cityId && "місто",
+              !plannedStart && "дата початку",
+              !plannedEnd && "дата кінця",
+              plannedStart && plannedEnd && plannedEnd < plannedStart && "кінець раніше початку",
+              !plannedCount && "к-ть за планом",
+              plannedCount && parseInt(plannedCount, 10) <= 0 && "к-ть має бути > 0",
+            ].filter(Boolean).join(", ") || "перевірте поля"}
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Скасувати

@@ -2852,8 +2852,10 @@ async fn data_create_group_handler(
         body.force,
     )
     .await
-    .map_err(|_| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка створення групи" })))
+    .map_err(|e| {
+        let detail = e.to_string();
+        tracing::error!("create_group error: {detail}");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": format!("Помилка створення групи: {detail}") })))
     })?;
 
     match result {
