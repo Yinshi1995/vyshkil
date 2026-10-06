@@ -2857,10 +2857,10 @@ async fn data_create_group_handler(
     })?;
 
     match result {
-        CreateGroupResult::Duplicate(existing_id) => {
+        CreateGroupResult::Duplicates(existing) => {
             Ok(Json(serde_json::json!({
-                "warning": "Група з такими параметрами вже існує",
-                "existing_id": existing_id
+                "warning": "Схожі заходи вже існують",
+                "existing": existing
             })))
         }
         CreateGroupResult::Created(id) => {

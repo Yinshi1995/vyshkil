@@ -1326,6 +1326,32 @@ function CreateGroupDialog({
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<{ id: number; vos_label: string; site_label: string; planned_count: number }[] | null>(null);
+
+  // Dictionaries for optional fields
+  const [dicts, setDicts] = useState<{
+    vos: { id: number; label: string }[];
+    positions: { id: number; label: string }[];
+    courses: { id: number; label: string }[];
+    bzvp_programs: { id: number; label: string }[];
+    equipment: { id: number; label: string }[];
+  } | null>(null);
+
+  // Optional fields
+  const [vosId, setVosId] = useState<number | null>(null);
+  const [vosLabel, setVosLabel] = useState("");
+  const [vosCmdOpen, setVosCmdOpen] = useState(false);
+  const [positionId, setPositionId] = useState<number | null>(null);
+  const [courseId, setCourseId] = useState<number | null>(null);
+  const [bzvpProgramId, setBzvpProgramId] = useState<number | null>(null);
+  const [equipmentText, setEquipmentText] = useState("");
+  const [organizerOrgId, setOrganizerOrgId] = useState<number | null>(null);
+  const [organizerLabel, setOrganizerLabel] = useState("");
+  const [organizerQuery, setOrganizerQuery] = useState("");
+  const [organizerResults, setOrganizerResults] = useState<{ org_id: number; label: string }[]>([]);
+  const [organizerCmdOpen, setOrganizerCmdOpen] = useState(false);
+  const [basisDocNumber, setBasisDocNumber] = useState("");
+  const [basisDocDate, setBasisDocDate] = useState("");
 
   // Form fields
   const [orgQuery, setOrgQuery] = useState("");
@@ -1359,7 +1385,26 @@ function CreateGroupDialog({
     if (open && !kinds) {
       api.get<TrainingKindOpt[]>("/data/training-kinds").then(setKinds).catch(() => {});
     }
-  }, [open, kinds]);
+    if (open && !dicts) {
+      api.get<typeof dicts>("/admin/dictionaries").then(setDicts).catch(() => {});
+    }
+  }, [open, kinds, dicts]);
+
+  useEffect(() => {
+    if (organizerQuery.length < 2) {
+      setOrganizerResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      api
+        .get<{ org_id: number; label: string }[]>(
+          `/orgs/search?q=${encodeURIComponent(organizerQuery)}&limit=5&scope=visible`,
+        )
+        .then(setOrganizerResults)
+        .catch(() => setOrganizerResults([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [organizerQuery]);
 
   useEffect(() => {
     if (orgQuery.length < 2) {
@@ -1435,9 +1480,11 @@ function CreateGroupDialog({
     return e;
   }
 
+  type CreateRes = { id?: number; warning?: string; existing?: { id: number; vos_label: string; site_label: string; planned_count: number }[] };
+
   const submitGroup = async (force = false) => {
     const resolvedCityId = venueType === "unit_base" ? cityId : venueCityId;
-    return api.post<{ id?: number; warning?: string; existing_id?: number }>("/data/groups", {
+    return api.post<CreateRes>("/data/groups", {
       sender_org_id: orgId,
       training_kind_id: kindId,
       venue_type: venueType || undefined,
@@ -1448,6 +1495,14 @@ function CreateGroupDialog({
       planned_count: parseInt(plannedCount, 10),
       arrived_count: arrivedCount ? parseInt(arrivedCount, 10) : 0,
       note: note || undefined,
+      vos_id: vosId || undefined,
+      position_id: positionId || undefined,
+      course_id: courseId || undefined,
+      bzvp_program_id: bzvpProgramId || undefined,
+      equipment_text: equipmentText || undefined,
+      organizer_org_id: organizerOrgId || undefined,
+      basis_doc_number: basisDocNumber || undefined,
+      basis_doc_date: basisDocDate || undefined,
       force,
     });
   };
@@ -1470,7 +1525,20 @@ function CreateGroupDialog({
     setPlannedCount("");
     setArrivedCount("");
     setNote("");
+    setVosId(null);
+    setVosLabel("");
+    setPositionId(null);
+    setCourseId(null);
+    setBzvpProgramId(null);
+    setEquipmentText("");
+    setOrganizerOrgId(null);
+    setOrganizerLabel("");
+    setOrganizerQuery("");
+    setOrganizerResults([]);
+    setBasisDocNumber("");
+    setBasisDocDate("");
     setErrors({});
+    setDuplicates(null);
   };
 
   const handleCreate = async () => {
@@ -1482,11 +1550,26 @@ function CreateGroupDialog({
     setSaving(true);
     try {
       const res = await submitGroup(false);
-      if (res.warning) {
-        const ok = window.confirm(`${res.warning} (ID ${res.existing_id}). Все одно створити?`);
-        if (!ok) { setSaving(false); return; }
-        await submitGroup(true);
+      if (res.warning && res.existing) {
+        setDuplicates(res.existing);
+        setSaving(false);
+        return;
       }
+      onOpenChange(false);
+      onCreated();
+      resetForm();
+    } catch (err) {
+      setServerError(err instanceof Error ? err.message : "Помилка створення");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleForceCreate = async () => {
+    setSaving(true);
+    setServerError(null);
+    try {
+      await submitGroup(true);
       onOpenChange(false);
       onCreated();
       resetForm();
@@ -1503,7 +1586,7 @@ function CreateGroupDialog({
         <DialogHeader>
           <DialogTitle>Нова група підготовки</DialogTitle>
           <DialogDescription>
-            Заповніть обов'язкові поля для створення групи.
+            Поля з * обов'язкові. Решта — за наявності.
           </DialogDescription>
         </DialogHeader>
 
@@ -1595,6 +1678,229 @@ function CreateGroupDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          {/* ВОС autocomplete */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <GraduationCap className="mr-1 inline h-3 w-3" />
+              ВОС
+            </Label>
+            <Popover open={vosCmdOpen} onOpenChange={setVosCmdOpen}>
+              <PopoverTrigger
+                render={<Button variant="outline" className="w-full justify-start text-left font-normal" />}
+              >
+                <GraduationCap className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                {vosId ? (
+                  <span className="flex-1 truncate">{vosLabel}</span>
+                ) : (
+                  <span className="flex-1 text-muted-foreground">Оберіть ВОС…</span>
+                )}
+                {vosId && (
+                  <span
+                    className="ml-auto rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => { e.stopPropagation(); setVosId(null); setVosLabel(""); }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </PopoverTrigger>
+              <PopoverContent className="w-[--anchor-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Пошук за кодом або назвою…" />
+                  <CommandList>
+                    <CommandEmpty>Не знайдено</CommandEmpty>
+                    <CommandGroup>
+                      {(dicts?.vos ?? []).map((v) => (
+                        <CommandItem
+                          key={v.id}
+                          value={v.label}
+                          onSelect={() => {
+                            setVosId(v.id);
+                            setVosLabel(v.label);
+                            setVosCmdOpen(false);
+                          }}
+                        >
+                          <GraduationCap className="h-3.5 w-3.5 text-muted-foreground" />
+                          {v.label}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Посада + Курс */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Посада
+              </Label>
+              <Select
+                value={positionId ? String(positionId) : ""}
+                onValueChange={(v) => setPositionId(v ? Number(v) : null)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {(dicts?.positions ?? []).map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Курс
+              </Label>
+              <Select
+                value={courseId ? String(courseId) : ""}
+                onValueChange={(v) => setCourseId(v ? Number(v) : null)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {(dicts?.courses ?? []).map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* БЗВП program — only for bzvp kind */}
+          {kinds?.find((k) => k.id === kindId)?.code === "bzvp" && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Програма БЗВП
+              </Label>
+              <Select
+                value={bzvpProgramId ? String(bzvpProgramId) : ""}
+                onValueChange={(v) => setBzvpProgramId(v ? Number(v) : null)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">—</SelectItem>
+                  {(dicts?.bzvp_programs ?? []).map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* ОВТ (equipment) */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              ОВТ (озброєння)
+            </Label>
+            <Input
+              placeholder="Наприклад: Darts, Switchblade…"
+              value={equipmentText}
+              onChange={(e) => setEquipmentText(e.target.value)}
+            />
+          </div>
+
+          {/* Організатор */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <Building2 className="mr-1 inline h-3 w-3" />
+              Організатор
+            </Label>
+            <Popover open={organizerCmdOpen} onOpenChange={setOrganizerCmdOpen}>
+              <PopoverTrigger
+                render={<Button variant="outline" className="w-full justify-start text-left font-normal" />}
+              >
+                <Building2 className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                {organizerOrgId ? (
+                  <span className="flex-1 truncate">{organizerLabel}</span>
+                ) : (
+                  <span className="flex-1 text-muted-foreground">Пошук організатора…</span>
+                )}
+                {organizerOrgId && (
+                  <span
+                    className="ml-auto rounded-md p-0.5 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => { e.stopPropagation(); setOrganizerOrgId(null); setOrganizerLabel(""); setOrganizerQuery(""); }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </PopoverTrigger>
+              <PopoverContent className="w-[--anchor-width] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Почніть вводити назву…"
+                    value={organizerQuery}
+                    onValueChange={setOrganizerQuery}
+                  />
+                  <CommandList>
+                    {organizerQuery.length >= 2 && organizerResults.length === 0 && (
+                      <CommandEmpty>Не знайдено</CommandEmpty>
+                    )}
+                    {organizerQuery.length < 2 && (
+                      <CommandEmpty>Введіть мін. 2 символи</CommandEmpty>
+                    )}
+                    <CommandGroup>
+                      {organizerResults.map((r) => (
+                        <CommandItem
+                          key={r.org_id}
+                          value={String(r.org_id)}
+                          onSelect={() => {
+                            setOrganizerOrgId(r.org_id);
+                            setOrganizerLabel(r.label);
+                            setOrganizerQuery("");
+                            setOrganizerResults([]);
+                            setOrganizerCmdOpen(false);
+                          }}
+                        >
+                          <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          {r.label}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Підстава (номер + дата) */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_160px]">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <FileText className="mr-1 inline h-3 w-3" />
+                Підстава (номер)
+              </Label>
+              <Input
+                placeholder="Номер документа"
+                value={basisDocNumber}
+                onChange={(e) => setBasisDocNumber(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Дата
+              </Label>
+              <Input
+                type="date"
+                value={basisDocDate}
+                onChange={(e) => setBasisDocDate(e.target.value)}
+              />
             </div>
           </div>
 
@@ -1886,6 +2192,34 @@ function CreateGroupDialog({
 
         {serverError && (
           <p className="text-sm" style={{ color: "#D9534F" }}>{serverError}</p>
+        )}
+
+        {duplicates && (
+          <div className="rounded-lg border p-3" style={{ borderColor: "var(--warning)", background: "color-mix(in srgb, var(--warning) 8%, transparent)" }}>
+            <p className="mb-2 text-sm font-semibold flex items-center gap-1.5">
+              <AlertTriangle className="h-4 w-4" style={{ color: "var(--warning)" }} />
+              Схожі заходи вже існують
+            </p>
+            <div className="space-y-1 text-sm">
+              {duplicates.map((d) => (
+                <div key={d.id} className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-muted-foreground">#{d.id}</span>
+                  <span>{d.vos_label || "—"}</span>
+                  <span className="text-muted-foreground">{d.site_label}</span>
+                  <span className="ml-auto">{d.planned_count} осіб</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDuplicates(null)}>
+                Повернутись
+              </Button>
+              <Button size="sm" onClick={handleForceCreate} disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Все одно створити
+              </Button>
+            </div>
+          </div>
         )}
 
         <DialogFooter>

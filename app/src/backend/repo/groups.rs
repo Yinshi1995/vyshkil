@@ -1079,37 +1079,41 @@ pub async fn create_group_with_events(
         id: i32,
     }
 
-    let existing = NewId::find_by_statement(Statement::from_sql_and_values(
-        sea_orm::DatabaseBackend::Postgres,
-        "SELECT id FROM training_group \
-         WHERE sender_org_id = $1 AND training_kind_id = $2 \
-           AND planned_start = $3::date AND planned_end = $4::date \
-           AND COALESCE(vos_id, 0) = COALESCE($5, 0) \
-           AND COALESCE(course_id, 0) = COALESCE($6, 0) \
-           AND COALESCE(bzvp_program_id, 0) = COALESCE($7, 0) \
-           AND COALESCE(venue_type, '') = COALESCE($8, '') \
-           AND COALESCE(training_venue_id, 0) = COALESCE($9, 0) \
-           AND COALESCE(city_id, 0) = COALESCE($10, 0) \
-         LIMIT 1",
-        [
-            sender_org_id.into(),
-            training_kind_id.into(),
-            planned_start.into(),
-            planned_end.into(),
-            vos_id.into(),
-            course_id.into(),
-            bzvp_program_id.into(),
-            venue_type.into(),
-            training_venue_id.into(),
-            city_id.into(),
-        ],
-    ))
-    .one(db)
-    .await?;
+    if !force {
+        let similar = SimilarGroup::find_by_statement(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT tg.id, \
+                    COALESCE(v.code || ' — ' || v.name, '') AS vos_label, \
+                    COALESCE(tv.name, c.name, '') AS site_label, \
+                    tg.planned_count \
+             FROM training_group tg \
+             LEFT JOIN vos v ON v.id = tg.vos_id \
+             LEFT JOIN training_venue tv ON tv.id = tg.training_venue_id \
+             LEFT JOIN city c ON c.id = tg.city_id \
+             WHERE tg.sender_org_id = $1 AND tg.training_kind_id = $2 \
+               AND tg.planned_start = $3::date AND tg.planned_end = $4::date \
+             LIMIT 5",
+            [
+                sender_org_id.into(),
+                training_kind_id.into(),
+                planned_start.into(),
+                planned_end.into(),
+            ],
+        ))
+        .all(db)
+        .await?;
 
-    if let Some(dup) = existing {
-        if !force {
-            return Ok(CreateGroupResult::Duplicate(dup.id));
+        if !similar.is_empty() {
+            let items: Vec<DuplicateInfo> = similar
+                .into_iter()
+                .map(|s| DuplicateInfo {
+                    id: s.id,
+                    vos_label: s.vos_label,
+                    site_label: s.site_label,
+                    planned_count: s.planned_count,
+                })
+                .collect();
+            return Ok(CreateGroupResult::Duplicates(items));
         }
     }
 
@@ -1183,7 +1187,23 @@ pub async fn create_group_with_events(
     Ok(CreateGroupResult::Created(gid))
 }
 
+#[derive(FromQueryResult)]
+struct SimilarGroup {
+    id: i32,
+    vos_label: String,
+    site_label: String,
+    planned_count: i32,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DuplicateInfo {
+    pub id: i32,
+    pub vos_label: String,
+    pub site_label: String,
+    pub planned_count: i32,
+}
+
 pub enum CreateGroupResult {
     Created(i32),
-    Duplicate(i32),
+    Duplicates(Vec<DuplicateInfo>),
 }
