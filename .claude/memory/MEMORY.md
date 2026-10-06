@@ -26,8 +26,11 @@ date: 2026-10-01
 - **БД**: перенесено dump dev-БД (taktoblik + notifier, 63 міграції). Сид-паролі (`admin123`)
   ротовано: admin — новий пароль (переданий замовнику), 4 сид-акаунти — випадковий хеш
   (скидати через адмінку).
-- **Оновлення образу**: збірка на dev-VM в окремому `~/build-prod` (`git archive` — не чіпати
-  робочу копію), `docker save | gzip | ssh … docker load`, потім playbook (хендлер/ensure-up).
+- **Оновлення — автоматично (2026-10-06)**: push у `main` → user-таймер `vyshkil-prod-deploy` на
+  dev-VM (≤1 хв) збирає образи, бекапить БД, `docker save|load`, `:previous` для відкату (11 §5.1,
+  `decisions/prod-autodeploy-pull.md`). Стан: `~/deploy/{deployed-sha,failed-sha}`, журнал
+  `journalctl --user -u vyshkil-prod-deploy`. Невдалий sha не ретраїться — `rm ~/deploy/failed-sha`
+  або `deploy-prod.sh --force`. dev-VM диск 95% (`~/vyshkil/target` 95 ГБ) — стежити.
 - **Граблі першого запуску** (виправлено): `flush ruleset` у nftables стирав Docker-правила;
   опубліковані Docker-порти ходять через forward, не input; `group_vars/vault.yml` Ansible сам
   не підтягує (`vars_files`); init-sql `root:0640` не читався postgres (uid 70);
