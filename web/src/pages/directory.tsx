@@ -134,51 +134,47 @@ function UserCard({
               ))}
             </div>
           )}
-          {!isSelf && user.is_active && (
-            <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px]"
-                onClick={() => onMessage(user.user_id)}
-                title="Написати"
-              >
-                <MessageSquarePlus className="mr-1 h-3 w-3" />
-                Написати
-              </Button>
-            </div>
-          )}
-          {canManage && (
-            <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px]"
-                onClick={() => onToggleActive(user.user_id)}
-                title={user.is_active ? "Заблокувати" : "Розблокувати"}
-              >
-                {user.is_active ? (
-                  <>
-                    <UserX className="mr-1 h-3 w-3" />
-                    Заблокувати
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="mr-1 h-3 w-3" />
-                    Розблокувати
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[11px]"
-                onClick={() => onResetPassword(user.user_id)}
-                title="Скинути пароль"
-              >
-                <KeyRound className="mr-1 h-3 w-3" />
-                Пароль
-              </Button>
+          {(!isSelf && user.is_active || canManage) && (
+            <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border/40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+              {!isSelf && user.is_active && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={() => onMessage(user.user_id)}
+                  title="Написати"
+                >
+                  <MessageSquarePlus className="mr-1 h-3 w-3" />
+                  Написати
+                </Button>
+              )}
+              {canManage && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => onToggleActive(user.user_id)}
+                    title={user.is_active ? "Заблокувати" : "Розблокувати"}
+                  >
+                    {user.is_active ? (
+                      <><UserX className="mr-1 h-3 w-3" /> Заблокувати</>
+                    ) : (
+                      <><UserCheck className="mr-1 h-3 w-3" /> Розблокувати</>
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => onResetPassword(user.user_id)}
+                    title="Скинути пароль"
+                  >
+                    <KeyRound className="mr-1 h-3 w-3" />
+                    Пароль
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </div>

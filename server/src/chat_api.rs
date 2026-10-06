@@ -534,11 +534,11 @@ async fn delete_message(
     let user = require_auth(&state.db, &headers).await?;
 
     #[derive(FromQueryResult)]
-    struct MsgCheck { sender_id: i32, age_seconds: Option<f64> }
+    struct MsgCheck { sender_id: i32 }
 
     let row = MsgCheck::find_by_statement(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
-        "SELECT sender_id, EXTRACT(EPOCH FROM (now() - created_at))::float8 AS age_seconds FROM chat_message WHERE id = $1 AND deleted_at IS NULL",
+        "SELECT sender_id FROM chat_message WHERE id = $1 AND deleted_at IS NULL",
         [msg_id.into()],
     ))
     .one(&state.db)
@@ -546,11 +546,34 @@ async fn delete_message(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::NOT_FOUND)?;
 
-    if row.sender_id != user.user_id {
-        return Err(StatusCode::FORBIDDEN);
-    }
-    if row.age_seconds.unwrap_or(999.0) > 30.0 {
-        return Err(StatusCode::GONE);
+    let is_own = row.sender_id == user.user_id;
+
+    if !is_own {
+        // Check if user is admin and sender belongs to their org tree
+        let actor = user.actor.ok_or(StatusCode::FORBIDDEN)?;
+        if !app::backend::policy::is_admin(actor) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        #[derive(FromQueryResult)]
+        struct InTree { in_tree: Option<bool> }
+
+        let check = InTree::find_by_statement(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"SELECT EXISTS(
+                SELECT 1 FROM user_role ur
+                JOIN subordination_closure sc ON sc.descendant_id = ur.org_id AND sc.ancestor_id = $1
+                WHERE ur.user_id = $2
+            ) AS in_tree"#,
+            [actor.org_id.into(), row.sender_id.into()],
+        ))
+        .one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        if !check.map(|c| c.in_tree.unwrap_or(false)).unwrap_or(false) {
+            return Err(StatusCode::FORBIDDEN);
+        }
     }
 
     state.db.execute(Statement::from_sql_and_values(

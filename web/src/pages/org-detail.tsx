@@ -256,18 +256,21 @@ export function OrgDetailPage() {
 
       <Tabs defaultValue="groups">
         <TabsList>
-          <TabsTrigger value="groups" className="gap-1.5">
+          <TabsTrigger value="groups" className="gap-1 sm:gap-1.5">
             <Users className="h-4 w-4" />
-            Групи ({groups.length})
+            <span className="hidden sm:inline">Групи</span>
+            ({groups.length})
           </TabsTrigger>
-          <TabsTrigger value="submissions" className="gap-1.5">
+          <TabsTrigger value="submissions" className="gap-1 sm:gap-1.5">
             <FileText className="h-4 w-4" />
-            Подання ({submissions.length})
+            <span className="hidden sm:inline">Подання</span>
+            ({submissions.length})
           </TabsTrigger>
           {isAdmin && (
-            <TabsTrigger value="users" className="gap-1.5">
+            <TabsTrigger value="users" className="gap-1 sm:gap-1.5">
               <Users className="h-4 w-4" />
-              Користувачі ({users.length})
+              <span className="hidden sm:inline">Користувачі</span>
+              ({users.length})
             </TabsTrigger>
           )}
         </TabsList>

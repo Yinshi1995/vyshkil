@@ -127,6 +127,7 @@ import {
   Shield,
   Share2,
   MessageSquare,
+  PenLine,
 } from "lucide-react";
 import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 
@@ -2722,6 +2723,17 @@ export function DataWorkspacePage() {
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* DM */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => navigate("/chat?newdm=1")}
+        >
+          <PenLine className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Написати</span>
+        </Button>
 
         {/* Create group (admin only) */}
         {isAdmin && (

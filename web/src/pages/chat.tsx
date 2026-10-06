@@ -606,6 +606,7 @@ function MediaContent({
 function MessageBubble({
   msg,
   isOwn,
+  canDelete,
   onReply,
   onEdit,
   onDelete,
@@ -613,6 +614,7 @@ function MessageBubble({
 }: {
   msg: ChatMessage;
   isOwn: boolean;
+  canDelete: boolean;
   onReply: (msg: ChatMessage) => void;
   onEdit: (msg: ChatMessage, newBody: string) => void;
   onDelete: (msg: ChatMessage) => void;
@@ -630,7 +632,7 @@ function MessageBubble({
   const editRef = useRef<HTMLTextAreaElement>(null);
 
   const ageSec = (Date.now() - new Date(msg.created_at).getTime()) / 1000;
-  const canModify = isOwn && ageSec <= 30 && !isDeleted;
+  const canEdit = isOwn && ageSec <= 30 && !isDeleted;
 
   useEffect(() => {
     if (editing && editRef.current) {
@@ -720,23 +722,23 @@ function MessageBubble({
             <button onClick={() => onReply(msg)} title="Відповісти">
               <Reply className="h-3 w-3" />
             </button>
-            {canModify && (
-              <>
-                <button
-                  data-edit-trigger
-                  onClick={() => { setEditing(true); setEditText(msg.body); }}
-                  title="Редагувати"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={() => onDelete(msg)}
-                  title="Видалити"
-                  className="hover:text-red-400"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </>
+            {canEdit && (
+              <button
+                data-edit-trigger
+                onClick={() => { setEditing(true); setEditText(msg.body); }}
+                title="Редагувати"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            )}
+            {canDelete && !isDeleted && (
+              <button
+                onClick={() => onDelete(msg)}
+                title="Видалити"
+                className="hover:text-red-400"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
             )}
           </div>
         </div>
@@ -1225,7 +1227,7 @@ function NewDmDialog({
 // ---------------------------------------------------------------------------
 
 export function ChatPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [chatParams, setChatParams] = useSearchParams();
   const initialRoom = chatParams.get("room") ? Number(chatParams.get("room")) : null;
@@ -1236,7 +1238,7 @@ export function ChatPage() {
   const [text, setText] = useState(chatParams.get("prefill") ?? "");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [mobileSidebar, setMobileSidebar] = useState(true);
-  const [showNewDm, setShowNewDm] = useState(false);
+  const [showNewDm, setShowNewDm] = useState(chatParams.has("newdm"));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1246,7 +1248,7 @@ export function ChatPage() {
 
   // Clear prefill/room from URL and focus input
   useEffect(() => {
-    if (chatParams.has("prefill") || chatParams.has("room")) {
+    if (chatParams.has("prefill") || chatParams.has("room") || chatParams.has("newdm")) {
       setChatParams({}, { replace: true });
       if (chatParams.has("prefill")) {
         setTimeout(() => inputRef.current?.focus(), 300);
@@ -1359,8 +1361,8 @@ export function ChatPage() {
       ));
     } catch (e: any) {
       const status = e?.response?.status ?? e?.status;
-      if (status === 410) {
-        toast.error("Час для видалення вичерпано (30 сек)");
+      if (status === 403) {
+        toast.error("Немає прав для видалення");
       } else {
         toast.error("Не вдалося видалити");
       }
@@ -1370,7 +1372,8 @@ export function ChatPage() {
   const handleMsgContextMenu = useCallback((e: React.MouseEvent, msg: ChatMessage) => {
     const isOwn = msg.sender_id === user?.user_id;
     const ageSec = (Date.now() - new Date(msg.created_at).getTime()) / 1000;
-    const canModify = isOwn && ageSec <= 30 && !msg.deleted_at;
+    const canEdit = isOwn && ageSec <= 30 && !msg.deleted_at;
+    const canDel = (isOwn || isAdmin) && !msg.deleted_at;
 
     const items: ContextMenuEntry[] = [
       {
@@ -1389,18 +1392,21 @@ export function ChatPage() {
       },
     ];
 
-    if (canModify) {
+    if (canEdit || canDel) {
       items.push({ separator: true });
+    }
+    if (canEdit) {
       items.push({
         label: "Редагувати",
         icon: <Pencil className="h-3.5 w-3.5" />,
         shortcut: "30с",
         onClick: () => {
-          // Trigger edit mode on the message bubble via a custom event
           const el = document.querySelector(`[data-msg-id="${msg.id}"] [data-edit-trigger]`) as HTMLButtonElement;
           el?.click();
         },
       });
+    }
+    if (canDel) {
       items.push({
         label: "Видалити",
         icon: <Trash2 className="h-3.5 w-3.5" />,
@@ -1410,7 +1416,7 @@ export function ChatPage() {
     }
 
     ctxMenu.open(e, items);
-  }, [user, ctxMenu, handleDeleteMessage]);
+  }, [user, isAdmin, ctxMenu, handleDeleteMessage]);
 
   // Send text message
   const sendMessage = useCallback(async () => {
@@ -1714,17 +1720,21 @@ export function ChatPage() {
                       </span>
                       <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
                     </div>
-                    {group.messages.map((msg) => (
-                      <MessageBubble
-                        key={msg.id}
-                        msg={msg}
-                        isOwn={msg.sender_id === user?.user_id}
-                        onReply={setReplyTo}
-                        onEdit={handleEditMessage}
-                        onDelete={handleDeleteMessage}
-                        onRightClick={handleMsgContextMenu}
-                      />
-                    ))}
+                    {group.messages.map((msg) => {
+                      const own = msg.sender_id === user?.user_id;
+                      return (
+                        <MessageBubble
+                          key={msg.id}
+                          msg={msg}
+                          isOwn={own}
+                          canDelete={own || isAdmin}
+                          onReply={setReplyTo}
+                          onEdit={handleEditMessage}
+                          onDelete={handleDeleteMessage}
+                          onRightClick={handleMsgContextMenu}
+                        />
+                      );
+                    })}
                   </div>
                 ))
               )}
