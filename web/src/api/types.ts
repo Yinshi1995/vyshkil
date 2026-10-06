@@ -310,6 +310,7 @@ export interface GroupEventRow {
   created_by_phone: string | null;
   created_by_rank: string | null;
   created_by_delta: string | null;
+  created_by_active: boolean | null;
 }
 
 export interface TrainingKindOption {

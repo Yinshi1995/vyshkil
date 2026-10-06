@@ -889,6 +889,7 @@ pub struct GroupEventRow {
     pub created_by_phone: Option<String>,
     pub created_by_rank: Option<String>,
     pub created_by_delta: Option<String>,
+    pub created_by_active: Option<bool>,
 }
 
 pub async fn list_group_events(
@@ -917,7 +918,8 @@ pub async fn list_group_events(
          cb_org.short_name AS created_by_org, \
          cb.phone AS created_by_phone, \
          cb.rank AS created_by_rank, \
-         cb.delta_nick AS created_by_delta \
+         cb.delta_nick AS created_by_delta, \
+         cb.is_active AS created_by_active \
          FROM group_event ge \
          LEFT JOIN attrition_reason ar ON ar.id = ge.reason_id \
          LEFT JOIN submission s ON s.id = ge.submission_id \

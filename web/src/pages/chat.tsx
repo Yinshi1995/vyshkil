@@ -1624,7 +1624,7 @@ export function ChatPage() {
 
   return (
     <div
-      className="flex h-[calc(100vh-4.5rem)] overflow-hidden rounded-xl"
+      className="flex h-[calc(100dvh-6.5rem)] overflow-hidden rounded-xl"
       style={{
         border: "1px solid var(--border)",
         background: "var(--background)",
