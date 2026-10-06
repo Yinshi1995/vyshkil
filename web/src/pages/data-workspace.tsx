@@ -2735,53 +2735,6 @@ export function DataWorkspacePage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Share view */}
-        <DropdownMenu onOpenChange={(open) => { if (open) loadRooms(); }}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Share2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Поділитись</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => {
-              const url = buildShareUrl();
-              navigator.clipboard.writeText(window.location.origin + url);
-              toast.success("Посилання скопійовано");
-            }}>
-              <Copy className="mr-2 h-4 w-4" />
-              Копіювати посилання
-            </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Надіслати в чат
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {chatRooms.length === 0 ? (
-                  <DropdownMenuItem disabled>Завантаження...</DropdownMenuItem>
-                ) : chatRooms.map((room) => (
-                  <DropdownMenuItem
-                    key={room.id}
-                    onClick={() => {
-                      const url = buildShareUrl();
-                      const desc = [
-                        kindFilter && `вид: ${kindFilter}`,
-                        globalFilter && `пошук: «${globalFilter}»`,
-                        groupBy && `групування: ${groupBy === "training_kind" ? "за видом" : groupBy === "org_label" ? "за підрозділом" : "за місцем"}`,
-                      ].filter(Boolean).join(", ");
-                      const text = desc ? `${url} (${desc})` : url;
-                      navigate(`/chat?room=${room.id}&prefill=${encodeURIComponent(text)}`);
-                    }}
-                  >
-                    {room.emoji ? `${room.emoji} ` : ""}{room.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {/* Create group (admin only) */}
         {isAdmin && (
           <Button size="sm" onClick={() => setShowCreateDialog(true)}>
