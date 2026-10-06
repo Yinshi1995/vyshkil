@@ -72,8 +72,9 @@ prod "sudo mkdir -p $PROD_DIR/backups && sudo chmod 700 $PROD_DIR/backups && \
     | sudo tee $PROD_DIR/backups/taktoblik-$STAMP-$SHORT.dump >/dev/null && \
   sudo docker compose --project-directory $PROD_DIR exec -T db pg_dump -U taktoblik -Fc notifier \
     | sudo tee $PROD_DIR/backups/notifier-$STAMP-$SHORT.dump >/dev/null && \
-  cd $PROD_DIR/backups && ls -1t taktoblik-*.dump | tail -n +$((KEEP_BACKUPS + 1)) | sudo xargs -r rm -f && \
-  ls -1t notifier-*.dump | tail -n +$((KEEP_BACKUPS + 1)) | sudo xargs -r rm -f" || fail "бекап БД"
+  sudo sh -c 'cd $PROD_DIR/backups && for p in taktoblik notifier; do \
+    ls -1t \$p-*.dump | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f; done'" || fail "бекап БД"
+# backups/ — root 0700: ротацію робить root (sudo sh -c), не cd з-під deploy.
 
 # --- 4. Перенесення образів ---
 log "перенесення образів на прод"
