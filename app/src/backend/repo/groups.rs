@@ -884,6 +884,11 @@ pub struct GroupEventRow {
     pub note: Option<String>,
     pub source_label: Option<String>,
     pub created_by_label: Option<String>,
+    pub created_by_id: Option<i32>,
+    pub created_by_org: Option<String>,
+    pub created_by_phone: Option<String>,
+    pub created_by_rank: Option<String>,
+    pub created_by_delta: Option<String>,
 }
 
 pub async fn list_group_events(
@@ -907,7 +912,12 @@ pub async fn list_group_events(
          WHEN al.actor IS NOT NULL AND al.actor <> '' THEN \
              COALESCE(actor_org.short_name, 'org#' || split_part(al.actor, ':', 1)) \
          END AS source_label, \
-         COALESCE(cb.callsign, cb.display_name, cb.login) AS created_by_label \
+         COALESCE(cb.callsign, cb.display_name, cb.login) AS created_by_label, \
+         cb.id AS created_by_id, \
+         cb_org.short_name AS created_by_org, \
+         cb.phone AS created_by_phone, \
+         cb.rank AS created_by_rank, \
+         cb.delta_nick AS created_by_delta \
          FROM group_event ge \
          LEFT JOIN attrition_reason ar ON ar.id = ge.reason_id \
          LEFT JOIN submission s ON s.id = ge.submission_id \
@@ -920,6 +930,12 @@ pub async fn list_group_events(
          LEFT JOIN org actor_org ON al.actor IS NOT NULL AND al.actor <> '' \
              AND actor_org.id = split_part(al.actor, ':', 1)::int \
          LEFT JOIN user_account cb ON cb.id = ge.created_by \
+         LEFT JOIN LATERAL ( \
+             SELECT o.short_name FROM user_role ur \
+             JOIN org o ON o.id = ur.org_id \
+             WHERE ur.user_id = cb.id \
+             ORDER BY ur.id LIMIT 1 \
+         ) cb_org ON cb.id IS NOT NULL \
          WHERE ge.group_id = $1 \
          ORDER BY ge.occurred_on, ge.id",
         [group_id.into()],

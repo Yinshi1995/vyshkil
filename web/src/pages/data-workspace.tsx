@@ -119,6 +119,8 @@ import {
   CheckCircle2,
   FileWarning,
   GraduationCap,
+  Phone,
+  Shield,
 } from "lucide-react";
 import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 
@@ -583,13 +585,49 @@ function EventTimeline({
                 )}
               </span>
               {ev.created_by_label && (
-                <span
-                  className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] tracking-wider cursor-default"
-                  style={{ borderColor: "color-mix(in oklch, var(--primary) 30%, transparent)", color: "var(--primary)", fontFamily: "var(--font-heading)" }}
-                  title={`${ev.created_by_label} · ${ev.recorded_at}`}
-                >
-                  {ev.created_by_label}
-                </span>
+                <Popover>
+                  <PopoverTrigger
+                    className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] tracking-wider cursor-pointer transition-colors hover:bg-primary/10"
+                    style={{ borderColor: "color-mix(in oklch, var(--primary) 30%, transparent)", color: "var(--primary)", fontFamily: "var(--font-heading)" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {ev.created_by_label}
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-3 text-sm" side="top" align="end">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <Shield className="h-3.5 w-3.5 text-primary" />
+                        {ev.created_by_label}
+                        {ev.created_by_rank && (
+                          <span className="text-xs font-normal text-muted-foreground">({ev.created_by_rank})</span>
+                        )}
+                      </div>
+                      {ev.created_by_org && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Building2 className="h-3 w-3" />
+                          {ev.created_by_org}
+                        </div>
+                      )}
+                      {ev.created_by_phone && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <Phone className="h-3 w-3 text-muted-foreground" />
+                          <a href={`tel:${ev.created_by_phone}`} className="text-primary hover:underline">
+                            {ev.created_by_phone}
+                          </a>
+                        </div>
+                      )}
+                      {ev.created_by_delta && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="font-mono">@</span>
+                          {ev.created_by_delta} (Delta)
+                        </div>
+                      )}
+                      <div className="text-[10px] text-muted-foreground/60 pt-1 border-t border-border/50">
+                        Записано: {ev.recorded_at}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               )}
               {ev.source_label && !ev.created_by_label && (
                 <span

@@ -305,6 +305,11 @@ export interface GroupEventRow {
   note: string | null;
   source_label: string | null;
   created_by_label: string | null;
+  created_by_id: number | null;
+  created_by_org: string | null;
+  created_by_phone: string | null;
+  created_by_rank: string | null;
+  created_by_delta: string | null;
 }
 
 export interface TrainingKindOption {
