@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/api/client";
+import type { ChatRoom } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
   Building2,
@@ -757,6 +761,8 @@ export function DashboardPage() {
     setSearchParams(params, { replace: true });
   }, [filters, setSearchParams]);
 
+  const hasFilters = filters.orgs.size > 0 || filters.kinds.size > 0 || !!filters.dateFrom || !!filters.dateTo;
+
   const buildShareUrl = useCallback(() => {
     const params = new URLSearchParams();
     if (filters.orgs.size) params.set("orgs", [...filters.orgs].join(","));
@@ -766,6 +772,14 @@ export function DashboardPage() {
     const qs = params.toString();
     return `/dashboard${qs ? `?${qs}` : ""}`;
   }, [filters]);
+
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+  const [roomsLoaded, setRoomsLoaded] = useState(false);
+  const loadRooms = useCallback(() => {
+    if (roomsLoaded) return;
+    api.get<ChatRoom[]>("/chat/rooms").then(setChatRooms).catch(() => {});
+    setRoomsLoaded(true);
+  }, [roomsLoaded]);
 
   useEffect(() => {
     Promise.allSettled([
@@ -892,38 +906,54 @@ export function DashboardPage() {
             Зведена візуалізація стану підготовки, укомплектованості та розбіжностей
           </p>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
-              <Share2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Поділитись</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => {
-              const url = buildShareUrl();
-              navigator.clipboard.writeText(window.location.origin + url);
-              toast.success("Посилання скопійовано");
-            }}>
-              <Copy className="mr-2 h-4 w-4" />
-              Копіювати посилання
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => {
-              const url = buildShareUrl();
-              const parts = [
-                filters.orgs.size && `підрозділи: ${[...filters.orgs].join(", ")}`,
-                filters.kinds.size && `вид: ${[...filters.kinds].join(", ")}`,
-                filters.dateFrom && `з ${filters.dateFrom}`,
-                filters.dateTo && `по ${filters.dateTo}`,
-              ].filter(Boolean).join(", ");
-              const text = parts ? `${url} (${parts})` : url;
-              navigate(`/chat?prefill=${encodeURIComponent(text)}`);
-            }}>
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Надіслати в чат
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {hasFilters && (
+          <DropdownMenu onOpenChange={(open) => { if (open) loadRooms(); }}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
+                <Share2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Поділитись</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => {
+                const url = buildShareUrl();
+                navigator.clipboard.writeText(window.location.origin + url);
+                toast.success("Посилання скопійовано");
+              }}>
+                <Copy className="mr-2 h-4 w-4" />
+                Копіювати посилання
+              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Надіслати в чат
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {chatRooms.length === 0 ? (
+                    <DropdownMenuItem disabled>Завантаження...</DropdownMenuItem>
+                  ) : chatRooms.map((room) => (
+                    <DropdownMenuItem
+                      key={room.id}
+                      onClick={() => {
+                        const url = buildShareUrl();
+                        const parts = [
+                          filters.orgs.size && `підрозділи: ${[...filters.orgs].join(", ")}`,
+                          filters.kinds.size && `вид: ${[...filters.kinds].join(", ")}`,
+                          filters.dateFrom && `з ${filters.dateFrom}`,
+                          filters.dateTo && `по ${filters.dateTo}`,
+                        ].filter(Boolean).join(", ");
+                        const text = parts ? `${url} (${parts})` : url;
+                        navigate(`/chat?room=${room.id}&prefill=${encodeURIComponent(text)}`);
+                      }}
+                    >
+                      {room.emoji ? `${room.emoji} ` : ""}{room.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Filters */}

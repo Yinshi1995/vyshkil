@@ -23,6 +23,7 @@ import { api } from "@/api/client";
 import type {
   DataGroupRow,
   GroupEventRow,
+  ChatRoom,
   VenueSearchRow,
   CityRow,
   AdminSubmissionRow,
@@ -81,6 +82,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -2431,6 +2435,14 @@ export function DataWorkspacePage() {
     return `/data${qs ? `?${qs}` : ""}`;
   }, [kindFilter, globalFilter, groupBy]);
 
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+  const [roomsLoaded, setRoomsLoaded] = useState(false);
+  const loadRooms = useCallback(() => {
+    if (roomsLoaded) return;
+    api.get<ChatRoom[]>("/chat/rooms").then(setChatRooms).catch(() => {});
+    setRoomsLoaded(true);
+  }, [roomsLoaded]);
+
   // Kind stats for filter chips
   const kindStats = useMemo(() => {
     if (!groups) return [];
@@ -2665,7 +2677,7 @@ export function DataWorkspacePage() {
         </DropdownMenu>
 
         {/* Share view */}
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(open) => { if (open) loadRooms(); }}>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1.5">
               <Share2 className="h-3.5 w-3.5" />
@@ -2681,19 +2693,33 @@ export function DataWorkspacePage() {
               <Copy className="mr-2 h-4 w-4" />
               Копіювати посилання
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => {
-              const url = buildShareUrl();
-              const desc = [
-                kindFilter && `вид: ${kindFilter}`,
-                globalFilter && `пошук: «${globalFilter}»`,
-                groupBy && `групування: ${groupBy === "training_kind" ? "за видом" : groupBy === "org_label" ? "за підрозділом" : "за місцем"}`,
-              ].filter(Boolean).join(", ");
-              const text = desc ? `${url} (${desc})` : url;
-              navigate(`/chat?prefill=${encodeURIComponent(text)}`);
-            }}>
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Надіслати в чат
-            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Надіслати в чат
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {chatRooms.length === 0 ? (
+                  <DropdownMenuItem disabled>Завантаження...</DropdownMenuItem>
+                ) : chatRooms.map((room) => (
+                  <DropdownMenuItem
+                    key={room.id}
+                    onClick={() => {
+                      const url = buildShareUrl();
+                      const desc = [
+                        kindFilter && `вид: ${kindFilter}`,
+                        globalFilter && `пошук: «${globalFilter}»`,
+                        groupBy && `групування: ${groupBy === "training_kind" ? "за видом" : groupBy === "org_label" ? "за підрозділом" : "за місцем"}`,
+                      ].filter(Boolean).join(", ");
+                      const text = desc ? `${url} (${desc})` : url;
+                      navigate(`/chat?room=${room.id}&prefill=${encodeURIComponent(text)}`);
+                    }}
+                  >
+                    {room.emoji ? `${room.emoji} ` : ""}{room.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
 

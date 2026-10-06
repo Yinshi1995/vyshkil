@@ -1112,11 +1112,12 @@ function RecordingBar({
 export function ChatPage() {
   const { user } = useAuth();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
-  const [activeRoom, setActiveRoom] = useState<number | null>(null);
+  const [chatParams, setChatParams] = useSearchParams();
+  const initialRoom = chatParams.get("room") ? Number(chatParams.get("room")) : null;
+  const [activeRoom, setActiveRoom] = useState<number | null>(initialRoom);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [chatParams, setChatParams] = useSearchParams();
   const [text, setText] = useState(chatParams.get("prefill") ?? "");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [mobileSidebar, setMobileSidebar] = useState(true);
@@ -1127,11 +1128,13 @@ export function ChatPage() {
   const ctxMenu = useContextMenu();
   const voice = useVoiceRecorder();
 
-  // Clear prefill from URL and focus input
+  // Clear prefill/room from URL and focus input
   useEffect(() => {
-    if (chatParams.has("prefill")) {
+    if (chatParams.has("prefill") || chatParams.has("room")) {
       setChatParams({}, { replace: true });
-      setTimeout(() => inputRef.current?.focus(), 300);
+      if (chatParams.has("prefill")) {
+        setTimeout(() => inputRef.current?.focus(), 300);
+      }
     }
   }, []);
 
@@ -1142,6 +1145,8 @@ export function ChatPage() {
         setRooms(data);
         if (data.length > 0 && activeRoom === null) {
           setActiveRoom(data[0].id);
+        }
+        if (activeRoom !== null || data.length > 0) {
           setMobileSidebar(false);
         }
       })
