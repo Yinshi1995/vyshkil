@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { api } from "@/api/client";
 import type { ChatRoom, ChatMessage } from "@/api/types";
@@ -1093,7 +1093,8 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [text, setText] = useState("");
+  const [chatParams, setChatParams] = useSearchParams();
+  const [text, setText] = useState(chatParams.get("prefill") ?? "");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [mobileSidebar, setMobileSidebar] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1102,6 +1103,14 @@ export function ChatPage() {
   const eventSourceRef = useRef<EventSource | null>(null);
   const ctxMenu = useContextMenu();
   const voice = useVoiceRecorder();
+
+  // Clear prefill from URL and focus input
+  useEffect(() => {
+    if (chatParams.has("prefill")) {
+      setChatParams({}, { replace: true });
+      setTimeout(() => inputRef.current?.focus(), 300);
+    }
+  }, []);
 
   // Load rooms
   useEffect(() => {

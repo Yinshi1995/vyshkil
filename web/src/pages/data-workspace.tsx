@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth";
 import { todayIso } from "@/lib/date-ua";
@@ -121,6 +121,8 @@ import {
   GraduationCap,
   Phone,
   Shield,
+  Share2,
+  MessageSquare,
 } from "lucide-react";
 import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 
@@ -793,10 +795,27 @@ function DetailPanel({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" dockable className="w-full overflow-y-auto sm:max-w-xl lg:max-w-2xl">
         <SheetHeader>
-          <SheetTitle>{group.org_label}</SheetTitle>
-          <SheetDescription>
-            {group.training_kind} · #{group.id}
-          </SheetDescription>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <SheetTitle>{group.org_label}</SheetTitle>
+              <SheetDescription>
+                {group.training_kind} · #{group.id}
+              </SheetDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              title="Копіювати посилання на групу"
+              onClick={() => {
+                const url = `${window.location.origin}/data?group=${group.id}`;
+                navigator.clipboard.writeText(url);
+                toast.success("Посилання скопійовано");
+              }}
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+          </div>
         </SheetHeader>
 
         <div className="flex flex-col gap-5 px-4 pb-6">
@@ -2314,6 +2333,7 @@ function CreateGroupDialog({
 
 export function DataWorkspacePage() {
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
 
   // Data state
   const [groups, setGroups] = useState<DataGroupRow[] | null>(null);
@@ -2323,7 +2343,9 @@ export function DataWorkspacePage() {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "planned_start", desc: true },
   ]);
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [globalFilter, setGlobalFilter] = useState(searchParams.get("q") ?? "");
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [grouping, setGrouping] = useState<GroupingState>([]);
 
@@ -2335,10 +2357,10 @@ export function DataWorkspacePage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   // Kind filter (quick filter chips)
-  const [kindFilter, setKindFilter] = useState<string | null>(null);
+  const [kindFilter, setKindFilter] = useState<string | null>(searchParams.get("kind"));
 
   // Grouping by
-  const [groupBy, setGroupBy] = useState<string | null>(null);
+  const [groupBy, setGroupBy] = useState<string | null>(searchParams.get("group_by"));
 
   // Virtual scroll container
   const containerRef = useRef<HTMLDivElement>(null);
@@ -2358,7 +2380,6 @@ export function DataWorkspacePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const [searchParams, setSearchParams] = useSearchParams();
   const initialGroupId = useRef(searchParams.get("group"));
 
   useEffect(() => {
@@ -2374,9 +2395,8 @@ export function DataWorkspacePage() {
         setSelectedGroup(found);
         setDetailOpen(true);
       }
-      setSearchParams({}, { replace: true });
     }
-  }, [groups, setSearchParams]);
+  }, [groups]);
 
   // Apply kind filter as column filter
   useEffect(() => {
@@ -2391,6 +2411,24 @@ export function DataWorkspacePage() {
   useEffect(() => {
     setGrouping(groupBy ? [groupBy] : []);
   }, [groupBy]);
+
+  // Sync filters → URL params
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (kindFilter) params.kind = kindFilter;
+    if (globalFilter) params.q = globalFilter;
+    if (groupBy) params.group_by = groupBy;
+    setSearchParams(params, { replace: true });
+  }, [kindFilter, globalFilter, groupBy, setSearchParams]);
+
+  const buildShareUrl = useCallback(() => {
+    const params = new URLSearchParams();
+    if (kindFilter) params.set("kind", kindFilter);
+    if (globalFilter) params.set("q", globalFilter);
+    if (groupBy) params.set("group_by", groupBy);
+    const qs = params.toString();
+    return `/data${qs ? `?${qs}` : ""}`;
+  }, [kindFilter, globalFilter, groupBy]);
 
   // Kind stats for filter chips
   const kindStats = useMemo(() => {
@@ -2621,6 +2659,39 @@ export function DataWorkspacePage() {
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setGroupBy("site_label")}>
               За місцем проведення
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Share view */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Share2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Поділитись</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => {
+              const url = buildShareUrl();
+              navigator.clipboard.writeText(window.location.origin + url);
+              toast.success("Посилання скопійовано");
+            }}>
+              <Copy className="mr-2 h-4 w-4" />
+              Копіювати посилання
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => {
+              const url = buildShareUrl();
+              const desc = [
+                kindFilter && `вид: ${kindFilter}`,
+                globalFilter && `пошук: «${globalFilter}»`,
+                groupBy && `групування: ${groupBy === "training_kind" ? "за видом" : groupBy === "org_label" ? "за підрозділом" : "за місцем"}`,
+              ].filter(Boolean).join(", ");
+              const text = desc ? `${url} (${desc})` : url;
+              navigate(`/chat?prefill=${encodeURIComponent(text)}`);
+            }}>
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Надіслати в чат
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
