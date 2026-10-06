@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { api } from "@/api/client";
 import type { DirectoryUser } from "@/api/types";
@@ -30,6 +30,7 @@ import {
   Loader2,
   UserX,
   UserCheck,
+  MessageSquarePlus,
 } from "lucide-react";
 
 const ROLE_UA: Record<string, string> = {
@@ -48,14 +49,18 @@ function UserCard({
   user,
   index,
   isAdmin,
+  isSelf,
   onToggleActive,
   onResetPassword,
+  onMessage,
 }: {
   user: DirectoryUser;
   index: number;
   isAdmin: boolean;
+  isSelf: boolean;
   onToggleActive: (userId: number) => void;
   onResetPassword: (userId: number) => void;
+  onMessage: (userId: number) => void;
 }) {
   const name = user.callsign ?? user.display_name ?? user.login;
   const fullName = [user.rank, user.first_name, user.last_name].filter(Boolean).join(" ");
@@ -129,6 +134,20 @@ function UserCard({
               ))}
             </div>
           )}
+          {!isSelf && user.is_active && (
+            <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => onMessage(user.user_id)}
+                title="Написати"
+              >
+                <MessageSquarePlus className="mr-1 h-3 w-3" />
+                Написати
+              </Button>
+            </div>
+          )}
           {canManage && (
             <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <Button
@@ -169,7 +188,8 @@ function UserCard({
 }
 
 export function DirectoryPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user: authUser } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -316,8 +336,17 @@ export function DirectoryPage() {
                     user={u}
                     index={cardIdx++}
                     isAdmin={isAdmin}
+                    isSelf={u.user_id === authUser?.user_id}
                     onToggleActive={handleToggleActive}
                     onResetPassword={(id) => { setResetDialogUser(id); setNewPassword(""); }}
+                    onMessage={async (id) => {
+                      try {
+                        const res = await api.post<{ room_id: number }>(`/chat/dm/${id}`, {});
+                        navigate(`/chat?room=${res.room_id}`);
+                      } catch {
+                        toast.error("Не вдалось відкрити діалог");
+                      }
+                    }}
                   />
                 ))}
               </div>

@@ -5,7 +5,15 @@ import { api } from "@/api/client";
 import type { ChatRoom, ChatMessage } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 import {
@@ -28,6 +36,8 @@ import {
   Building2,
   MessageSquare,
   Copy,
+  Search,
+  PenLine,
   type LucideIcon,
 } from "lucide-react";
 
@@ -1106,6 +1116,111 @@ function RecordingBar({
 }
 
 // ---------------------------------------------------------------------------
+// DM user picker
+// ---------------------------------------------------------------------------
+
+interface DmUser {
+  id: number;
+  label: string;
+  callsign: string | null;
+  rank: string | null;
+  org_label: string | null;
+}
+
+function NewDmDialog({
+  open,
+  onOpenChange,
+  onSelect,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (userId: number) => void;
+}) {
+  const [users, setUsers] = useState<DmUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    api.get<DmUser[]>("/chat/users")
+      .then(setUsers)
+      .catch(() => toast.error("Помилка завантаження"))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    if (!search) return users;
+    const q = search.toLowerCase();
+    return users.filter(
+      (u) =>
+        u.label.toLowerCase().includes(q) ||
+        u.callsign?.toLowerCase().includes(q) ||
+        u.org_label?.toLowerCase().includes(q) ||
+        u.rank?.toLowerCase().includes(q),
+    );
+  }, [users, search]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Написати</DialogTitle>
+          <DialogDescription>Оберіть користувача для особистого повідомлення</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Пошук..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            autoFocus
+          />
+        </div>
+        <div className="max-h-64 overflow-y-auto -mx-1">
+          {loading ? (
+            <div className="space-y-2 px-1">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-6">
+              {search ? "Нікого не знайдено" : "Немає користувачів"}
+            </p>
+          ) : (
+            filtered.map((u) => (
+              <button
+                key={u.id}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent/50"
+                onClick={() => onSelect(u.id)}
+              >
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #3a4a5a, #1a2a3a)",
+                    color: "#64b5f6",
+                  }}
+                >
+                  {(u.callsign || u.label).slice(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold truncate">{u.label}</div>
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    {[u.rank, u.org_label].filter(Boolean).join(" · ") || "—"}
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Chat Page
 // ---------------------------------------------------------------------------
 
@@ -1121,6 +1236,7 @@ export function ChatPage() {
   const [text, setText] = useState(chatParams.get("prefill") ?? "");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [mobileSidebar, setMobileSidebar] = useState(true);
+  const [showNewDm, setShowNewDm] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1152,6 +1268,22 @@ export function ChatPage() {
       })
       .catch(() => toast.error("Помилка завантаження чатів"))
       .finally(() => setLoading(false));
+  }, []);
+
+  const handleStartDm = useCallback(async (targetUserId: number) => {
+    try {
+      const res = await api.post<{ room_id: number }>(`/chat/dm/${targetUserId}`, {});
+      const roomId = res.room_id;
+      setShowNewDm(false);
+      // Refresh rooms to include the new DM
+      const updated = await api.get<ChatRoom[]>("/chat/rooms");
+      setRooms(updated);
+      setActiveRoom(roomId);
+      setMobileSidebar(false);
+      setTimeout(() => inputRef.current?.focus(), 200);
+    } catch {
+      toast.error("Не вдалось відкрити діалог");
+    }
   }, []);
 
   // Load messages for active room
@@ -1449,9 +1581,19 @@ export function ChatPage() {
           >
             Чати
           </h2>
-          <Badge variant="secondary" className="ml-auto text-[10px]">
-            {rooms.length}
-          </Badge>
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Написати"
+              onClick={() => setShowNewDm(true)}
+            >
+              <PenLine className="h-4 w-4" />
+            </Button>
+            <Badge variant="secondary" className="text-[10px]">
+              {rooms.length}
+            </Badge>
+          </div>
         </div>
 
         {/* Room list — grouped by kind */}
@@ -1722,6 +1864,7 @@ export function ChatPage() {
         )}
       </div>
       <ContextMenuPortal state={ctxMenu.state} onClose={ctxMenu.close} />
+      <NewDmDialog open={showNewDm} onOpenChange={setShowNewDm} onSelect={handleStartDm} />
     </div>
   );
 }

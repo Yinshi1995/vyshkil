@@ -82,7 +82,18 @@ async fn list_rooms(
     let rooms = ChatRoom::find_by_statement(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
         r#"SELECT
-                cr.id, cr.name, cr.kind, cr.emoji,
+                cr.id,
+                CASE WHEN cr.kind = 'direct' THEN
+                    COALESCE(
+                        (SELECT COALESCE(ua2.callsign, ua2.display_name, ua2.login)
+                         FROM chat_room_member crm3
+                         JOIN user_account ua2 ON ua2.id = crm3.user_id
+                         WHERE crm3.room_id = cr.id AND crm3.user_id <> $1
+                         LIMIT 1),
+                        cr.name
+                    )
+                ELSE cr.name END AS name,
+                cr.kind, cr.emoji,
                 (SELECT COUNT(*) FROM chat_message cm
                  WHERE cm.room_id = cr.id
                    AND cm.deleted_at IS NULL
@@ -554,6 +565,131 @@ async fn delete_message(
 }
 
 // ---------------------------------------------------------------------------
+// DM: find or create direct room
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, FromQueryResult)]
+struct DmRoomResult {
+    room_id: i32,
+}
+
+async fn open_dm(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(other_user_id): Path<i32>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let user = require_auth(&state.db, &headers).await?;
+
+    if other_user_id == user.user_id {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Check target user exists and is active
+    #[derive(FromQueryResult)]
+    struct UserExists { exists: Option<bool> }
+    let exists = UserExists::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT EXISTS(SELECT 1 FROM user_account WHERE id = $1 AND is_active = TRUE) AS exists",
+        [other_user_id.into()],
+    ))
+    .one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !exists.map(|e| e.exists.unwrap_or(false)).unwrap_or(false) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Find existing DM room between these two users
+    let existing = DmRoomResult::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        r#"SELECT cr.id AS room_id
+           FROM chat_room cr
+           WHERE cr.kind = 'direct' AND cr.is_active = TRUE
+             AND EXISTS(SELECT 1 FROM chat_room_member WHERE room_id = cr.id AND user_id = $1)
+             AND EXISTS(SELECT 1 FROM chat_room_member WHERE room_id = cr.id AND user_id = $2)
+             AND (SELECT COUNT(*) FROM chat_room_member WHERE room_id = cr.id) = 2
+           LIMIT 1"#,
+        [user.user_id.into(), other_user_id.into()],
+    ))
+    .one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(row) = existing {
+        return Ok(Json(serde_json::json!({ "room_id": row.room_id })));
+    }
+
+    // Create new DM room
+    #[derive(FromQueryResult)]
+    struct IdRow { id: i32 }
+
+    let room = IdRow::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "INSERT INTO chat_room (name, kind) VALUES ('DM', 'direct') RETURNING id",
+        [],
+    ))
+    .one(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Add both users as members
+    state.db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "INSERT INTO chat_room_member (room_id, user_id) VALUES ($1, $2), ($1, $3)",
+        [room.id.into(), user.user_id.into(), other_user_id.into()],
+    ))
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(serde_json::json!({ "room_id": room.id })))
+}
+
+// ---------------------------------------------------------------------------
+// Users available for DM
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, FromQueryResult)]
+struct DmUser {
+    id: i32,
+    label: String,
+    callsign: Option<String>,
+    rank: Option<String>,
+    org_label: Option<String>,
+}
+
+async fn list_dm_users(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<DmUser>>, StatusCode> {
+    let user = require_auth(&state.db, &headers).await?;
+
+    let users = DmUser::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        r#"SELECT
+                ua.id,
+                COALESCE(ua.callsign, ua.display_name, ua.login) AS label,
+                ua.callsign,
+                ua.rank,
+                (SELECT o.short_name FROM user_role ur
+                 JOIN org o ON o.id = ur.org_id
+                 WHERE ur.user_id = ua.id
+                 ORDER BY ur.id LIMIT 1
+                ) AS org_label
+            FROM user_account ua
+            WHERE ua.is_active = TRUE AND ua.id <> $1
+            ORDER BY label"#,
+        [user.user_id.into()],
+    ))
+    .all(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(users))
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -563,6 +699,8 @@ pub fn chat_router() -> Router<AppState> {
         .route("/api/chat/rooms/:room_id/messages", get(room_messages))
         .route("/api/chat/rooms/:room_id/messages", post(send_message))
         .route("/api/chat/rooms/:room_id/stream", get(room_stream))
+        .route("/api/chat/dm/:user_id", post(open_dm))
+        .route("/api/chat/users", get(list_dm_users))
         .route("/api/chat/messages/:msg_id", axum::routing::put(edit_message))
         .route("/api/chat/messages/:msg_id", axum::routing::delete(delete_message))
         .route("/api/chat/media", post(upload_media))
