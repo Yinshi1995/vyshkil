@@ -634,7 +634,7 @@ function EventTimeline({
                       <div className="text-[10px] text-muted-foreground/60 pt-1 border-t border-border/50">
                         Записано: {ev.recorded_at}
                       </div>
-                      {ev.created_by_id && ev.created_by_id !== user?.user_id && ev.created_by_active && (
+                      {ev.created_by_id && ev.created_by_id !== user?.user_id && (
                         <Button
                           variant="outline"
                           size="sm"

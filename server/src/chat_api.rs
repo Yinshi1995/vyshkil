@@ -627,12 +627,12 @@ async fn open_dm(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Check target user exists and is active
+    // Check target user exists
     #[derive(FromQueryResult)]
     struct UserExists { exists: Option<bool> }
     let exists = UserExists::find_by_statement(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
-        "SELECT EXISTS(SELECT 1 FROM user_account WHERE id = $1 AND is_active = TRUE) AS exists",
+        "SELECT EXISTS(SELECT 1 FROM user_account WHERE id = $1) AS exists",
         [other_user_id.into()],
     ))
     .one(&state.db)
