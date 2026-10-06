@@ -12,3 +12,4 @@
     - project
     - firewall
     - autonomy
+    - prod_autodeploy  # після autonomy: потребує lingering

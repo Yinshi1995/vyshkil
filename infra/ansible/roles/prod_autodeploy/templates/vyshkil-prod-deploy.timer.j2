@@ -1,0 +1,9 @@
+[Unit]
+Description=Перевірка нових комітів для прод-деплою кожні {{ prod_autodeploy_interval }}
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec={{ prod_autodeploy_interval }}
+
+[Install]
+WantedBy=timers.target

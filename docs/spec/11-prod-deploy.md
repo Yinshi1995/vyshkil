@@ -165,6 +165,21 @@ Ansible-роль `firewall` має перевіряти всі 5 рівнів п
 4. `docker compose up -d` — міграції застосовуються на старті сервера
 5. Healthchecks → готово
 
+### 5.1. Автодеплой з GitHub (`.claude/decisions/prod-autodeploy-pull.md`)
+
+Пуш у `main` → прод оновлюється сам. systemd user-таймер `vyshkil-prod-deploy` на dev-VM
+(роль `prod_autodeploy`, скрипт `infra/deploy/deploy-prod.sh`) щохвилини перевіряє `origin/main`:
+
+1. новий коміт → `git archive` у `~/deploy/build`, збірка `vyshkil-app:<sha>`/`vyshkil-notifier:<sha>`;
+2. `pg_dump` taktoblik + notifier → `/opt/vyshkil/backups/` (останні 14);
+3. `docker save | ssh docker load`, поточні `:latest` → `:previous`, нові → `:latest`, `compose up -d`;
+4. перевірка: HTTP 200 на `:3000` і нема `panicked` у логах app (до 2 хв);
+5. збій → відкат на `:previous`, sha пишеться в `~/deploy/failed-sha` (не ретраїться до нового коміту).
+
+Журнал: `journalctl --user -u vyshkil-prod-deploy -f` (на dev-VM). Ручний деплой конкретного
+коміту: `~/deploy/deploy-prod.sh --force <sha>`. Зупинити: `systemctl --user stop vyshkil-prod-deploy.timer`.
+Деплоїть лише образи; compose/env/NATS-конфіг — `playbooks/prod-vm.yml`.
+
 ## 6. Логи й моніторинг
 - Docker `log-driver: local`, ротація.
 - `WA_PRINT_QR_TO_LOGS` — вимкнено.

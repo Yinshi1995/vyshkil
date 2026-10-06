@@ -1,0 +1,13 @@
+# Згенеровано Ansible (roles/prod_autodeploy). Журнал: journalctl --user -u vyshkil-prod-deploy
+[Unit]
+Description=vyshkil: деплой origin/{{ prod_autodeploy_branch }} на прод (якщо є новий коміт)
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+Environment=REPO_URL={{ prod_autodeploy_repo_url }}
+Environment=BRANCH={{ prod_autodeploy_branch }}
+Environment=STATE_DIR={{ prod_autodeploy_dir }}
+ExecStart={{ prod_autodeploy_dir }}/deploy-prod.sh
+TimeoutStartSec=45min
+Nice=10

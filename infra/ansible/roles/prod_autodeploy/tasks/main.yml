@@ -1,0 +1,57 @@
+---
+# Pull-автодеплой (11 §5.1): user-таймер `prod_autodeploy_user` (lingering уже вмикає роль autonomy).
+# Ключ ~/.ssh/vyshkil-prod (доступ deploy@прод через VyOS) — кладеться вручну, не з репо.
+
+- name: "Каталог автодеплою {{ prod_autodeploy_dir }}"
+  ansible.builtin.file:
+    path: "{{ prod_autodeploy_dir }}"
+    state: directory
+    owner: "{{ prod_autodeploy_user }}"
+    group: "{{ prod_autodeploy_user }}"
+    mode: "0750"
+
+- name: Скрипт деплою
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../deploy/deploy-prod.sh"
+    dest: "{{ prod_autodeploy_dir }}/deploy-prod.sh"
+    owner: "{{ prod_autodeploy_user }}"
+    group: "{{ prod_autodeploy_user }}"
+    mode: "0750"
+
+- name: Наявність ключа доступу до проду
+  ansible.builtin.stat:
+    path: "/home/{{ prod_autodeploy_user }}/.ssh/vyshkil-prod"
+  register: prod_autodeploy_key
+
+- name: "ПОПЕРЕДЖЕННЯ: нема ~/.ssh/vyshkil-prod — таймер не вмикається"
+  ansible.builtin.debug:
+    msg: "Скопіюйте ключ: scp ~/.ssh/vyshkil-prod dev@<dev-vm>:.ssh/ && chmod 600, потім повторіть плейбук."
+  when: not prod_autodeploy_key.stat.exists
+
+- name: systemd user-юніти автодеплою
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/home/{{ prod_autodeploy_user }}/.config/systemd/user/{{ item }}"
+    owner: "{{ prod_autodeploy_user }}"
+    group: "{{ prod_autodeploy_user }}"
+    mode: "0644"
+  loop:
+    - vyshkil-prod-deploy.service
+    - vyshkil-prod-deploy.timer
+
+- name: "UID {{ prod_autodeploy_user }}"
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ prod_autodeploy_user }}"
+
+- name: Таймер автодеплою
+  ansible.builtin.systemd:
+    name: vyshkil-prod-deploy.timer
+    scope: user
+    daemon_reload: true
+    enabled: "{{ prod_autodeploy_enabled and prod_autodeploy_key.stat.exists }}"
+    state: "{{ 'started' if (prod_autodeploy_enabled and prod_autodeploy_key.stat.exists) else 'stopped' }}"
+  become: true
+  become_user: "{{ prod_autodeploy_user }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.getent_passwd[prod_autodeploy_user][1] }}"

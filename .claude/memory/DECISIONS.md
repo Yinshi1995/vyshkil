@@ -41,3 +41,5 @@ date: 2026-09-27
 - [Нотифікатор — TypeScript/Node 22, не Rust](../decisions/notifier-ts-whatsapp-web-js.md) — `whatsapp-web.js`, рішення замовника; Bun vs Node перевірено емпірично.
 - [IaC — Ansible, не разовий скрипт](../decisions/iac-ansible.md) — ролі `base`/`docker`/`firewall` перевикористовує прод (11); `community.proxmox` 2.0.0 — актуальна назва колекції.
 - [Dev-VM: параметри](../decisions/dev-vm-parameters.md) — RAM/мережа/git-remote/source_files, зафіксовані відповідями замовника + реальною інвентаризацією хоста, не вгадані.
+- [Прод через cf-connector, VLAN 90 за VyOS](../decisions/prod-cloudflare-tunnel.md) — ревізія 2: без окремого cloudflared на VM.
+- [Автодеплой проду — pull-таймер на dev-VM](../decisions/prod-autodeploy-pull.md) — не GitHub Actions: репо публічне, self-hosted runner з доступом до проду небезпечний.

@@ -1,0 +1,9 @@
+---
+# Автодеплой проду з GitHub (11 §5.1, decisions/prod-autodeploy-pull.md): таймер на dev-VM.
+# Той самий користувач, що й у base/autonomy (base_primary_user задає роль base).
+prod_autodeploy_user: "{{ base_primary_user | default(dev_vm_user) | default('dev') }}"
+prod_autodeploy_enabled: true
+prod_autodeploy_interval: 1min
+prod_autodeploy_repo_url: https://github.com/Yinshi1995/vyshkil.git
+prod_autodeploy_branch: main
+prod_autodeploy_dir: "/home/{{ prod_autodeploy_user }}/deploy"
