@@ -368,7 +368,7 @@ pub fn validate_row(row: &GroupFormRow, as_of: NaiveDate) -> Result<ValidatedRow
         .map_err(|e| map_date_err("З", e))?;
 
     let end = if row.planned_end_raw.trim().is_empty() {
-        range_end.ok_or_else(|| ("По".to_string(), "не вказано термін «по»".to_string()))?
+        range_end.ok_or_else(|| ("По".to_string(), "не вказано термін \"по\"".to_string()))?
     } else {
         parse_end_date(&row.planned_end_raw, start).map_err(|e| map_date_err("По", e))?
     };

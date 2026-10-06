@@ -33,7 +33,7 @@ pub async fn parse_kvid_file(
         import::kvid::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
     if raw_rows.is_empty() {
         return Err(ServerFnError::new(
-            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «КВід» \
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл \"КВід\" \
              (заголовок № з/п/Підрозділ/За штатом/За списком/В наявності/…)",
         ));
     }
@@ -65,9 +65,9 @@ pub async fn parse_ivs_file(
     let extract = import::ivs::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
     if extract.staffing.is_empty() && extract.internships.is_empty() && extract.courses.is_empty() {
         return Err(ServerFnError::new(
-            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «ІВС» \
-             («ВІДОМІСТЬ укомплектованості та навченості груп інструкторів» + «ВІДОМІСТЬ \
-             проходження підготовки інструкторами» на одному аркуші)",
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл \"ІВС\" \
+             (\"ВІДОМІСТЬ укомплектованості та навченості груп інструкторів\" + \"ВІДОМІСТЬ \
+             проходження підготовки інструкторами\" на одному аркуші)",
         ));
     }
 
@@ -100,7 +100,7 @@ pub async fn parse_vch_archive_file(
     if raw_rows.is_empty() {
         return Err(ServerFnError::new(
             "у файлі не знайдено жодного рядка даних — перевірте, що це файл архіву ВЧ \
-             (аркуш «Записи», заголовок Військова частина/Місце проведення/Спеціальність/ВОС/ОВТ/\
+             (аркуш \"Записи\", заголовок Військова частина/Місце проведення/Спеціальність/ВОС/ОВТ/\
              Термін з/Термін по/План/Фактично навчається)",
         ));
     }
@@ -165,18 +165,18 @@ pub async fn commit_staffing(
         return Err(ServerFnError::new("немає жодного рядка для збереження"));
     }
     if chrono::NaiveDate::parse_from_str(&as_of_date, "%Y-%m-%d").is_err() {
-        return Err(ServerFnError::new("«станом на»: неможлива дата"));
+        return Err(ServerFnError::new("\"станом на\": неможлива дата"));
     }
     for row in &rows {
         let Some(org_id) = row.org_id else {
             return Err(ServerFnError::new(format!(
-                "«{}»: частину не розпізнано — оберіть вручну перед фіксацією",
+                "\"{}\": частину не розпізнано — оберіть вручну перед фіксацією",
                 row.org_label
             )));
         };
         if !policy::can_edit_org(actor, org_id) {
             return Err(ServerFnError::new(format!(
-                "немає права вносити дані за «{}»",
+                "немає права вносити дані за \"{}\"",
                 row.org_label
             )));
         }
@@ -232,18 +232,18 @@ pub async fn commit_instructor_staffing(
         return Err(ServerFnError::new("немає жодного рядка для збереження"));
     }
     if chrono::NaiveDate::parse_from_str(&as_of_date, "%Y-%m-%d").is_err() {
-        return Err(ServerFnError::new("«станом на»: неможлива дата"));
+        return Err(ServerFnError::new("\"станом на\": неможлива дата"));
     }
     for row in &rows {
         let Some(org_id) = row.org_id else {
             return Err(ServerFnError::new(format!(
-                "«{}»: частину не розпізнано — оберіть вручну перед фіксацією",
+                "\"{}\": частину не розпізнано — оберіть вручну перед фіксацією",
                 row.org_label
             )));
         };
         if !policy::can_edit_org(actor, org_id) {
             return Err(ServerFnError::new(format!(
-                "немає права вносити дані за «{}»",
+                "немає права вносити дані за \"{}\"",
                 row.org_label
             )));
         }

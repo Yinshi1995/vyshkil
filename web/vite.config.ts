@@ -11,7 +11,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:3000",
+      // Перевизначення — щоб ганяти dev-фронт проти віддаленого сервера (SSH-тунель на прод тощо).
+      "/api": process.env.API_PROXY_TARGET ?? "http://localhost:3000",
     },
   },
 })

@@ -39,7 +39,7 @@ fn metric_value(r: &ReportedValues, metric: &str) -> String {
         "planned_start" => r.planned_start.clone(),
         "planned_end" => r.planned_end.clone(),
         "site_id" => r.site_id.to_string(),
-        _ => unreachable!("невідомий метрик «{metric}» — див. METRICS"),
+        _ => unreachable!("невідомий метрик \"{metric}\" — див. METRICS"),
     }
 }
 

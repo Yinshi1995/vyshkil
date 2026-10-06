@@ -14,7 +14,8 @@
     dev_vm_vlan_tag: "{{ prod_vm_vlan_tag }}"
     dev_vm_ip_cidr: "{{ prod_vm_ip_cidr }}"
     dev_vm_gateway: "{{ prod_vm_gateway }}"
+    dev_vm_dns: ["{{ prod_vm_dns }}"]
     dev_vm_user: "{{ prod_vm_user }}"
-    dev_vm_user_ssh_public_key: "{{ vault_prod_vm_user_ssh_public_key }}"
+    dev_vm_user_ssh_public_key: "{{ prod_vm_user_ssh_public_key }}"
   roles:
     - provision

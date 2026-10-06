@@ -58,7 +58,7 @@ const SEED_STATEMENTS: &[&str] = &[
     r#"INSERT INTO org (kind, short_name, country) VALUES ('foreign_state', 'Республіка Польща', 'Польща')"#,
     // --- місце навчання 152 нц (02-input-forms-ux.md §3) ---
     r#"INSERT INTO training_site (org_id, locality)
-        SELECT id, 'НЦ «Десна»' FROM org WHERE short_name = '152 нц'"#,
+        SELECT id, 'НЦ "Десна"' FROM org WHERE short_name = '152 нц'"#,
     // --- підпорядкування: командний ланцюг під УВ(с) (штатне, з 2022) ---
     r#"INSERT INTO subordination (child_org_id, parent_org_id, axis, valid_from)
         SELECT (SELECT id FROM org WHERE short_name = c.name),

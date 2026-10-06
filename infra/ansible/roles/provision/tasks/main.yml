@@ -171,8 +171,7 @@
       net0: "virtio,bridge={{ dev_vm_bridge }}{{ ',tag=' + dev_vm_vlan_tag | string if dev_vm_vlan_tag else '' }}"
     ipconfig:
       ipconfig0: "ip={{ dev_vm_ip_cidr }},gw={{ dev_vm_gateway }}"
-    nameservers:
-      - "{{ dev_vm_gateway }}"
+    nameservers: "{{ dev_vm_dns | default([dev_vm_gateway]) }}"
     ciuser: "{{ dev_vm_user }}"
     sshkeys: "{{ dev_vm_user_ssh_public_key }}"
     agent: "enabled=1"

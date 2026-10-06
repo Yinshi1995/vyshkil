@@ -91,7 +91,7 @@ impl DateError {
             DateError::Invalid { raw, day, month, year } => {
                 let days = days_in_month(*year, *month);
                 format!(
-                    "«{raw}» — такої дати нема: {} {year} року має {days} {}, а вказано {day}-е число",
+                    "\"{raw}\" — такої дати нема: {} {year} року має {days} {}, а вказано {day}-е число",
                     month_name(*month),
                     day_word(days)
                 )
@@ -99,21 +99,21 @@ impl DateError {
             DateError::MalformedYear { raw, year_token } => {
                 let len = year_token.len() as u32;
                 format!(
-                    "«{raw}» — рік «{year_token}» має бути 2 або 4 цифри (наприклад, 26 або \
+                    "\"{raw}\" — рік \"{year_token}\" має бути 2 або 4 цифри (наприклад, 26 або \
                      2026), а тут {len} {}",
                     digit_word(len)
                 )
             }
             DateError::YearMismatch { raw, given_year, expected_year } => format!(
-                "«{raw}» — рік {given_year} не збігається з роком подання ({expected_year}); \
-                 якщо дата справді за {given_year} рік, перевірте поле «Станом на» вгорі"
+                "\"{raw}\" — рік {given_year} не збігається з роком подання ({expected_year}); \
+                 якщо дата справді за {given_year} рік, перевірте поле \"Станом на\" вгорі"
             ),
             DateError::Unparseable { raw } => format!(
-                "«{raw}» — не розпізнано як дату; очікую формат дд.мм або дд.мм.рррр \
+                "\"{raw}\" — не розпізнано як дату; очікую формат дд.мм або дд.мм.рррр \
                  (наприклад, 15.09 або 15.09.2026)"
             ),
             DateError::EndBeforeStart { start, end } => format!(
-                "«по» ({}) раніше «з» ({}) — дати переплутані місцями, або в одній з них \
+                "\"по\" ({}) раніше \"з\" ({}) — дати переплутані місцями, або в одній з них \
                  помилка в місяці/році",
                 fmt_date(*end),
                 fmt_date(*start)
@@ -333,7 +333,7 @@ pub fn format_date_mask(digits: &str) -> LiveDateMask {
     if !(1..=12).contains(&month_num) {
         return LiveDateMask {
             display,
-            error: Some(format!("місяць «{month_str}» неможливий (01–12)")),
+            error: Some(format!("місяць \"{month_str}\" неможливий (01–12)")),
         };
     }
     let day_num: u32 = day_str.parse().unwrap_or(0);
@@ -347,7 +347,7 @@ pub fn format_date_mask(digits: &str) -> LiveDateMask {
         return LiveDateMask {
             display,
             error: Some(format!(
-                "«{day_str}.{month_str}» — {} {} не існує",
+                "\"{day_str}.{month_str}\" — {} {} не існує",
                 day_num,
                 month_name(month_num)
             )),
@@ -362,7 +362,7 @@ pub fn format_date_mask(digits: &str) -> LiveDateMask {
         if NaiveDate::from_ymd_opt(year, month_num, day_num).is_none() {
             return LiveDateMask {
                 display,
-                error: Some(format!("«{day_str}.{month_str}.{year}» — такої дати не існує")),
+                error: Some(format!("\"{day_str}.{month_str}.{year}\" — такої дати не існує")),
             };
         }
     }
@@ -420,7 +420,7 @@ mod tests {
         );
         assert_eq!(
             parse_date("31.09", as_of()).unwrap_err().message(),
-            "«31.09» — такої дати нема: вересень 2026 року має 30 днів, а вказано 31-е число"
+            "\"31.09\" — такої дати нема: вересень 2026 року має 30 днів, а вказано 31-е число"
         );
     }
 
@@ -429,7 +429,7 @@ mod tests {
         // жовтень 2026 має 31 день (не "днів") — перевіряємо узгодження на межовому випадку.
         assert_eq!(
             parse_date("32.10", as_of()).unwrap_err().message(),
-            "«32.10» — такої дати нема: жовтень 2026 року має 31 день, а вказано 32-е число"
+            "\"32.10\" — такої дати нема: жовтень 2026 року має 31 день, а вказано 32-е число"
         );
     }
 
@@ -445,8 +445,8 @@ mod tests {
         );
         assert_eq!(
             parse_date("11.07.2027", as_of()).unwrap_err().message(),
-            "«11.07.2027» — рік 2027 не збігається з роком подання (2026); якщо дата справді за \
-             2027 рік, перевірте поле «Станом на» вгорі"
+            "\"11.07.2027\" — рік 2027 не збігається з роком подання (2026); якщо дата справді за \
+             2027 рік, перевірте поле \"Станом на\" вгорі"
         );
     }
 
@@ -461,7 +461,7 @@ mod tests {
         );
         assert_eq!(
             parse_date("18.09.20216", as_of()).unwrap_err().message(),
-            "«18.09.20216» — рік «20216» має бути 2 або 4 цифри (наприклад, 26 або 2026), а тут \
+            "\"18.09.20216\" — рік \"20216\" має бути 2 або 4 цифри (наприклад, 26 або 2026), а тут \
              5 цифр"
         );
     }
@@ -470,7 +470,7 @@ mod tests {
     fn unparseable_message_shows_expected_format() {
         assert_eq!(
             parse_date("абракадабра", as_of()).unwrap_err().message(),
-            "«абракадабра» — не розпізнано як дату; очікую формат дд.мм або дд.мм.рррр \
+            "\"абракадабра\" — не розпізнано як дату; очікую формат дд.мм або дд.мм.рррр \
              (наприклад, 15.09 або 15.09.2026)"
         );
     }
@@ -523,7 +523,7 @@ mod tests {
         );
         assert_eq!(
             parse_maybe_range("18.08-05.08", as_of()).unwrap_err().message(),
-            "«по» (05.08.2026) раніше «з» (18.08.2026) — дати переплутані місцями, або в одній з \
+            "\"по\" (05.08.2026) раніше \"з\" (18.08.2026) — дати переплутані місцями, або в одній з \
              них помилка в місяці/році"
         );
     }

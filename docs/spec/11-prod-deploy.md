@@ -33,19 +33,30 @@ Proxmox замовника — з **технічно гарантованими*
 > замовник вирішив публікувати через Cloudflare tunnel для зручного доступу з польових пристроїв.
 > Попереднє обмеження "НІКОЛИ через Cloudflare tunnel" скасовано.
 
-На хості є `cf-connector` (LXC 150) з активним Cloudflare tunnel. Для прод-VM використовується
-**окремий `cloudflared` daemon** безпосередньо на прод-VM:
-- проксює `localhost:3000` (застосунок) на зовнішній домен через Cloudflare;
-- не залежить від `cf-connector` LXC (ізоляція, окремий токен);
-- Cloudflare Access policy для обмеження доступу (email/OTP або інший IdP);
-- tunnel token зберігається в Ansible Vault.
+> **Ревізія 2 (того ж дня, вказівка замовника)**: окремий `cloudflared` на прод-VM скасовано.
+
+Використовується наявний `cf-connector` (LXC 150, `10.10.0.5`, VLAN 10 `EDGE` за VyOS):
+- замовник сам додає public hostname у Cloudflare dashboard → `http://10.90.0.10:3000`;
+- на прод-VM `cloudflared` **не ставиться**, токен tunnel-у в Vault не потрібен;
+- Cloudflare Access policy (email/OTP або інший IdP) — на боці замовника.
 
 ## 0.3. Мережа — VyOS сегментація
 
-Прод-VM **не** на тій самій LAN (vmbr0), що й dev-VM. Маршрутизацією прод-VM займається VyOS:
-- прод-VM підключена до VyOS-керованого мережевого сегменту (окремий bridge або VLAN);
-- VyOS забезпечує маршрутизацію, firewall між сегментами, NAT для вихідного трафіку;
-- параметри (bridge, VLAN, IP-діапазон) — в `inventories/prod/group_vars/all.yml`.
+Прод-VM **не** на тій самій LAN (vmbr0), що й dev-VM. VyOS (VM 100, `192.168.1.2`) — роутер
+сегментів на `vmbr10` (VLAN-aware trunk); DHCP на VyOS немає — усі сервіси статичні.
+
+| Параметр | Значення |
+|---|---|
+| Сегмент | VLAN 90 `VYSHKIL`, `10.90.0.0/24`, шлюз `10.90.0.1` (vif 90 на VyOS `eth1`) |
+| Прод-VM | VMID 400, `vmbr10` tag 90, `10.90.0.10/24` |
+| DNS | pihole `10.60.0.53` (VyOS rule 50: SRV-NETS → DNS) |
+| Вхід | лише `10.10.0.5` (cf-connector) → `10.90.0.10:3000/tcp` (окреме forward-правило) |
+| Вихід в інтернет | SRV-NETS → internet (VyOS rule 900) + source NAT; потрібен для apt/docker і WhatsApp |
+| Anti-pivot | `10.90.0.0/24` у групі `SRV-NETS` → rule 800 ріже доступ у LAN/інші сегменти |
+| SSH адміна | через VyOS як jump-host (`ProxyJump vyos@192.168.1.2`) або з wg0 (rule 74) |
+
+Окремий VLAN, а не WEB 20 поруч зі `striy-web`: всередині VLAN трафік VyOS-firewall не бачить,
+ДСК-стек не ділить L2 з чужим застосунком.
 
 ## 1. Ролі (перевикористання з dev)
 
@@ -54,9 +65,9 @@ Proxmox замовника — з **технічно гарантованими*
 | `provision` | ✓ | ✓ | Інший VMID, менше ресурсів, VyOS-мережа |
 | `base` | ✓ | ✓ | `base_user_passwordless_sudo: false` |
 | `docker` | ✓ | ✓ | `docker_add_primary_user_to_group: false` |
-| `firewall` | ✓ | ✓ | SSH + порти для cloudflared (якщо потрібно) |
+| `firewall` | ✓ | ✓ | SSH + 3000 лише з cf-connector (`10.10.0.5`) |
 | `app_stack` | — | ✓ | **Нова**: compose-стек, env-файли з Vault, volumes |
-| `cloudflare_tunnel` | — | ✓ | **Нова**: cloudflared daemon, tunnel config |
+| `cloudflare_tunnel` | — | — | Не використовується (ревізія 2 §0.2): tunnel — у `cf-connector` LXC |
 | `rust_toolchain` | ✓ | — | Не потрібна: образи збираються на dev |
 | `node` | ✓ | — | Не потрібна: notifier всередині Docker |
 | `devtools` | ✓ | — | |
@@ -71,7 +82,6 @@ Ansible Vault (`inventories/prod/group_vars/vault.yml`):
 - `vault_postgres_notifier_password` — пароль notifier→Postgres
 - `vault_nats_app_password` — пароль app→NATS
 - `vault_nats_notifier_password` — пароль notifier→NATS
-- `vault_cloudflare_tunnel_token` — токен tunnel
 - `vault_prod_vm_user_ssh_public_key` — SSH-ключ для доступу
 
 ## 3. Мережа
@@ -79,7 +89,7 @@ Ansible Vault (`inventories/prod/group_vars/vault.yml`):
 ### 3.1. Вхідні (nftables на гостьовій VM)
 SSH (22) — тільки з адмін-підмережі. Усе інше — drop.
 NATS 4222 — не публікується; 8222 — тільки 127.0.0.1; Postgres — не публікується.
-Порт 3000 — тільки 127.0.0.1 (cloudflared проксює локально).
+Порт 3000 — на інтерфейсі VM, nftables пускає лише з `10.10.0.5` (cf-connector, §0.2).
 
 ### 3.2. Docker і хостовий файрвол
 `DOCKER-USER` ланцюжок для обмеження контейнерних з'єднань. Compose-файл: усі порти на
@@ -129,8 +139,8 @@ Notifier на проді — через egress-мережу з обмеженн�
   Chromium sandbox увімкнений (SYS_ADMIN cap, не `--privileged`).
 
 **Рівень 4 — Cloudflare tunnel:**
-- Tunnel проксює **тільки** `localhost:3000` (застосунок); жоден інший порт/сервіс не
-  маршрутизується через tunnel.
+- cf-connector дістає **тільки** `10.90.0.10:3000` (VyOS-правило + nftables на VM); жоден інший
+  порт/сервіс через tunnel не маршрутизується.
 - Cloudflare Access policy: email/OTP автентифікація перед доступом.
 
 **Рівень 5 — VyOS (§0.3):**
@@ -288,7 +298,7 @@ NATS-стріми та консюмери **не потрібно перенос
 6. **Docker images** — `docker save` з dev → `docker load` на prod.
 7. **`docker compose up -d`** — стріми/консюмери/KV створяться автоматично.
 8. **nftables** — перевірити всі рівні §3.5.
-9. **Cloudflare tunnel** — `cloudflared` daemon, тільки порт 3000.
+9. **Cloudflare tunnel** — замовник додає hostname у dashboard → `http://10.90.0.10:3000`.
 10. **Smoke test** — ззовні перевірити, що 5432/4222/8222 **не** відповідають; з адмін-підмережі
     по SSH: `nats stream ls`, `psql`, `docker compose logs`.
 11. **WhatsApp pairing** — через admin UI, QR/pairing code → перша тестова нотифікація.

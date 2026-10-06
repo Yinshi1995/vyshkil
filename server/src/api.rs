@@ -3034,7 +3034,7 @@ async fn import_upload_handler(
 
     let no_data_err = |kind_label: &str| {
         (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({
-            "error": format!("Файл не містить розпізнаних даних типу «{}». Перевірте тип файлу або структуру таблиці.", kind_label),
+            "error": format!("Файл не містить розпізнаних даних типу \"{}\". Перевірте тип файлу або структуру таблиці.", kind_label),
             "issues": []
         })))
     };
@@ -3145,7 +3145,7 @@ async fn import_upload_handler(
 
     if imported > 0 {
         let _ = repo::notifications::insert(
-            db, _actor.org_id, "import", &format!("Імпорт «{kind}»: {imported} записів"),
+            db, _actor.org_id, "import", &format!("Імпорт \"{kind}\": {imported} записів"),
             None, Some("/data"),
         ).await;
         let _ = repo::whatsapp_routing::dispatch_wa_notifications(

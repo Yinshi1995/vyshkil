@@ -419,7 +419,7 @@ fn FormBody() -> impl IntoView {
                     .map(|(row_index, field, message)| {
                         view! {
                             <p class="status-error">
-                                "Рядок "{row_index + 1}", «"{field}"»: "{message}
+                                "Рядок "{row_index + 1}", \""{field}"\": "{message}
                             </p>
                         }
                     })
@@ -529,7 +529,7 @@ fn CommandPalette(
                         </button>
                     </li>
                     <li class="card__desc">
-                        "«перейти до частини…» і «згенерувати звіт…» — інших етапів, ще не підключено."
+                        "\"перейти до частини…\" і \"згенерувати звіт…\" — інших етапів, ще не підключено."
                     </li>
                 </ul>
             </div>

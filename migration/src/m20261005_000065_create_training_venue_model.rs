@@ -83,13 +83,14 @@ impl MigrationTrait for Migration {
         // 6. Migrate existing data: training_site → city + training_venue
 
         // Extract cities from training_site localities
-        // "НЦ «Десна»" → "Десна", "ПП «Рівне»" → "Рівне", etc.
+        // "НЦ «Десна»" / "НЦ \"Десна\"" → "Десна" — лапки обох видів: 000065_seed_d1_org_composition
+        // (виконується раніше) переводить «» у латинські.
         db.execute_unprepared(
             "INSERT INTO city (name)
              SELECT DISTINCT
                 regexp_replace(
-                    regexp_replace(locality, '^(НЦ|ПП|НП)\\s*«', ''),
-                    '»$', ''
+                    regexp_replace(locality, '^(НЦ|ПП|НП)\\s*[«\"]', ''),
+                    '[»\"]$', ''
                 )
              FROM training_site
              WHERE locality IS NOT NULL
@@ -107,8 +108,8 @@ impl MigrationTrait for Migration {
                 c.id
              FROM training_site ts
              JOIN city c ON c.name = regexp_replace(
-                regexp_replace(ts.locality, '^(НЦ|ПП|НП)\\s*«', ''),
-                '»$', ''
+                regexp_replace(ts.locality, '^(НЦ|ПП|НП)\\s*[«\"]', ''),
+                '[»\"]$', ''
              )
              WHERE ts.locality IS NOT NULL"
         ).await?;

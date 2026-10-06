@@ -64,9 +64,11 @@
   ansible.builtin.template:
     src: init-notifier-db.sql.j2
     dest: "{{ app_stack_compose_dir }}/docker/init-notifier-db.sql"
-    owner: root
-    group: root
-    mode: "0640"
+    # uid 70 = postgres у postgres:*-alpine: з root:root 0640 entrypoint падав "Permission
+    # denied", роль notifier не створювалась (містить пароль — тому 0400, не 0644).
+    owner: "70"
+    group: "70"
+    mode: "0400"
 
 - name: Перевірити, чи завантажені образи
   ansible.builtin.command: "docker image inspect vyshkil-app:latest"
@@ -82,3 +84,11 @@
       Передати: rsync -av vyshkil-images.tar.gz deploy@{{ ansible_host }}:{{ app_stack_images_dir }}/
       На prod: docker load < {{ app_stack_images_dir }}/vyshkil-images.tar.gz
   when: app_image_check.rc != 0
+
+- name: Стек запущено (ідемпотентно; хендлер вище — лише перезапуск після змін)
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_stack_compose_dir }}"
+    state: present
+    pull: never
+    recreate: auto
+  when: app_image_check.rc == 0

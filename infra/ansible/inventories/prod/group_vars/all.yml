@@ -19,18 +19,25 @@ prod_vm_memory_mb: 2048
 prod_vm_swap_gb: 2
 prod_vm_disk_gb: 50
 
-# --- Мережа (VyOS-керований сегмент, НЕ vmbr0) ---
-# ЗАПОВНИТИ: bridge/VLAN, яким VyOS маршрутизує прод-сегмент.
-prod_vm_bridge: "{{ prod_vm_bridge_override | default('ЗАПОВНИТИ') }}"
-prod_vm_vlan_tag: null
-prod_vm_ip_cidr: "{{ prod_vm_ip_cidr_override | default('ЗАПОВНИТИ') }}"
-prod_vm_gateway: "{{ prod_vm_gateway_override | default('ЗАПОВНИТИ') }}"
-prod_vm_dns: "{{ prod_vm_gateway }}"
+# --- Мережа: VLAN 90 `VYSHKIL` за VyOS (11 §0.3) ---
+# vmbr10 — VLAN-aware trunk до VyOS eth1; vif 90 = 10.90.0.1. DHCP на VyOS немає — статика.
+prod_vm_bridge: vmbr10
+prod_vm_vlan_tag: 90
+prod_vm_ip_cidr: "10.90.0.10/24"
+prod_vm_gateway: "10.90.0.1"
+# VyOS сам DNS не обслуговує — pihole (INFRA 60), дозволено VyOS rule 50 для SRV-NETS.
+prod_vm_dns: "10.60.0.53"
+# cf-connector (LXC 150, EDGE VLAN 10) — єдине джерело, якому відкрито :3000 (11 §0.2).
+prod_cf_connector_ip: "10.10.0.5"
 
 # --- Користувач ---
 prod_vm_user: deploy
 prod_vm_ip: "{{ prod_vm_ip_cidr | regex_replace('/.*', '') }}"
 prod_vm_ssh_key_path: /root/.ssh/vyshkil-prod
+# Публічні ключі — не секрет (як у dev). Особистий ключ замовника + ключ автоматизації без пароля.
+prod_vm_user_ssh_public_key: |
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILnSkk/si0+4Z5UNniaDb44wy8ZnplfYR5RHJ/4kUrGq pidhotova
+  ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOCHjl2GhneXG2b9IHKKzAZ6VlkyXO7SfnP4OdNsaoSq claude-code@vyshkil-prod-automation
 
 # --- Base role overrides (прод-режим) ---
 base_primary_user: "{{ prod_vm_user }}"
@@ -45,11 +52,12 @@ docker_dns_servers:
 # --- Firewall ---
 firewall_allowed_tcp_ports:
   - 22
+firewall_published_ports:
+  - port: 3000
+    source: "{{ prod_cf_connector_ip }}"
 
 # --- App stack ---
 app_stack_compose_dir: "/opt/vyshkil"
 app_stack_data_dir: "/opt/vyshkil/data"
 app_stack_images_dir: "/opt/vyshkil/images"
-
-# --- Cloudflare tunnel ---
-cloudflare_tunnel_service: cloudflared
+app_stack_app_bind_addr: "{{ prod_vm_ip }}"

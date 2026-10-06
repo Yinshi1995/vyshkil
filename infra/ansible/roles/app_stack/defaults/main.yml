@@ -2,6 +2,8 @@
 app_stack_compose_dir: /opt/vyshkil
 app_stack_data_dir: "{{ app_stack_compose_dir }}/data"
 app_stack_images_dir: "{{ app_stack_compose_dir }}/images"
+# Адреса публікації :3000. Прод — IP VM (cf-connector ходить через VyOS, 11 §0.2), інакше loopback.
+app_stack_app_bind_addr: 127.0.0.1
 app_stack_user: "{{ base_primary_user | default('deploy') }}"
 
 # Postgres

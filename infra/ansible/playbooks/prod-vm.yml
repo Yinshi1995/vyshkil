@@ -2,11 +2,14 @@
 - name: Конфігурація прод-VM
   hosts: prod
   become: true
+  # group_vars/vault.yml сам не підтягується (Ansible вважає його змінними групи "vault").
+  vars_files:
+    - ../inventories/prod/group_vars/vault.yml
   vars:
-    dev_vm_user_ssh_public_key: "{{ vault_prod_vm_user_ssh_public_key }}"
+    dev_vm_user_ssh_public_key: "{{ prod_vm_user_ssh_public_key }}"
   roles:
     - base
     - docker
     - firewall
     - app_stack
-    - cloudflare_tunnel
+    # cloudflare_tunnel — не використовується (11 §0.2, ревізія 2): tunnel живе в cf-connector LXC.

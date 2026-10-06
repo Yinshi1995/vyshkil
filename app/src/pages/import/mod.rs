@@ -475,7 +475,7 @@ fn ImportBody() -> impl IntoView {
                     .map(|(row_index, field, message)| {
                         view! {
                             <p class="status-error">
-                                "Рядок "{row_index + 1}", «"{field}"»: "{message}
+                                "Рядок "{row_index + 1}", \""{field}"\": "{message}
                             </p>
                         }
                     })

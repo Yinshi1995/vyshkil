@@ -55,9 +55,11 @@ impl MigrationTrait for Migration {
         ).await?;
 
         // 4. Assign created_by to existing events based on org ownership
+        // id — підзапитом за login, не літералом: на чистій БД (прод) seed_comprehensive видає
+        // інші id, ніж на dev, і літерал 7 ламав FK (зловлено на першому прод-запуску).
         // Events for groups owned by orgs under 17 АК → editor_17ak (id=7)
         db.execute_unprepared(
-            "UPDATE group_event ge SET created_by = 7 \
+            "UPDATE group_event ge SET created_by = (SELECT id FROM user_account WHERE login = 'editor_17ak') \
              FROM training_group tg \
              WHERE ge.group_id = tg.id AND tg.sender_org_id IN ( \
                 SELECT descendant_id FROM subordination_closure WHERE ancestor_id = 2 \
@@ -66,7 +68,7 @@ impl MigrationTrait for Migration {
         ).await?;
         // Events for groups owned by orgs under 20 АК → editor_20ak (id=8)
         db.execute_unprepared(
-            "UPDATE group_event ge SET created_by = 8 \
+            "UPDATE group_event ge SET created_by = (SELECT id FROM user_account WHERE login = 'editor_20ak') \
              FROM training_group tg \
              WHERE ge.group_id = tg.id AND tg.sender_org_id IN ( \
                 SELECT descendant_id FROM subordination_closure WHERE ancestor_id = 3 \
@@ -75,13 +77,13 @@ impl MigrationTrait for Migration {
         ).await?;
         // Events for 152 НЦ groups → editor_152nc (id=10)
         db.execute_unprepared(
-            "UPDATE group_event ge SET created_by = 10 \
+            "UPDATE group_event ge SET created_by = (SELECT id FROM user_account WHERE login = 'editor_152nc') \
              FROM training_group tg \
              WHERE ge.group_id = tg.id AND tg.sender_org_id = 30 AND ge.created_by IS NULL"
         ).await?;
         // Remaining events → admin (id=1)
         db.execute_unprepared(
-            "UPDATE group_event SET created_by = 1 WHERE created_by IS NULL"
+            "UPDATE group_event SET created_by = (SELECT id FROM user_account WHERE login = 'admin') WHERE created_by IS NULL"
         ).await?;
 
         // 5. Vary recorded_at to show realistic creation times

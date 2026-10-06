@@ -5,3 +5,7 @@
 # уся LAN і так однаково довірена, як і зараз для Windows-машини розробки).
 firewall_allowed_tcp_ports:
   - 22
+# Docker-порти, опубліковані не на 127.0.0.1: [{port: 3000, source: 10.10.0.5}] (прод, 11 §3.1).
+# Порожньо (dev) — forward-ланцюжок без змін.
+firewall_published_ports: []
+firewall_external_iface: "{{ ansible_default_ipv4.interface | default('eth0') }}"

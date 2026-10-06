@@ -71,7 +71,7 @@ async fn notify_discrepancy_opened(
     metric_label_str: &str,
 ) -> Result<(), DbErr> {
     let title = format!("Нова розбіжність: {metric_label_str}");
-    let body = format!("{} розбіжність — перевірте розділ «Розбіжності»", kind_label_ua(kind));
+    let body = format!("{} розбіжність — перевірте розділ \"Розбіжності\"", kind_label_ua(kind));
     notifications::insert(db, org_id, "discrepancy", &title, Some(&body), Some("/discrepancies")).await
 }
 

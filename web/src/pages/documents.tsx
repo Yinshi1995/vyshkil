@@ -382,7 +382,7 @@ const DOCS_AFTER_D5: DocBlockProps[] = [
   {
     title: "D6 — Звіт по переданих частинах",
     description:
-      "Частини зі статусом «передано» — кому, в яких заходах підготовки.",
+      "Частини зі статусом \"передано\" — кому, в яких заходах підготовки.",
     icon: FileSpreadsheet,
     iconLabel: "xlsx",
     needsOrg: false,
@@ -394,7 +394,7 @@ const DOCS_AFTER_D5: DocBlockProps[] = [
 const D5_DOCS: DocBlockProps[] = [
   {
     title: "Фахова підготовка",
-    description: "Аркуші «Пройшли» / «Проходять» з деталями по кожній групі.",
+    description: "Аркуші \"Пройшли\" / \"Проходять\" з деталями по кожній групі.",
     icon: FileSpreadsheet,
     iconLabel: "xlsx",
     needsOrg: true,
@@ -403,7 +403,7 @@ const D5_DOCS: DocBlockProps[] = [
   },
   {
     title: "БпС — безпілотні системи",
-    description: '«Завершилась» / «Навчаються» по корпусу.',
+    description: '"Завершилась" / "Навчаються" по корпусу.',
     icon: FileSpreadsheet,
     iconLabel: "xlsx",
     needsOrg: true,
@@ -448,7 +448,7 @@ export function DocumentsPage() {
         <h1>Документи</h1>
         <p className="text-sm text-muted-foreground">
           Генерація звітних документів за даними системи. Оберіть тип документа,
-          вкажіть параметри і натисніть «Згенерувати».
+          вкажіть параметри і натисніть "Згенерувати".
         </p>
       </div>
 

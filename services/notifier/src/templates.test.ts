@@ -17,6 +17,6 @@ test("templates contain no substitution placeholders", () => {
 test("discrepancy_detected template matches 04 §5 exact wording", () => {
   assert.equal(
     renderTemplate("discrepancy_detected"),
-    "Виявлено розбіжності у ваших даних щодо підготовки. Увійдіть у систему та перевірте розділ «Розбіжності».",
+    "Виявлено розбіжності у ваших даних щодо підготовки. Увійдіть у систему та перевірте розділ \"Розбіжності\".",
   );
 });

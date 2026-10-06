@@ -63,6 +63,7 @@ mod m20261005_000060_dedup_training_group;
 mod m20261005_000062_add_can_see_org_names;
 mod m20261005_000063_add_sender_org_index;
 mod m20261005_000064_fix_admin_chat_rooms;
+mod m20261005_000065_seed_d1_org_composition;
 mod m20261005_000065_create_training_venue_model;
 mod m20261005_000066_add_org_masked_label;
 
@@ -160,6 +161,10 @@ impl MigratorTrait for Migrator {
             Box::new(m20261005_000062_add_can_see_org_names::Migration),
             Box::new(m20261005_000063_add_sender_org_index::Migration),
             Box::new(m20261005_000064_fix_admin_chat_rooms::Migration),
+            // Повний склад органів на 26.09 (D1) + латинські лапки в довідниках.
+            // Перед 000065_create_training_venue_model: та копіює training_site.locality у venue.
+            // Однаковий префікс 000065 — історичний (на проді вже застосовано під цим ім'ям).
+            Box::new(m20261005_000065_seed_d1_org_composition::Migration),
             // Структуровані місця навчання: city + training_venue замість training_site.
             Box::new(m20261005_000065_create_training_venue_model::Migration),
             // Generated column org.masked_label — маскований лейбл (А-номер або short_name),

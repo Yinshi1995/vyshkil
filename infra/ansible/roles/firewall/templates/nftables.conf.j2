@@ -3,7 +3,10 @@
 # Веб-застосунок (3000) і NATS-монітор (8222) НЕ в цьому списку навмисно (10 §4.8) — доступ лише
 # через SSH-тунель. Docker керує власними ланцюжками (DOCKER-USER тощо) окремо від цього файлу.
 
-flush ruleset
+# Не `flush ruleset`: це стирало б таблиці Docker (iptables-nft) при кожному рестарті nftables —
+# контейнери лишались би без NAT/форвардингу до рестарту docker. Чистимо лише власну таблицю.
+table inet filter
+flush table inet filter
 
 table inet filter {
     chain input {
@@ -23,6 +26,15 @@ table inet filter {
 
     chain forward {
         type filter hook forward priority 0; policy accept;
+{% if firewall_published_ports | length > 0 %}
+
+        # Опубліковані Docker-порти йдуть через DNAT → forward, input-ланцюжок їх не бачить.
+        # Зовні (з {{ firewall_external_iface }}) дозволено лише перелічені порт+джерело (11 §3.1).
+{% for p in firewall_published_ports %}
+        iifname "{{ firewall_external_iface }}" ct status dnat ct original proto-dst {{ p.port }} ip saddr {{ p.source }} accept
+{% endfor %}
+        iifname "{{ firewall_external_iface }}" ct status dnat drop
+{% endif %}
     }
 
     chain output {

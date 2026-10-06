@@ -7,9 +7,6 @@
 vault_pve_api_token_id: "ansible@pve!provision"
 vault_pve_api_token_secret: "СЕКРЕТ-ТОКЕНА-СЮДИ"
 
-# SSH-ключ для прод-VM (публічний)
-vault_prod_vm_user_ssh_public_key: "ssh-ed25519 AAAA... prod-deploy-key"
-
 # Postgres
 vault_postgres_app_password: "ЗГЕНЕРУВАТИ-СТІЙКИЙ-ПАРОЛЬ"
 vault_postgres_notifier_password: "ЗГЕНЕРУВАТИ-СТІЙКИЙ-ПАРОЛЬ"
@@ -17,6 +14,3 @@ vault_postgres_notifier_password: "ЗГЕНЕРУВАТИ-СТІЙКИЙ-ПАР�
 # NATS
 vault_nats_app_password: "ЗГЕНЕРУВАТИ-СТІЙКИЙ-ПАРОЛЬ"
 vault_nats_notifier_password: "ЗГЕНЕРУВАТИ-СТІЙКИЙ-ПАРОЛЬ"
-
-# Cloudflare tunnel token (з dashboard: Zero Trust → Tunnels → створити tunnel → токен)
-vault_cloudflare_tunnel_token: "ТОКЕН-ТУНЕЛЮ-СЮДИ"

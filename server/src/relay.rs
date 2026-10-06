@@ -19,6 +19,15 @@ use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, State
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const BATCH_SIZE: u64 = 50;
 
+/// `nats://user:pass@host` → `nats://***@host`: NATS_URL несе пароль (прод — з Vault), у лог
+/// він потрапляти не повинен (11 §6). Зловлено на першому прод-запуску.
+fn redact_url(url: &str) -> String {
+    match (url.find("://"), url.rfind('@')) {
+        (Some(scheme), Some(at)) if at > scheme => format!("{}***@{}", &url[..scheme + 3], &url[at + 1..]),
+        _ => url.to_string(),
+    }
+}
+
 /// Запускається одним `tokio::spawn` у `main.rs` (перша фонова задача в цьому проєкті) — сам
 /// цикл ніколи не повертається, живе стільки ж, скільки процес сервера.
 pub async fn run(db: DatabaseConnection, nats_url: String, shared: SharedNatsClient) {
@@ -51,7 +60,7 @@ pub async fn run(db: DatabaseConnection, nats_url: String, shared: SharedNatsCli
                         tracing::warn!("relay: не вдалось забезпечити стрім NOTIFY_CMD: {e}");
                         continue;
                     }
-                    tracing::info!("relay: з'єднано з NATS ({nats_url}), стріми EVENTS/NOTIFY_CMD готові");
+                    tracing::info!("relay: з'єднано з NATS ({}), стріми EVENTS/NOTIFY_CMD готові", redact_url(&nats_url));
                     *shared.lock().expect("shared NATS mutex отруєний") = Some(c.clone());
                     client = Some(c.clone());
 
@@ -63,7 +72,7 @@ pub async fn run(db: DatabaseConnection, nats_url: String, shared: SharedNatsCli
                     });
                 }
                 Err(e) => {
-                    tracing::warn!("relay: не вдалось з'єднатися з NATS ({nats_url}): {e}");
+                    tracing::warn!("relay: не вдалось з'єднатися з NATS ({}): {e}", redact_url(&nats_url));
                     continue;
                 }
             }
@@ -131,4 +140,15 @@ pub async fn relay_batch(db: &DatabaseConnection, js: &async_nats::jetstream::Co
     }
 
     txn.commit().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact_url;
+
+    #[test]
+    fn redact_url_hides_credentials() {
+        assert_eq!(redact_url("nats://app:secret@nats:4222"), "nats://***@nats:4222");
+        assert_eq!(redact_url("nats://127.0.0.1:4222"), "nats://127.0.0.1:4222");
+    }
 }

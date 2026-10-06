@@ -5,6 +5,47 @@ date: 2026-10-01
 
 # Поточний стан проєкту
 
+## Прод-VM (11-prod-deploy.md) — розгорнуто, працює (2026-10-05)
+
+- **Де**: VM 400 `vyshkil-prod` (2 vCPU / 2 ГБ / 2 ГБ swap / 50 ГБ, Ubuntu 24.04) на `vmbr10`
+  tag 90 → VLAN 90 `VYSHKIL` за VyOS, `10.90.0.10`, шлюз `10.90.0.1`, DNS pihole `10.60.0.53`.
+  DHCP на VyOS немає — у всіх сегментах статика, облік — у конфігу VyOS.
+- **VyOS (192.168.1.2)**: додано vif 90, `10.90.0.0/24` у `SRV-NETS` (DNS rule 50, anti-pivot
+  800, internet 900), NAT source 190, forward rule 12 `10.10.0.5 → 10.90.0.10:3000`, ключ
+  автоматизації `claude-vyshkil-prod` для користувача vyos (jump-host).
+- **Публікація**: наявний `cf-connector` (LXC 150, `10.10.0.5`) → `http://10.90.0.10:3000`;
+  hostname у Cloudflare dashboard прокидає замовник. `cloudflared` на VM НЕ ставиться
+  (`.claude/decisions/prod-cloudflare-tunnel.md`, ревізія 2). Перевірено: cf-connector → 200,
+  lan-proxy/VyOS → заблоковано, 5432 ззовні закрито.
+- **Доступ**: `ssh -i ~/.ssh/vyshkil-prod -J vyos@192.168.1.2 deploy@10.90.0.10` (ключ без
+  пароля на Windows і в WSL `/root/.ssh/vyshkil-prod`). Ansible — з WSL:
+  `ANSIBLE_CONFIG=$PWD/ansible.cfg ansible-playbook -i inventories/prod/hosts.yml playbooks/prod-vm.yml --vault-password-file /root/.vyshkil-prod-vault-pass`
+  (ansible.cfg у /mnt/c ігнорується як world-writable — тому явний ANSIBLE_CONFIG).
+- **Секрети**: `inventories/prod/group_vars/vault.yml` (згенеровані паролі PG/NATS), пароль
+  vault-у — `/root/.vyshkil-prod-vault-pass` у WSL, поза репо.
+- **БД**: перенесено dump dev-БД (taktoblik + notifier, 63 міграції). Сид-паролі (`admin123`)
+  ротовано: admin — новий пароль (переданий замовнику), 4 сид-акаунти — випадковий хеш
+  (скидати через адмінку).
+- **Оновлення образу**: збірка на dev-VM в окремому `~/build-prod` (`git archive` — не чіпати
+  робочу копію), `docker save | gzip | ssh … docker load`, потім playbook (хендлер/ensure-up).
+- **Граблі першого запуску** (виправлено): `flush ruleset` у nftables стирав Docker-правила;
+  опубліковані Docker-порти ходять через forward, не input; `group_vars/vault.yml` Ansible сам
+  не підтягує (`vars_files`); init-sql `root:0640` не читався postgres (uid 70);
+  `recreate: smart` нема в community.docker 5.x; том `app_data` був не на `/app/data`;
+  міграція 000056 з літеральними id ламалась на чистій БД; relay логував NATS URL з паролем.
+- **Фронт на моках (виправлено 2026-10-05)**: `web/src/api/client.ts` мав `USE_MOCK =
+  !VITE_API_REAL` — моки за замовчуванням, Dockerfile змінну не задає → прод-SPA взагалі не ходив
+  на сервер (вхід лише admin/admin123 з mock.ts, порожні підрозділи, чат не вантажився). Тепер моки
+  лише `VITE_API_MOCK=1`. Перевірка фронта проти прод-сервера: SSH-тунель
+  `-L 3300:10.90.0.10:3000 deploy@10.90.0.10` (через VyOS напряму не можна — nft на VM пускає
+  :3000 лише з cf-connector) + `API_PROXY_TARGET=http://localhost:3300 npx vite`.
+- **Склад органів** — міграція 000065 (D1 26.09: 6 органів, ЧБП відновлено), лапки в
+  довідниках/повідомленнях — лише латинські " (вимога замовника; `normalize.rs` «» на вході
+  розуміє і далі).
+- **Відкрито**: egress allowlist для notifier (11 §3.3) — зараз весь SRV→internet (VyOS rule
+  900); шифрований бекап pg_dump (11 §4); Cloudflare Access policy — на боці замовника.
+  Пам'ять хоста тісна (~2.6 ГБ вільних до старту прод-VM).
+
 ## Dev-VM на Proxmox (10-dev-vm.md) — Фаза 0-4 закриті (2026-10-01)
 
 **Мета**: перенести розробку з Windows (MSVC-лінкер: LNK2019 cross-CGU, LNK1140 PDB-ліміт —

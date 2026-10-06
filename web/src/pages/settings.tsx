@@ -1748,7 +1748,7 @@ function VenuesTab() {
             <div className="flex flex-col gap-1.5">
               <Label>Назва</Label>
               <Input
-                placeholder="напр. НЦ СВ «Десна»"
+                placeholder='напр. НЦ СВ "Десна"'
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />

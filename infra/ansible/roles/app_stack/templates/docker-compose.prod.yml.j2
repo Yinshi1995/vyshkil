@@ -60,9 +60,10 @@ services:
         condition: service_started
     env_file: app.env
     ports:
-      - "127.0.0.1:3000:3000"
+      - "{{ app_stack_app_bind_addr }}:3000:3000"
     volumes:
-      - app_data:{{ app_stack_data_dir | default('/app/data') }}
+      # Сервер пише у відносний data/ (avatars, chat-media, generated_documents), WORKDIR /app.
+      - app_data:/app/data
     restart: unless-stopped
     logging:
       driver: local

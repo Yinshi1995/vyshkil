@@ -1,7 +1,10 @@
 import { mockFetch } from "./mock";
 
 const BASE = "/api";
-const USE_MOCK = !import.meta.env.VITE_API_REAL;
+// Моки — лише явним opt-in (`VITE_API_MOCK=1 npm run dev`). Було `!VITE_API_REAL`, тобто
+// моки за замовчуванням: прод-збірка (Dockerfile змінну не задає) ходила не на сервер, а в
+// mock.ts — вхід приймав лише зашитий admin/admin123, чат не вантажився.
+const USE_MOCK = import.meta.env.VITE_API_MOCK === "1";
 
 export class ApiError extends Error {
   status: number;

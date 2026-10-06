@@ -1,7 +1,9 @@
 ---
+# recreate: always — змінені bind-mount файли (nats-server.conf) compose сам не помічає (`auto`
+# дивиться лише на конфіг сервісу). Хендлер спрацьовує лише коли щось реально змінилось.
 - name: Перезапустити стек
   community.docker.docker_compose_v2:
     project_src: "{{ app_stack_compose_dir }}"
     state: present
     pull: never
-    recreate: smart
+    recreate: always

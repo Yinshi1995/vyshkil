@@ -22,11 +22,11 @@ const SEED_STATEMENTS: &[&str] = &[
 
     // ── Додаткові місця навчання (належать НЦ, не бойовим частинам) ──
     r#"INSERT INTO training_site (org_id, locality) VALUES
-        ((SELECT id FROM org WHERE short_name = '184 нц'), 'ПП «Рівне»'),
-        ((SELECT id FROM org WHERE short_name = '197 нц'), 'НЦ «Запоріжжя»'),
-        ((SELECT id FROM org WHERE short_name = '214 нц'), 'ПП «Черкаське»'),
-        ((SELECT id FROM org WHERE short_name = '169 нц'), 'ПП «Широкий Лан»'),
-        ((SELECT id FROM org WHERE short_name = '152 нц'), 'ПП «Покровськ»')"#,
+        ((SELECT id FROM org WHERE short_name = '184 нц'), 'ПП "Рівне"'),
+        ((SELECT id FROM org WHERE short_name = '197 нц'), 'НЦ "Запоріжжя"'),
+        ((SELECT id FROM org WHERE short_name = '214 нц'), 'ПП "Черкаське"'),
+        ((SELECT id FROM org WHERE short_name = '169 нц'), 'ПП "Широкий Лан"'),
+        ((SELECT id FROM org WHERE short_name = '152 нц'), 'ПП "Покровськ"')"#,
 
     // ── Групи підготовки (7 груп різних видів і стадій) ──
 
@@ -37,7 +37,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM org WHERE short_name = '128 овмбр'),
             (SELECT id FROM training_kind WHERE code = 'bzvp'),
             (SELECT id FROM bzvp_program WHERE name = 'БЗВП-3'),
-            (SELECT id FROM training_site WHERE locality = 'ПП «Рівне»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'ПП "Рівне"' LIMIT 1),
             '2026-07-01', '2026-08-15', 'Завершена група БЗВП-3'"#,
 
     // Група 2: 65 омбр, фахова (ВОС 218 — пілоти БпЛА), поточна
@@ -48,7 +48,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM training_kind WHERE code = 'special'),
             (SELECT id FROM vos WHERE code = '218'),
             (SELECT id FROM "position" WHERE name = 'зовнішній пілот (оператор) БпЛА'),
-            (SELECT id FROM training_site WHERE locality = 'НЦ «Запоріжжя»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'НЦ "Запоріжжя"' LIMIT 1),
             '2026-09-15', '2026-11-01', 'Фахова: пілоти Vampire'"#,
 
     // Група 3: 118 омбр, БЗВП БЗВП-6, запланована (майбутня)
@@ -58,7 +58,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM org WHERE short_name = '118 омбр'),
             (SELECT id FROM training_kind WHERE code = 'bzvp'),
             (SELECT id FROM bzvp_program WHERE name = 'БЗВП-6'),
-            (SELECT id FROM training_site WHERE locality = 'ПП «Черкаське»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'ПП "Черкаське"' LIMIT 1),
             '2026-11-01', '2026-12-20'"#,
 
     // Група 4: 153 омбр, адаптація, поточна
@@ -67,7 +67,7 @@ const SEED_STATEMENTS: &[&str] = &[
         SELECT
             (SELECT id FROM org WHERE short_name = '153 омбр'),
             (SELECT id FROM training_kind WHERE code = 'adaptation'),
-            (SELECT id FROM training_site WHERE locality = 'ПП «Широкий Лан»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'ПП "Широкий Лан"' LIMIT 1),
             '2026-09-20', '2026-10-10', 'Адаптація новоприбулих'"#,
 
     // Група 5: 110 омбр, фахова (ВОС 219 — FPV), завершена
@@ -77,7 +77,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM org WHERE short_name = '110 омбр'),
             (SELECT id FROM training_kind WHERE code = 'special'),
             (SELECT id FROM vos WHERE code = '219'),
-            (SELECT id FROM training_site WHERE locality = 'ПП «Покровськ»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'ПП "Покровськ"' LIMIT 1),
             '2026-06-01', '2026-07-30'"#,
 
     // Група 6: 260 обр ТрО, стажування, щойно розпочата
@@ -86,7 +86,7 @@ const SEED_STATEMENTS: &[&str] = &[
         SELECT
             (SELECT id FROM org WHERE short_name = '260 обр ТрО'),
             (SELECT id FROM training_kind WHERE code = 'internship'),
-            (SELECT id FROM training_site WHERE locality = 'НЦ «Десна»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'НЦ "Десна"' LIMIT 1),
             '2026-09-28', '2026-10-30'"#,
 
     // Група 7: 241 обр ТрО, БЗВП КТЗ, запланована
@@ -96,7 +96,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM org WHERE short_name = '241 обр ТрО'),
             (SELECT id FROM training_kind WHERE code = 'bzvp'),
             (SELECT id FROM bzvp_program WHERE name = 'КТЗ'),
-            (SELECT id FROM training_site WHERE locality = 'НЦ «Десна»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'НЦ "Десна"' LIMIT 1),
             '2026-11-15', '2026-12-30'"#,
 
     // ── Воронка подій для завершеної групи 1 (128 овмбр, БЗВП-3) ──
@@ -324,7 +324,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM org WHERE short_name = '128 овмбр'),
             (SELECT id FROM training_kind WHERE code = 'bzvp'),
             (SELECT id FROM bzvp_program WHERE name = 'БЗВП-3'),
-            (SELECT id FROM training_site WHERE locality = 'ПП «Рівне»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'ПП "Рівне"' LIMIT 1),
             '2026-07-01', '2026-08-15',
             30, 28, 28,
             tg.id
@@ -347,7 +347,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM org WHERE short_name = '128 овмбр'),
             (SELECT id FROM training_kind WHERE code = 'bzvp'),
             (SELECT id FROM bzvp_program WHERE name = 'БЗВП-3'),
-            (SELECT id FROM training_site WHERE locality = 'ПП «Рівне»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'ПП "Рівне"' LIMIT 1),
             '2026-07-01', '2026-08-15',
             30, 27, 27,
             tg.id
@@ -371,7 +371,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM training_kind WHERE code = 'special'),
             (SELECT id FROM vos WHERE code = '218'),
             (SELECT id FROM "position" WHERE name = 'зовнішній пілот (оператор) БпЛА'),
-            (SELECT id FROM training_site WHERE locality = 'НЦ «Запоріжжя»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'НЦ "Запоріжжя"' LIMIT 1),
             '2026-09-15', '2026-11-01',
             15, 14, 14,
             tg.id
@@ -395,7 +395,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM training_kind WHERE code = 'special'),
             (SELECT id FROM vos WHERE code = '218'),
             (SELECT id FROM "position" WHERE name = 'зовнішній пілот (оператор) БпЛА'),
-            (SELECT id FROM training_site WHERE locality = 'НЦ «Запоріжжя»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'НЦ "Запоріжжя"' LIMIT 1),
             '2026-09-15', '2026-11-01',
             15, 13, 13,
             tg.id
@@ -418,7 +418,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM org WHERE short_name = '110 омбр'),
             (SELECT id FROM training_kind WHERE code = 'special'),
             (SELECT id FROM vos WHERE code = '219'),
-            (SELECT id FROM training_site WHERE locality = 'ПП «Покровськ»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'ПП "Покровськ"' LIMIT 1),
             '2026-06-01', '2026-07-30',
             20, 19, 19,
             tg.id
@@ -441,7 +441,7 @@ const SEED_STATEMENTS: &[&str] = &[
             (SELECT id FROM org WHERE short_name = '110 омбр'),
             (SELECT id FROM training_kind WHERE code = 'special'),
             (SELECT id FROM vos WHERE code = '219'),
-            (SELECT id FROM training_site WHERE locality = 'ПП «Покровськ»' LIMIT 1),
+            (SELECT id FROM training_site WHERE locality = 'ПП "Покровськ"' LIMIT 1),
             '2026-06-01', '2026-07-30',
             20, 18, 18,
             tg.id
@@ -904,7 +904,7 @@ impl MigrationTrait for Migration {
 
         db.execute_unprepared(
             "DELETE FROM training_site WHERE locality IN (
-                'ПП «Рівне»','НЦ «Запоріжжя»','ПП «Черкаське»','ПП «Широкий Лан»','ПП «Покровськ»'
+                'ПП \"Рівне\"','НЦ \"Запоріжжя\"','ПП \"Черкаське\"','ПП \"Широкий Лан\"','ПП \"Покровськ\"'
             )",
         )
         .await?;

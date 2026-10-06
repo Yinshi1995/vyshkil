@@ -152,7 +152,7 @@ export function Header() {
           <img
             src="/emblem.png"
             alt="Вишкіл"
-            className="h-9 w-9 object-contain"
+            className="h-11 w-11 object-contain sm:h-9 sm:w-9"
             style={{ filter: "drop-shadow(0 0 6px rgba(201,168,76,0.3))" }}
           />
           <span

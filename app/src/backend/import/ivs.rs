@@ -302,7 +302,7 @@ pub fn extract(bytes: &[u8]) -> Result<IvsExtract, ParseError> {
     for name in workbook.sheet_names().to_vec() {
         let range = workbook
             .worksheet_range(&name)
-            .map_err(|e| ParseError(format!("аркуш «{name}»: {e}")))?;
+            .map_err(|e| ParseError(format!("аркуш \"{name}\": {e}")))?;
         let rows: Vec<Vec<Data>> = range.rows().map(|r| r.to_vec()).collect();
 
         let (staffing, internships) = parse_staffing_and_internships(&rows);

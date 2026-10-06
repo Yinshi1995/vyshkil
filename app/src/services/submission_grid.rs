@@ -73,7 +73,7 @@ pub async fn commit_grid_impl(
     // as_of_date приходить з <input type="date"> -- вже ISO, парсимо напряму (без евристики
     // року з domain::dates::parse_date, та для рядків без явного року).
     let as_of = chrono::NaiveDate::parse_from_str(&payload.as_of_date, "%Y-%m-%d")
-        .map_err(|_| "«станом на»: неможлива дата".to_string())?;
+        .map_err(|_| "\"станом на\": неможлива дата".to_string())?;
 
     let mut validated = Vec::with_capacity(rows.len());
     for (index, row) in rows.iter().enumerate() {

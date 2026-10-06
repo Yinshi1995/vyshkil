@@ -27,8 +27,8 @@ pub async fn parse_fah_file(
         import::fah::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
     if raw_rows.is_empty() {
         return Err(ServerFnError::new(
-            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «Фах» \
-             (аркуші «Пройшли»/«Проходять», заголовок Підрозділ/Місце/Посада/ВОС/ОВТ/Термін/Кількість)",
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл \"Фах\" \
+             (аркуші \"Пройшли\"/\"Проходять\", заголовок Підрозділ/Місце/Посада/ВОС/ОВТ/Термін/Кількість)",
         ));
     }
 
@@ -58,8 +58,8 @@ pub async fn parse_bps_file(
         import::bps::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
     if raw_rows.is_empty() {
         return Err(ServerFnError::new(
-            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «БпС» \
-             (аркуші «Завершилась»/«Навчаються», заголовок Тип БпАК/ВОС/Військова частина/…)",
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл \"БпС\" \
+             (аркуші \"Завершилась\"/\"Навчаються\", заголовок Тип БпАК/ВОС/Військова частина/…)",
         ));
     }
 
@@ -87,7 +87,7 @@ pub async fn parse_terminy_file(
     let extract = import::terminy::extract(&bytes).map_err(|e| ServerFnError::new(e.to_string()))?;
     if extract.bzvp.is_empty() && extract.special.is_empty() && extract.adapt.is_empty() {
         return Err(ServerFnError::new(
-            "у файлі не знайдено жодного рядка даних — перевірте, що це файл «Терміни» \
+            "у файлі не знайдено жодного рядка даних — перевірте, що це файл \"Терміни\" \
              (заголовок № з/п/Підрозділ/БЗВП/Фахова підготовка/Адаптація)",
         ));
     }

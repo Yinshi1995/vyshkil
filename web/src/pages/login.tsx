@@ -49,7 +49,7 @@ export function LoginPage() {
             <img
               src="/emblem.png"
               alt="Вишкіл"
-              style={{ width: "56px", height: "56px", objectFit: "contain" }}
+              className="h-32 w-32 object-contain sm:h-28 sm:w-28"
             />
             <div className="text-center">
               <h2

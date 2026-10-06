@@ -35,7 +35,7 @@ mod tests {
 
     #[test]
     fn domain_error_passes_through_unchanged() {
-        let msg = "у файлі не знайдено жодного рядка даних — перевірте, що це файл «Фах»";
+        let msg = "у файлі не знайдено жодного рядка даних — перевірте, що це файл \"Фах\"";
         assert_eq!(humanize_import_error(msg), msg);
     }
 }

@@ -136,7 +136,7 @@ pub fn extract(bytes: &[u8]) -> Result<Vec<RawKvidRow>, ParseError> {
     for name in sheet_names {
         let range = workbook
             .worksheet_range(&name)
-            .map_err(|e| ParseError(format!("аркуш «{name}»: {e}")))?;
+            .map_err(|e| ParseError(format!("аркуш \"{name}\": {e}")))?;
         let rows: Vec<Vec<Data>> = range.rows().map(|r| r.to_vec()).collect();
         all_rows.extend(parse_sheet(&name, rows));
     }
