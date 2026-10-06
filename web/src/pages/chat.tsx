@@ -775,7 +775,7 @@ function MessageBubble({
               <span className="italic ml-1" style={{ opacity: 0.6 }}>(ред.)</span>
             )}
           </span>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-60 sm:hover:!opacity-100 opacity-40 transition-opacity">
             <button onClick={() => onReply(msg)} title="Відповісти">
               <Reply className="h-3 w-3" />
             </button>
