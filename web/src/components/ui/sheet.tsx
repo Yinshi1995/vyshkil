@@ -42,11 +42,13 @@ function SheetContent({
   side = "right",
   showCloseButton = true,
   dockable = false,
+  actions,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
   dockable?: boolean
+  actions?: React.ReactNode
 }) {
   const [position, setPosition] = React.useState<SheetPosition>("side");
 
@@ -96,10 +98,12 @@ function SheetContent({
       >
         {children}
         <div className="absolute top-3 right-3 flex items-center gap-1">
+          {actions}
           {dockable && (
             <Button
               variant="ghost"
               size="icon-sm"
+              className="hidden sm:inline-flex"
               onClick={() => setPosition(isSide ? "center" : "side")}
               title={isSide ? "На весь екран" : "Вбік"}
             >

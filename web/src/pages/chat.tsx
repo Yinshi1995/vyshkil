@@ -161,7 +161,19 @@ function parseRichText(text: string): TextSegment[] {
       if (deltaInfo) {
         segments.push({ type: "delta", value: deltaInfo.label, label: deltaInfo.label, deltaKind: deltaInfo.kind === "collective" ? "wiki" : "doc", href });
       } else {
-        segments.push({ type: "url", value: href, href });
+        // Check if it's our own app URL → convert to internal link
+        try {
+          const u = new URL(href);
+          const isOwnDomain = u.hostname === window.location.hostname || u.hostname.endsWith(".striy.pp.ua");
+          if (isOwnDomain && u.pathname.match(/^\/(data|directory|training|documents|discrepancies|orgs|import|settings|chat)/)) {
+            const internal = u.pathname + u.search;
+            segments.push({ type: "internal", value: internal, href: internal });
+          } else {
+            segments.push({ type: "url", value: href, href });
+          }
+        } catch {
+          segments.push({ type: "url", value: href, href });
+        }
       }
     }
     lastIndex = match.index + match[0].length;
@@ -270,6 +282,13 @@ function RichTextContent({ text }: { text: string }) {
           case "internal": {
             const basePath = seg.href?.split("?")[0] ?? "";
             const info = INTERNAL_LINK_NAMES[basePath] ?? { label: seg.value, icon: "🔗" };
+            // Build detail suffix from query params
+            const qs = seg.href?.includes("?") ? new URLSearchParams(seg.href.split("?")[1]) : null;
+            const detail = qs ? [
+              qs.get("group") && `#${qs.get("group")}`,
+              qs.get("kind"),
+              qs.get("q") && `«${qs.get("q")}»`,
+            ].filter(Boolean).join(" ") : "";
             return (
               <Link
                 key={i}
@@ -282,10 +301,10 @@ function RichTextContent({ text }: { text: string }) {
                   border: "1px solid rgba(201,168,76,0.25)",
                   textDecoration: "none",
                 }}
-                title={`Перейти: ${info.label}`}
+                title={`Перейти: ${info.label}${detail ? ` ${detail}` : ""}`}
               >
                 <span>{info.icon}</span>
-                <span>{info.label}</span>
+                <span>{info.label}{detail ? ` ${detail}` : ""}</span>
               </Link>
             );
           }

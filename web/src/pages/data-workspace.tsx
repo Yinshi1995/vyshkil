@@ -793,29 +793,30 @@ function DetailPanel({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" dockable className="w-full overflow-y-auto sm:max-w-xl lg:max-w-2xl">
+      <SheetContent
+        side="right"
+        dockable
+        className="w-full overflow-y-auto sm:max-w-xl lg:max-w-2xl"
+        actions={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Копіювати посилання на групу"
+            onClick={() => {
+              const url = `${window.location.origin}/data?group=${group.id}`;
+              navigator.clipboard.writeText(url);
+              toast.success("Посилання скопійовано");
+            }}
+          >
+            <Share2 className="h-4 w-4" />
+          </Button>
+        }
+      >
         <SheetHeader>
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <SheetTitle>{group.org_label}</SheetTitle>
-              <SheetDescription>
-                {group.training_kind} · #{group.id}
-              </SheetDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              title="Копіювати посилання на групу"
-              onClick={() => {
-                const url = `${window.location.origin}/data?group=${group.id}`;
-                navigator.clipboard.writeText(url);
-                toast.success("Посилання скопійовано");
-              }}
-            >
-              <Share2 className="h-4 w-4" />
-            </Button>
-          </div>
+          <SheetTitle>{group.org_label}</SheetTitle>
+          <SheetDescription>
+            {group.training_kind} · #{group.id}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="flex flex-col gap-5 px-4 pb-6">
