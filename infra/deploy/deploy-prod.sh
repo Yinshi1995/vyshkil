@@ -57,12 +57,22 @@ fail() {
 }
 
 # --- 2. Збірка ---
+# Один повтор (мережа apt/npm буває нестабільна); при остаточному збої — хвіст логу в журнал.
+build() {
+  local tag=$1 ctx=$2 logf="$STATE_DIR/build.log"
+  for attempt in 1 2; do
+    docker build -t "$tag" "$ctx" >"$logf" 2>&1 && return 0
+    log "збірка $tag: спроба $attempt невдала"
+  done
+  tail -25 "$logf" | sed 's/^/    /'
+  return 1
+}
 rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
 git -C "$MIRROR" archive "$SHA" | tar -x -C "$BUILD_DIR"
 log "збірка vyshkil-app"
-docker build -q -t "vyshkil-app:$SHORT" "$BUILD_DIR" >/dev/null || fail "збірка app"
+build "vyshkil-app:$SHORT" "$BUILD_DIR" || fail "збірка app"
 log "збірка vyshkil-notifier"
-docker build -q -t "vyshkil-notifier:$SHORT" "$BUILD_DIR/services/notifier" >/dev/null || fail "збірка notifier"
+build "vyshkil-notifier:$SHORT" "$BUILD_DIR/services/notifier" || fail "збірка notifier"
 
 # --- 3. Бекап БД проду (міграції застосовуються на старті сервера) ---
 STAMP="$(date +%Y%m%d-%H%M%S)"
