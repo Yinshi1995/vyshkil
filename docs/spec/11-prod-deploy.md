@@ -167,18 +167,22 @@ Ansible-роль `firewall` має перевіряти всі 5 рівнів п
 
 ### 5.1. Автодеплой з GitHub (`.claude/decisions/prod-autodeploy-pull.md`)
 
-Пуш у `main` → прод оновлюється сам. systemd user-таймер `vyshkil-prod-deploy` на dev-VM
-(роль `prod_autodeploy`, скрипт `infra/deploy/deploy-prod.sh`) щохвилини перевіряє `origin/main`:
+Пуш у `main` → прод оновлюється сам; машина розробника (dev-VM/ноут) у ланцюжку не потрібна.
 
-1. новий коміт → `git archive` у `~/deploy/build`, збірка `vyshkil-app:<sha>`/`vyshkil-notifier:<sha>`;
-2. `pg_dump` taktoblik + notifier → `/opt/vyshkil/backups/` (останні 14);
-3. `docker save | ssh docker load`, поточні `:latest` → `:previous`, нові → `:latest`, `compose up -d`;
+1. GitHub Actions (`.github/workflows/images.yml`) збирає `ghcr.io/yinshi1995/vyshkil-app:<sha>` і
+   `vyshkil-notifier:<sha>`, потім обидва отримують тег `:main` (півреліз прод не побачить).
+2. Системний таймер `vyshkil-prod-deploy` на прод-VM (роль `prod_autodeploy`, скрипт
+   `/usr/local/sbin/vyshkil-deploy` ← `infra/deploy/deploy-prod.sh`) щохвилини тягне `:main` і
+   читає label `org.opencontainers.image.revision`;
+3. новий коміт → `pg_dump` taktoblik + notifier у `/opt/vyshkil/backups/` (останні 14) → pull
+   `<sha>` → поточні `:latest` → `:previous`, нові → `:latest` → `compose up -d`;
 4. перевірка: HTTP 200 на `:3000` і нема `panicked` у логах app (до 2 хв);
-5. збій → відкат на `:previous`, sha пишеться в `~/deploy/failed-sha` (не ретраїться до нового коміту).
+5. збій → відкат на `:previous`, sha у `/var/lib/vyshkil-deploy/failed-sha` (не ретраїться до
+   нового коміту).
 
-Журнал: `journalctl --user -u vyshkil-prod-deploy -f` (на dev-VM). Ручний деплой конкретного
-коміту: `~/deploy/deploy-prod.sh --force <sha>`. Зупинити: `systemctl --user stop vyshkil-prod-deploy.timer`.
-Деплоїть лише образи; compose/env/NATS-конфіг — `playbooks/prod-vm.yml`.
+Журнал: `journalctl -u vyshkil-prod-deploy -f` (на прод-VM). Ручний деплой коміту:
+`sudo vyshkil-deploy --force <sha>`. Пауза: `sudo systemctl stop vyshkil-prod-deploy.timer`.
+Пакети GHCR мають бути Public. compose/env/NATS-конфіг — `playbooks/prod-vm.yml`.
 
 ## 6. Логи й моніторинг
 - Docker `log-driver: local`, ротація.

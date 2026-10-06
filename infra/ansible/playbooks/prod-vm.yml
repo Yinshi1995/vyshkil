@@ -12,4 +12,5 @@
     - docker
     - firewall
     - app_stack
+    - prod_autodeploy  # після app_stack: потребує /opt/vyshkil і compose
     # cloudflare_tunnel — не використовується (11 §0.2, ревізія 2): tunnel живе в cf-connector LXC.

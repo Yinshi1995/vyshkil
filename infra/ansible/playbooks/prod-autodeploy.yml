@@ -1,7 +1,0 @@
----
-# Лише автодеплой на dev-VM (без повного dev-vm.yml): 11 §5.1.
-- name: Автодеплой проду (таймер на dev-VM)
-  hosts: dev
-  become: true
-  roles:
-    - prod_autodeploy
