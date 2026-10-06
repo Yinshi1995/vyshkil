@@ -802,13 +802,22 @@ function DetailPanel({
   open,
   onOpenChange,
   onGroupChanged,
+  chatRooms,
+  loadRooms,
 }: {
   group: DataGroupRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onGroupChanged?: () => void;
+  chatRooms: ChatRoom[];
+  loadRooms: () => void;
 }) {
+  const navigate = useNavigate();
+
   if (!group) return null;
+
+  const shareUrl = `/data?group=${group.id}`;
+  const shareText = `${group.org_label} · ${group.training_kind} #${group.id}`;
 
   const pct =
     group.planned_count > 0
@@ -822,18 +831,43 @@ function DetailPanel({
         dockable
         className="w-full overflow-y-auto sm:max-w-xl lg:max-w-2xl"
         actions={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Копіювати посилання на групу"
-            onClick={() => {
-              const url = `${window.location.origin}/data?group=${group.id}`;
-              navigator.clipboard.writeText(url);
-              toast.success("Посилання скопійовано");
-            }}
-          >
-            <Share2 className="h-4 w-4" />
-          </Button>
+          <DropdownMenu onOpenChange={(o) => { if (o) loadRooms(); }}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" title="Поділитись">
+                <Share2 className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => {
+                navigator.clipboard.writeText(window.location.origin + shareUrl);
+                toast.success("Посилання скопійовано");
+              }}>
+                <Copy className="mr-2 h-4 w-4" />
+                Копіювати посилання
+              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Надіслати в чат
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {chatRooms.length === 0 ? (
+                    <DropdownMenuItem disabled>Завантаження...</DropdownMenuItem>
+                  ) : chatRooms.map((room) => (
+                    <DropdownMenuItem
+                      key={room.id}
+                      onClick={() => {
+                        const text = `${shareUrl} (${shareText})`;
+                        navigate(`/chat?room=${room.id}&prefill=${encodeURIComponent(text)}`);
+                      }}
+                    >
+                      {room.emoji ? `${room.emoji} ` : ""}{room.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuContent>
+          </DropdownMenu>
         }
       >
         <SheetHeader>
@@ -2504,7 +2538,12 @@ export function DataWorkspacePage() {
   const handleDetail = useCallback((row: DataGroupRow) => {
     setSelectedGroup(row);
     setDetailOpen(true);
-  }, []);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("group", String(row.id));
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const ctxMenu = useContextMenu();
 
@@ -2895,9 +2934,18 @@ export function DataWorkspacePage() {
         open={detailOpen}
         onOpenChange={(v) => {
           setDetailOpen(v);
-          if (!v) setSelectedGroup(null);
+          if (!v) {
+            setSelectedGroup(null);
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.delete("group");
+              return next;
+            }, { replace: true });
+          }
         }}
         onGroupChanged={loadGroups}
+        chatRooms={chatRooms}
+        loadRooms={loadRooms}
       />
 
       {/* Delete confirmation dialog */}
