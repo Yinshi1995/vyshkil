@@ -127,7 +127,7 @@ import {
   Shield,
   Share2,
   MessageSquare,
-  PenLine,
+  MessageSquarePlus,
 } from "lucide-react";
 import { useContextMenu, ContextMenuPortal, type ContextMenuEntry } from "@/components/context-menu";
 
@@ -468,6 +468,7 @@ function EventTimeline({
   open: boolean;
   onChanged?: () => void;
 }) {
+  const navigate = useNavigate();
   const [events, setEvents] = useState<GroupEventRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [tick, setTick] = useState(0);
@@ -632,6 +633,24 @@ function EventTimeline({
                       <div className="text-[10px] text-muted-foreground/60 pt-1 border-t border-border/50">
                         Записано: {ev.recorded_at}
                       </div>
+                      {ev.created_by_id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 w-full mt-2 gap-1.5 text-xs"
+                          onClick={async () => {
+                            try {
+                              const res = await api.post<{ room_id: number }>(`/chat/dm/${ev.created_by_id}`, {});
+                              navigate(`/chat?room=${res.room_id}`);
+                            } catch {
+                              toast.error("Не вдалось відкрити діалог");
+                            }
+                          }}
+                        >
+                          <MessageSquarePlus className="h-3.5 w-3.5" />
+                          Написати
+                        </Button>
+                      )}
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -2723,17 +2742,6 @@ export function DataWorkspacePage() {
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* DM */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => navigate("/chat?newdm=1")}
-        >
-          <PenLine className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Написати</span>
-        </Button>
 
         {/* Create group (admin only) */}
         {isAdmin && (
