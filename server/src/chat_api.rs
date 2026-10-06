@@ -316,6 +316,13 @@ async fn upload_media(
         else if ct.starts_with("audio/ogg") { "ogg" }
         else if ct.starts_with("audio/mpeg") { "mp3" }
         else if ct.starts_with("audio/mp4") { "m4a" }
+        else if ct == "application/pdf" { "pdf" }
+        else if ct == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" { "docx" }
+        else if ct == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" { "xlsx" }
+        else if ct == "application/vnd.openxmlformats-officedocument.presentationml.presentation" { "pptx" }
+        else if ct == "application/msword" { "doc" }
+        else if ct == "application/vnd.ms-excel" { "xls" }
+        else if ct == "application/vnd.ms-powerpoint" { "ppt" }
         else {
             original_name.as_deref()
                 .and_then(|n| n.rsplit('.').next())
@@ -370,9 +377,22 @@ async fn serve_media(
                 else if filename.ends_with(".ogg") { "audio/ogg" }
                 else if filename.ends_with(".mp3") { "audio/mpeg" }
                 else if filename.ends_with(".m4a") { "audio/mp4" }
+                else if filename.ends_with(".pdf") { "application/pdf" }
+                else if filename.ends_with(".docx") { "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }
+                else if filename.ends_with(".xlsx") { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+                else if filename.ends_with(".pptx") { "application/vnd.openxmlformats-officedocument.presentationml.presentation" }
+                else if filename.ends_with(".doc") { "application/msword" }
+                else if filename.ends_with(".xls") { "application/vnd.ms-excel" }
+                else if filename.ends_with(".ppt") { "application/vnd.ms-powerpoint" }
                 else { "application/octet-stream" };
             headers.insert(header::CONTENT_TYPE, mime.parse().unwrap());
             headers.insert(header::CACHE_CONTROL, "public, max-age=31536000, immutable".parse().unwrap());
+            if !mime.starts_with("image/") && !mime.starts_with("video/") && !mime.starts_with("audio/") {
+                headers.insert(
+                    header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"{}\"", filename).parse().unwrap(),
+                );
+            }
             (StatusCode::OK, headers, bytes)
         }
         Err(_) => (StatusCode::NOT_FOUND, HeaderMap::new(), Vec::new()),

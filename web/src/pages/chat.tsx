@@ -38,6 +38,11 @@ import {
   Copy,
   Search,
   PenLine,
+  FileText,
+  FileSpreadsheet,
+  Presentation,
+  File,
+  Download,
   type LucideIcon,
 } from "lucide-react";
 
@@ -599,6 +604,58 @@ function MediaContent({
   return null;
 }
 
+const FILE_ICONS: Record<string, LucideIcon> = {
+  docx: FileText, doc: FileText,
+  xlsx: FileSpreadsheet, xls: FileSpreadsheet,
+  pptx: Presentation, ppt: Presentation,
+  pdf: FileText,
+};
+
+const FILE_COLORS: Record<string, string> = {
+  docx: "#2B579A", doc: "#2B579A",
+  xlsx: "#217346", xls: "#217346",
+  pptx: "#D24726", ppt: "#D24726",
+  pdf: "#E34F26",
+};
+
+function FileAttachment({ url, name }: { url: string; name: string }) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const Icon = FILE_ICONS[ext] ?? File;
+  const color = FILE_COLORS[ext] ?? "var(--muted-foreground)";
+  const label = ext.toUpperCase() || "FILE";
+
+  return (
+    <a
+      href={url}
+      download={name}
+      className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:brightness-110"
+      style={{
+        background: `color-mix(in oklch, ${color} 12%, transparent)`,
+        border: `1px solid color-mix(in oklch, ${color} 25%, transparent)`,
+        textDecoration: "none",
+        minWidth: "180px",
+        maxWidth: "280px",
+      }}
+    >
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: color }}
+      >
+        <Icon className="h-5 w-5 text-white" />
+      </div>
+      <div className="flex flex-col min-w-0 flex-1">
+        <span className="text-sm font-medium truncate" style={{ color: "var(--foreground)" }}>
+          {name}
+        </span>
+        <span className="text-[11px]" style={{ color: "var(--muted-foreground)" }}>
+          {label}
+        </span>
+      </div>
+      <Download className="h-4 w-4 shrink-0" style={{ color: "var(--muted-foreground)" }} />
+    </a>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Single message bubble
 // ---------------------------------------------------------------------------
@@ -789,6 +846,11 @@ function MessageBubble({
             <MediaContent url={msg.media_url} mime={msg.media_mime} kind={msg.kind} />
           )}
 
+          {/* Document / file */}
+          {msg.kind === "file" && msg.media_url && (
+            <FileAttachment url={msg.media_url} name={msg.body || "file"} />
+          )}
+
           {/* Text body — editing or display */}
           {editing ? (
             <div className="flex flex-col gap-1">
@@ -832,7 +894,7 @@ function MessageBubble({
                 </button>
               </div>
             </div>
-          ) : msg.body && msg.kind !== "voice" ? (
+          ) : msg.body && msg.kind !== "voice" && msg.kind !== "file" ? (
             <div>
               <RichTextContent text={msg.body} />
             </div>
@@ -1792,13 +1854,13 @@ export function ChatPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*,video/*"
+                      accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
                       className="hidden"
                       onChange={handleFileSelect}
                     />
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      title="Додати фото/відео"
+                      title="Додати файл"
                       className="flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200 hover:bg-[rgba(201,168,76,0.1)]"
                       style={{ color: "var(--muted-foreground)" }}
                       onMouseEnter={(e) => { e.currentTarget.style.color = "var(--primary)"; }}
