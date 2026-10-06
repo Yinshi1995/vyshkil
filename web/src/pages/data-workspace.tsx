@@ -469,6 +469,7 @@ function EventTimeline({
   onChanged?: () => void;
 }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [events, setEvents] = useState<GroupEventRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [tick, setTick] = useState(0);
@@ -633,7 +634,7 @@ function EventTimeline({
                       <div className="text-[10px] text-muted-foreground/60 pt-1 border-t border-border/50">
                         Записано: {ev.recorded_at}
                       </div>
-                      {ev.created_by_id && (
+                      {ev.created_by_id && ev.created_by_id !== user?.user_id && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -2735,13 +2736,10 @@ export function DataWorkspacePage() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Create group (admin only) */}
-        {isAdmin && (
-          <Button size="sm" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="mr-1 h-4 w-4" />
-            Нова група
-          </Button>
-        )}
+        <Button size="sm" onClick={() => setShowCreateDialog(true)}>
+          <Plus className="mr-1 h-4 w-4" />
+          Нова група
+        </Button>
       </div>
 
       {/* Import section (admin only) */}
@@ -2760,7 +2758,7 @@ export function DataWorkspacePage() {
               ? "Нічого не знайдено за цим фільтром"
               : "Груп підготовки ще немає"}
           </p>
-          {!globalFilter && !kindFilter && isAdmin && (
+          {!globalFilter && !kindFilter && (
             <Button size="sm" onClick={() => setShowCreateDialog(true)}>
               <Plus className="mr-1 h-4 w-4" />
               Створити першу групу

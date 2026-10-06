@@ -1073,6 +1073,43 @@ function CreateUserDialog({ onCreated }: { onCreated: () => void }) {
   );
 }
 
+function RolesCell({ roles }: { roles: AdminUserRow["roles"] }) {
+  const [expanded, setExpanded] = useState(false);
+  const MAX = 2;
+  if (roles.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
+
+  const visible = expanded ? roles : roles.slice(0, MAX);
+  const hidden = roles.length - MAX;
+
+  return (
+    <div className="flex flex-wrap gap-1 items-center">
+      {visible.map((r, i) => (
+        <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0">
+          {r.role}@{r.org_label}
+        </Badge>
+      ))}
+      {hidden > 0 && !expanded && (
+        <button
+          type="button"
+          className="text-[10px] text-primary hover:underline px-1"
+          onClick={() => setExpanded(true)}
+        >
+          +{hidden}
+        </button>
+      )}
+      {expanded && roles.length > MAX && (
+        <button
+          type="button"
+          className="text-[10px] text-muted-foreground hover:underline px-1"
+          onClick={() => setExpanded(false)}
+        >
+          згорнути
+        </button>
+      )}
+    </div>
+  );
+}
+
 function UserManagementSection() {
   const [users, setUsers] = useState<AdminUserRow[] | null>(null);
   const { prompt: promptDialog, dialog: confirmDialog } = useConfirm();
@@ -1153,13 +1190,7 @@ function UserManagementSection() {
                     <TableCell className="font-medium">{u.login}</TableCell>
                     <TableCell>{u.display_name ?? "—"}</TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {u.roles.map((r, i) => (
-                          <Badge key={i} variant="outline" className="text-xs">
-                            {r.role}@{r.org_label}
-                          </Badge>
-                        ))}
-                      </div>
+                      <RolesCell roles={u.roles} />
                     </TableCell>
                     <TableCell>
                       <Badge variant={u.is_active ? "default" : "destructive"}>
