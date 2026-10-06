@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth";
 import { todayIso } from "@/lib/date-ua";
@@ -583,15 +583,13 @@ function EventTimeline({
                 )}
               </span>
               {ev.created_by_label && (
-                <Link
-                  to={`/directory?search=${encodeURIComponent(ev.created_by_label)}`}
-                  className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] tracking-wider no-underline transition-colors hover:bg-primary/10"
+                <span
+                  className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] tracking-wider cursor-default"
                   style={{ borderColor: "color-mix(in oklch, var(--primary) 30%, transparent)", color: "var(--primary)", fontFamily: "var(--font-heading)" }}
                   title={`${ev.created_by_label} · ${ev.recorded_at}`}
-                  onClick={(e) => e.stopPropagation()}
                 >
                   {ev.created_by_label}
-                </Link>
+                </span>
               )}
               {ev.source_label && !ev.created_by_label && (
                 <span
