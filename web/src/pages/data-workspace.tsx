@@ -1435,6 +1435,44 @@ function CreateGroupDialog({
     return e;
   }
 
+  const submitGroup = async (force = false) => {
+    const resolvedCityId = venueType === "unit_base" ? cityId : venueCityId;
+    return api.post<{ id?: number; warning?: string; existing_id?: number }>("/data/groups", {
+      sender_org_id: orgId,
+      training_kind_id: kindId,
+      venue_type: venueType || undefined,
+      training_venue_id: venueType === "unit_base" ? undefined : venueId,
+      city_id: resolvedCityId,
+      planned_start: plannedStart,
+      planned_end: plannedEnd,
+      planned_count: parseInt(plannedCount, 10),
+      arrived_count: arrivedCount ? parseInt(arrivedCount, 10) : 0,
+      note: note || undefined,
+      force,
+    });
+  };
+
+  const resetForm = () => {
+    setOrgQuery("");
+    setOrgId(null);
+    setOrgLabel("");
+    setVenueType("");
+    setVenueQuery("");
+    setVenueId(null);
+    setVenueLabel("");
+    setVenueCityId(null);
+    setVenueCityLabel("");
+    setCityQuery("");
+    setCityId(null);
+    setCityLabel("");
+    setPlannedStart("");
+    setPlannedEnd("");
+    setPlannedCount("");
+    setArrivedCount("");
+    setNote("");
+    setErrors({});
+  };
+
   const handleCreate = async () => {
     const errs = validate();
     setErrors(errs);
@@ -1443,39 +1481,15 @@ function CreateGroupDialog({
 
     setSaving(true);
     try {
-      const resolvedCityId = venueType === "unit_base" ? cityId : venueCityId;
-      await api.post("/data/groups", {
-        sender_org_id: orgId,
-        training_kind_id: kindId,
-        venue_type: venueType || undefined,
-        training_venue_id: venueType === "unit_base" ? undefined : venueId,
-        city_id: resolvedCityId,
-        planned_start: plannedStart,
-        planned_end: plannedEnd,
-        planned_count: parseInt(plannedCount, 10),
-        arrived_count: arrivedCount ? parseInt(arrivedCount, 10) : 0,
-        note: note || undefined,
-      });
+      const res = await submitGroup(false);
+      if (res.warning) {
+        const ok = window.confirm(`${res.warning} (ID ${res.existing_id}). Все одно створити?`);
+        if (!ok) { setSaving(false); return; }
+        await submitGroup(true);
+      }
       onOpenChange(false);
       onCreated();
-      setOrgQuery("");
-      setOrgId(null);
-      setOrgLabel("");
-      setVenueType("");
-      setVenueQuery("");
-      setVenueId(null);
-      setVenueLabel("");
-      setVenueCityId(null);
-      setVenueCityLabel("");
-      setCityQuery("");
-      setCityId(null);
-      setCityLabel("");
-      setPlannedStart("");
-      setPlannedEnd("");
-      setPlannedCount("");
-      setArrivedCount("");
-      setNote("");
-      setErrors({});
+      resetForm();
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Помилка створення");
     } finally {

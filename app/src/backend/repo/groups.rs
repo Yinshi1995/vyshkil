@@ -1071,7 +1071,9 @@ pub async fn create_group_with_events(
     venue_type: Option<&str>,
     training_venue_id: Option<i32>,
     city_id: Option<i32>,
-) -> Result<i32, DbErr> {
+    submission_id: Option<i32>,
+    force: bool,
+) -> Result<CreateGroupResult, DbErr> {
     #[derive(FromQueryResult)]
     struct NewId {
         id: i32,
@@ -1105,10 +1107,10 @@ pub async fn create_group_with_events(
     .one(db)
     .await?;
 
-    if existing.is_some() {
-        return Err(DbErr::Custom(
-            "Група з такими параметрами (частина, вид, місце, дати) вже існує".into(),
-        ));
+    if let Some(dup) = existing {
+        if !force {
+            return Ok(CreateGroupResult::Duplicate(dup.id));
+        }
     }
 
     let basis_date_val: sea_orm::Value = basis_doc_date
@@ -1154,29 +1156,34 @@ pub async fn create_group_with_events(
     if planned_count > 0 {
         db.execute(Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            "INSERT INTO group_event (group_id, event_type, count, occurred_on) \
-             VALUES ($1, 'planned', $2, $3::date)",
-            [gid.into(), planned_count.into(), planned_start.into()],
+            "INSERT INTO group_event (group_id, event_type, count, occurred_on, submission_id) \
+             VALUES ($1, 'planned', $2, $3::date, $4)",
+            [gid.into(), planned_count.into(), planned_start.into(), submission_id.into()],
         ))
         .await?;
     }
     if arrived_count > 0 {
         db.execute(Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            "INSERT INTO group_event (group_id, event_type, count, occurred_on) \
-             VALUES ($1, 'arrived', $2, $3::date)",
-            [gid.into(), arrived_count.into(), planned_start.into()],
+            "INSERT INTO group_event (group_id, event_type, count, occurred_on, submission_id) \
+             VALUES ($1, 'arrived', $2, $3::date, $4)",
+            [gid.into(), arrived_count.into(), planned_start.into(), submission_id.into()],
         ))
         .await?;
     }
     if in_training_count > 0 {
         db.execute(Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            "INSERT INTO group_event (group_id, event_type, count, occurred_on) \
-             VALUES ($1, 'started', $2, $3::date)",
-            [gid.into(), in_training_count.into(), planned_start.into()],
+            "INSERT INTO group_event (group_id, event_type, count, occurred_on, submission_id) \
+             VALUES ($1, 'started', $2, $3::date, $4)",
+            [gid.into(), in_training_count.into(), planned_start.into(), submission_id.into()],
         ))
         .await?;
     }
-    Ok(gid)
+    Ok(CreateGroupResult::Created(gid))
+}
+
+pub enum CreateGroupResult {
+    Created(i32),
+    Duplicate(i32),
 }

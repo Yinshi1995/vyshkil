@@ -66,6 +66,7 @@ mod m20261005_000064_fix_admin_chat_rooms;
 mod m20261005_000065_seed_d1_org_composition;
 mod m20261005_000065_create_training_venue_model;
 mod m20261005_000066_add_org_masked_label;
+mod m20261006_000067_allow_duplicate_groups;
 
 pub struct Migrator;
 
@@ -170,6 +171,7 @@ impl MigratorTrait for Migrator {
             // Generated column org.masked_label — маскований лейбл (А-номер або short_name),
             // обчислюється Postgres, індексований pg_trgm — замість окремого запиту org_number_labels.
             Box::new(m20261005_000066_add_org_masked_label::Migration),
+            Box::new(m20261006_000067_allow_duplicate_groups::Migration),
         ]
     }
 }

@@ -2800,6 +2800,8 @@ struct CreateGroupBody {
     arrived_count: i32,
     #[serde(default)]
     in_training_count: i32,
+    #[serde(default)]
+    force: bool,
 }
 
 async fn data_create_group_handler(
@@ -2822,7 +2824,9 @@ async fn data_create_group_handler(
         return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Дати обов'язкові" }))));
     }
 
-    let id = repo::groups::create_group_with_events(
+    use repo::groups::CreateGroupResult;
+
+    let result = repo::groups::create_group_with_events(
         &state.db,
         body.sender_org_id,
         body.training_kind_id,
@@ -2844,26 +2848,42 @@ async fn data_create_group_handler(
         body.venue_type.as_deref(),
         body.training_venue_id,
         body.city_id,
+        None,
+        body.force,
     )
     .await
-    .map_err(|e| {
-        if let sea_orm::DbErr::Custom(msg) = &e {
-            if msg.contains("вже існує") {
-                return (StatusCode::CONFLICT, Json(serde_json::json!({ "error": msg })));
-            }
-        }
+    .map_err(|_| {
         (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка створення групи" })))
     })?;
 
-    let _ = repo::notifications::insert(
-        &state.db, body.sender_org_id, "group_event", "Створено нову групу підготовки",
-        None, Some("/data"),
-    ).await;
-    let _ = repo::whatsapp_routing::dispatch_wa_notifications(
-        &state.db, body.sender_org_id, "group_event_added", NotifyTemplate::GroupEventAdded,
-    ).await;
+    match result {
+        CreateGroupResult::Duplicate(existing_id) => {
+            Ok(Json(serde_json::json!({
+                "warning": "Група з такими параметрами вже існує",
+                "existing_id": existing_id
+            })))
+        }
+        CreateGroupResult::Created(id) => {
+            let sub_id = create_form_submission(&state.db, body.sender_org_id)
+                .await
+                .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Помилка створення подання" }))))?;
+            let _ = state.db.execute(sea_orm::Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                "UPDATE group_event SET submission_id = $1 WHERE group_id = $2 AND submission_id IS NULL",
+                [sub_id.into(), id.into()],
+            )).await;
 
-    Ok(Json(serde_json::json!({ "id": id })))
+            let _ = repo::notifications::insert(
+                &state.db, body.sender_org_id, "group_event", "Створено нову групу підготовки",
+                None, Some("/data"),
+            ).await;
+            let _ = repo::whatsapp_routing::dispatch_wa_notifications(
+                &state.db, body.sender_org_id, "group_event_added", NotifyTemplate::GroupEventAdded,
+            ).await;
+
+            Ok(Json(serde_json::json!({ "id": id })))
+        }
+    }
 }
 
 async fn training_kinds_handler(
@@ -3247,6 +3267,26 @@ async fn create_import_submission(
         db.get_database_backend(),
         "INSERT INTO submission (reporting_org_id, source_type, as_of_date, status) \
          VALUES ($1, 'table', $2::date, 'committed') RETURNING id",
+        [org_id.into(), today.into()],
+    ))
+    .one(db)
+    .await?
+    .ok_or_else(|| sea_orm::DbErr::Custom("INSERT submission не повернув id".into()))?;
+    Ok(row.id)
+}
+
+async fn create_form_submission(
+    db: &impl ConnectionTrait,
+    org_id: i32,
+) -> Result<i32, sea_orm::DbErr> {
+    use sea_orm::{FromQueryResult, Statement};
+    #[derive(FromQueryResult)]
+    struct NewId { id: i32 }
+    let today = chrono::Utc::now().date_naive().to_string();
+    let row = NewId::find_by_statement(Statement::from_sql_and_values(
+        db.get_database_backend(),
+        "INSERT INTO submission (reporting_org_id, source_type, as_of_date, status) \
+         VALUES ($1, 'form', $2::date, 'committed') RETURNING id",
         [org_id.into(), today.into()],
     ))
     .one(db)

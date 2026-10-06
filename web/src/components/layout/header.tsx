@@ -50,16 +50,16 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { href: "/orgs", label: "Підрозділи", icon: Building2, adminOnly: true },
   { href: "/data", label: "Облік", icon: Table },
   { href: "/training", label: "Підготовка", icon: FileText },
+  { href: "/documents", label: "Документи", icon: FileCheck },
   { href: "/dashboard", label: "Аналітика", icon: BarChart3 },
   { href: "/discrepancies", label: "Розбіжності", icon: AlertTriangle },
   { href: "/chat", label: "Чат", icon: MessageCircle },
 ];
 
 const MORE_NAV: NavItem[] = [
-  { href: "/documents", label: "Документи", icon: FileCheck },
+  { href: "/orgs", label: "Підрозділи", icon: Building2, adminOnly: true },
   { href: "/directory", label: "Люди", icon: UsersIcon },
 ];
 
