@@ -1752,14 +1752,14 @@ function CreateGroupDialog({
                 Посада
               </Label>
               <Select
-                value={positionId ? String(positionId) : ""}
-                onValueChange={(v) => setPositionId(v ? Number(v) : null)}
+                value={positionId ? String(positionId) : undefined}
+                onValueChange={(v) => setPositionId(v === "__none__" ? null : Number(v))}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="—" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="__none__">—</SelectItem>
                   {(dicts?.positions ?? []).map((p) => (
                     <SelectItem key={p.id} value={String(p.id)}>
                       {p.label}
@@ -1773,14 +1773,14 @@ function CreateGroupDialog({
                 Курс
               </Label>
               <Select
-                value={courseId ? String(courseId) : ""}
-                onValueChange={(v) => setCourseId(v ? Number(v) : null)}
+                value={courseId ? String(courseId) : undefined}
+                onValueChange={(v) => setCourseId(v === "__none__" ? null : Number(v))}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="—" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="__none__">—</SelectItem>
                   {(dicts?.courses ?? []).map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
                       {c.label}
@@ -1798,14 +1798,14 @@ function CreateGroupDialog({
                 Програма БЗВП
               </Label>
               <Select
-                value={bzvpProgramId ? String(bzvpProgramId) : ""}
-                onValueChange={(v) => setBzvpProgramId(v ? Number(v) : null)}
+                value={bzvpProgramId ? String(bzvpProgramId) : undefined}
+                onValueChange={(v) => setBzvpProgramId(v === "__none__" ? null : Number(v))}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="—" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">—</SelectItem>
+                  <SelectItem value="__none__">—</SelectItem>
                   {(dicts?.bzvp_programs ?? []).map((b) => (
                     <SelectItem key={b.id} value={String(b.id)}>
                       {b.label}
