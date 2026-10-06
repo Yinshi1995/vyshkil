@@ -56,7 +56,9 @@ build() {
   local tag=$1 ctx=$2 logf="$STATE_DIR/build.log"
   for attempt in 1 2; do
     docker buildx build --builder "$BUILDER" --load -t "$tag" "$ctx" >"$logf" 2>&1 && return 0
-    log "збірка $tag: спроба $attempt невдала"
+    log "збірка $tag: спроба $attempt невдала, причина:"
+    grep -iE 'error|ERR!|failed' "$logf" | tail -5 | sed 's/^/    /'
+    cp "$logf" "$STATE_DIR/build-failed-$attempt.log"
   done
   tail -25 "$logf" | sed 's/^/    /'
   return 1

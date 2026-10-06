@@ -68,6 +68,7 @@ mod m20261005_000065_create_training_venue_model;
 mod m20261005_000066_add_org_masked_label;
 mod m20261006_000067_allow_duplicate_groups;
 mod m20261006_000068_drop_fake_discrepancies;
+mod m20261006_000069_seed_ukraine_cities;
 
 pub struct Migrator;
 
@@ -174,6 +175,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20261005_000066_add_org_masked_label::Migration),
             Box::new(m20261006_000067_allow_duplicate_groups::Migration),
             Box::new(m20261006_000068_drop_fake_discrepancies::Migration),
+            // Довідник: усі міста України (460 унікальних назв).
+            Box::new(m20261006_000069_seed_ukraine_cities::Migration),
         ]
     }
 }
