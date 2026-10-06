@@ -141,7 +141,7 @@ function classifyDeltaDriveUrl(url: string): { kind: string; label: string } | n
 
 function parseRichText(text: string): TextSegment[] {
   const segments: TextSegment[] = [];
-  const pattern = /(delta:(?:(doc|wiki|board|table|cal|form):)?([\wЀ-ӿ\-№]+))|(\/(?:directory|data|training|documents|discrepancies|orgs|org\/\d+|import|settings|chat)(?:\?\S*)?)|((https?:\/\/\S+))/g;
+  const pattern = /(delta:(?:(doc|wiki|board|table|cal|form):)?([\wЀ-ӿ\-№]+))|(\/(?:directory|dashboard|data|training|documents|discrepancies|orgs|org\/\d+|import|settings|chat)(?:\?\S*)?)|((https?:\/\/\S+))/g;
   let lastIndex = 0;
   let match;
 
@@ -165,7 +165,7 @@ function parseRichText(text: string): TextSegment[] {
         try {
           const u = new URL(href);
           const isOwnDomain = u.hostname === window.location.hostname || u.hostname.endsWith(".striy.pp.ua");
-          if (isOwnDomain && u.pathname.match(/^\/(data|directory|training|documents|discrepancies|orgs|import|settings|chat)/)) {
+          if (isOwnDomain && u.pathname.match(/^\/(data|dashboard|directory|training|documents|discrepancies|orgs|import|settings|chat)/)) {
             const internal = u.pathname + u.search;
             segments.push({ type: "internal", value: internal, href: internal });
           } else {
@@ -188,6 +188,7 @@ function parseRichText(text: string): TextSegment[] {
 
 const INTERNAL_LINK_NAMES: Record<string, { label: string; icon: string }> = {
   "/directory": { label: "Люди", icon: "👥" },
+  "/dashboard": { label: "Аналітика", icon: "📈" },
   "/data": { label: "Дані", icon: "📊" },
   "/training": { label: "Підготовка", icon: "📋" },
   "/documents": { label: "Документи", icon: "📄" },
@@ -286,8 +287,11 @@ function RichTextContent({ text }: { text: string }) {
             const qs = seg.href?.includes("?") ? new URLSearchParams(seg.href.split("?")[1]) : null;
             const detail = qs ? [
               qs.get("group") && `#${qs.get("group")}`,
-              qs.get("kind"),
+              qs.get("kind") || qs.get("kinds"),
+              qs.get("orgs"),
               qs.get("q") && `«${qs.get("q")}»`,
+              qs.get("from") && `з ${qs.get("from")}`,
+              qs.get("to") && `по ${qs.get("to")}`,
             ].filter(Boolean).join(" ") : "";
             return (
               <Link

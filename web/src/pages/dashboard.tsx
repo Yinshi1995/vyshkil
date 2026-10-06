@@ -1,10 +1,18 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { api } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePickerUa } from "@/components/ui/date-picker-ua";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Building2,
   Users,
@@ -19,6 +27,9 @@ import {
   Filter,
   X,
   RotateCcw,
+  Share2,
+  MessageSquare,
+  Copy,
 } from "lucide-react";
 import {
   BarChart,
@@ -255,14 +266,14 @@ function DashboardFilters({
               value={filters.dateFrom}
               onChange={(v) => onChange({ ...filters, dateFrom: v })}
               placeholder="З"
-              className="h-8 w-32 text-xs"
+              className="h-8 w-24 sm:w-32 text-xs"
             />
             <span className="text-muted-foreground text-xs">—</span>
             <DatePickerUa
               value={filters.dateTo}
               onChange={(v) => onChange({ ...filters, dateTo: v })}
               placeholder="По"
-              className="h-8 w-32 text-xs"
+              className="h-8 w-24 sm:w-32 text-xs"
             />
           </div>
 
@@ -715,6 +726,8 @@ function ChartSection({
 // ---------------------------------------------------------------------------
 
 export function DashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [pipeline, setPipeline] = useState<PipelineData | null>(null);
   const [orgData, setOrgData] = useState<OrgData[]>([]);
@@ -722,7 +735,37 @@ export function DashboardPage() {
   const [discData, setDiscData] = useState<DiscData | null>(null);
   const [staffing, setStaffing] = useState<StaffingRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<DashFilters>(EMPTY_FILTERS);
+
+  const initFilters = useMemo((): DashFilters => {
+    const orgs = searchParams.get("orgs");
+    const kinds = searchParams.get("kinds");
+    return {
+      orgs: orgs ? new Set(orgs.split(",")) : new Set(),
+      kinds: kinds ? new Set(kinds.split(",")) : new Set(),
+      dateFrom: searchParams.get("from") ?? "",
+      dateTo: searchParams.get("to") ?? "",
+    };
+  }, []);
+  const [filters, setFilters] = useState<DashFilters>(initFilters);
+
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (filters.orgs.size) params.orgs = [...filters.orgs].join(",");
+    if (filters.kinds.size) params.kinds = [...filters.kinds].join(",");
+    if (filters.dateFrom) params.from = filters.dateFrom;
+    if (filters.dateTo) params.to = filters.dateTo;
+    setSearchParams(params, { replace: true });
+  }, [filters, setSearchParams]);
+
+  const buildShareUrl = useCallback(() => {
+    const params = new URLSearchParams();
+    if (filters.orgs.size) params.set("orgs", [...filters.orgs].join(","));
+    if (filters.kinds.size) params.set("kinds", [...filters.kinds].join(","));
+    if (filters.dateFrom) params.set("from", filters.dateFrom);
+    if (filters.dateTo) params.set("to", filters.dateTo);
+    const qs = params.toString();
+    return `/dashboard${qs ? `?${qs}` : ""}`;
+  }, [filters]);
 
   useEffect(() => {
     Promise.allSettled([
@@ -842,11 +885,45 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div>
-        <h1>Аналітика</h1>
-        <p className="text-sm text-muted-foreground">
-          Зведена візуалізація стану підготовки, укомплектованості та розбіжностей
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1>Аналітика</h1>
+          <p className="text-sm text-muted-foreground">
+            Зведена візуалізація стану підготовки, укомплектованості та розбіжностей
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5 shrink-0">
+              <Share2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Поділитись</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => {
+              const url = buildShareUrl();
+              navigator.clipboard.writeText(window.location.origin + url);
+              toast.success("Посилання скопійовано");
+            }}>
+              <Copy className="mr-2 h-4 w-4" />
+              Копіювати посилання
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => {
+              const url = buildShareUrl();
+              const parts = [
+                filters.orgs.size && `підрозділи: ${[...filters.orgs].join(", ")}`,
+                filters.kinds.size && `вид: ${[...filters.kinds].join(", ")}`,
+                filters.dateFrom && `з ${filters.dateFrom}`,
+                filters.dateTo && `по ${filters.dateTo}`,
+              ].filter(Boolean).join(", ");
+              const text = parts ? `${url} (${parts})` : url;
+              navigate(`/chat?prefill=${encodeURIComponent(text)}`);
+            }}>
+              <MessageSquare className="mr-2 h-4 w-4" />
+              Надіслати в чат
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Filters */}
