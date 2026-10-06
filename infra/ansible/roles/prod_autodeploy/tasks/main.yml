@@ -1,6 +1,38 @@
 ---
-# Pull-автодеплой на прод-VM (11 §5.1): образи збирає GitHub Actions у GHCR, таймер тут їх
-# підтягує. Ні dev-VM, ні ноут розробника в ланцюжку не потрібні.
+# Pull-автодеплой на прод-VM (11 §5.1): git fetch з GitHub + збірка тут. Ні dev-VM, ні ноут, ні
+# GitHub Actions у ланцюжку не потрібні.
+
+- name: git (для fetch публічного репо)
+  ansible.builtin.apt:
+    name: git
+    state: present
+
+- name: "Swap для збірки ({{ prod_autodeploy_build_swap_gb }} ГБ, нижчий пріоритет за основний)"
+  community.general.filesize:
+    path: /swap-build
+    size: "{{ prod_autodeploy_build_swap_gb }}G"
+  register: build_swap
+
+- name: Права, mkswap і swapon для /swap-build
+  ansible.builtin.shell: |
+    chmod 600 /swap-build && mkswap -q /swap-build && swapon -p -5 /swap-build
+  when: build_swap.changed
+  changed_when: true
+
+- name: /swap-build у fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: "/swap-build none swap sw,pri=-5 0 0"
+
+- name: Обмежений buildx-builder
+  ansible.builtin.shell: |
+    docker buildx inspect {{ prod_autodeploy_builder }} >/dev/null 2>&1 && exit 0
+    docker buildx create --name {{ prod_autodeploy_builder }} --driver docker-container \
+      --driver-opt memory={{ prod_autodeploy_builder_memory }} \
+      --driver-opt memory-swap={{ prod_autodeploy_builder_memory_swap }} \
+      --driver-opt cpu-quota={{ prod_autodeploy_builder_cpu_quota }} >/dev/null && echo created
+  register: builder_create
+  changed_when: "'created' in builder_create.stdout"
 
 - name: Скрипт деплою
   ansible.builtin.copy:

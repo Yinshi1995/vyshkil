@@ -28,8 +28,11 @@ COPY . .
 
 # --release використовує профіль з opt-level=z/lto/panic=abort із кореневого Cargo.toml —
 # саме там, а не тут, живе вся логіка "менший бінарник ціною часу збірки".
+# target/ — кеш-маунт: на проді (2 ГБ RAM, 11 §5.1) повторна збірка перекомпільовує лише змінені
+# крейти, а не весь граф залежностей. Бінарник копіюється з маунта, бо той не потрапляє в шар.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    cargo build -p server --release
+    --mount=type=cache,target=/app/target \
+    cargo build -p server --release && cp target/release/server /app/server-bin
 
 # ---------- runtime ----------
 # distroless/cc: немає shell, package manager і зайвих бібліотек — лише glibc/libgcc,
@@ -37,7 +40,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM gcr.io/distroless/cc-debian12 AS runtime
 
 WORKDIR /app
-COPY --from=builder /app/target/release/server ./server
+COPY --from=builder /app/server-bin ./server
 COPY --from=frontend /app/web/dist ./web/dist
 
 # LEPTOS_SITE_ADDR — адреса, на якій сервер слухає (leptos get_configuration читає з env).

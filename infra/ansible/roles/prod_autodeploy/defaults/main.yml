@@ -1,8 +1,16 @@
 ---
-# Автодеплой на самій прод-VM (11 §5.1, decisions/prod-autodeploy-pull.md): системний таймер root.
+# Автодеплой на самій прод-VM (11 §5.1, decisions/prod-autodeploy-pull.md): системний таймер root,
+# git fetch публічного репо + локальна збірка. Від GitHub — лише git, без Actions/реєстру.
 prod_autodeploy_enabled: true
 prod_autodeploy_interval: 1min
-prod_autodeploy_registry: ghcr.io/yinshi1995
-prod_autodeploy_channel: main
+prod_autodeploy_repo_url: https://github.com/Yinshi1995/vyshkil.git
+prod_autodeploy_branch: main
 prod_autodeploy_state_dir: /var/lib/vyshkil-deploy
 prod_autodeploy_script: /usr/local/sbin/vyshkil-deploy
+# Збірка Rust (LTO) не влазить у 2 ГБ: окремий builder-контейнер з лімітами, щоб робочий стек
+# (Postgres/app/notifier) не потрапив під OOM, + додатковий swap лише для нього.
+prod_autodeploy_builder: vyshkil-builder
+prod_autodeploy_builder_memory: 1200m
+prod_autodeploy_builder_memory_swap: 7g
+prod_autodeploy_builder_cpu_quota: 150000  # 1.5 ядра з 2
+prod_autodeploy_build_swap_gb: 6

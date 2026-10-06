@@ -42,4 +42,4 @@ date: 2026-09-27
 - [IaC — Ansible, не разовий скрипт](../decisions/iac-ansible.md) — ролі `base`/`docker`/`firewall` перевикористовує прод (11); `community.proxmox` 2.0.0 — актуальна назва колекції.
 - [Dev-VM: параметри](../decisions/dev-vm-parameters.md) — RAM/мережа/git-remote/source_files, зафіксовані відповідями замовника + реальною інвентаризацією хоста, не вгадані.
 - [Прод через cf-connector, VLAN 90 за VyOS](../decisions/prod-cloudflare-tunnel.md) — ревізія 2: без окремого cloudflared на VM.
-- [Автодеплой проду — Actions→GHCR→таймер на прод-VM](../decisions/prod-autodeploy-pull.md) — не залежить від машини розробника; GitHub не має доступу до інфраструктури.
+- [Автодеплой проду — таймер на прод-VM, збірка там же](../decisions/prod-autodeploy-pull.md) — без dev-VM і без GitHub Actions (billing-блок, платити не будемо); від GitHub лише git fetch.

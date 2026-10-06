@@ -167,22 +167,20 @@ Ansible-роль `firewall` має перевіряти всі 5 рівнів п
 
 ### 5.1. Автодеплой з GitHub (`.claude/decisions/prod-autodeploy-pull.md`)
 
-Пуш у `main` → прод оновлюється сам; машина розробника (dev-VM/ноут) у ланцюжку не потрібна.
+Пуш у `main` → прод оновлюється сам. Від GitHub — лише `git fetch` публічного репо (без Actions і
+реєстру); машина розробника в ланцюжку не потрібна.
 
-1. GitHub Actions (`.github/workflows/images.yml`) збирає `ghcr.io/yinshi1995/vyshkil-app:<sha>` і
-   `vyshkil-notifier:<sha>`, потім обидва отримують тег `:main` (півреліз прод не побачить).
-2. Системний таймер `vyshkil-prod-deploy` на прод-VM (роль `prod_autodeploy`, скрипт
-   `/usr/local/sbin/vyshkil-deploy` ← `infra/deploy/deploy-prod.sh`) щохвилини тягне `:main` і
-   читає label `org.opencontainers.image.revision`;
-3. новий коміт → `pg_dump` taktoblik + notifier у `/opt/vyshkil/backups/` (останні 14) → pull
-   `<sha>` → поточні `:latest` → `:previous`, нові → `:latest` → `compose up -d`;
-4. перевірка: HTTP 200 на `:3000` і нема `panicked` у логах app (до 2 хв);
-5. збій → відкат на `:previous`, sha у `/var/lib/vyshkil-deploy/failed-sha` (не ретраїться до
-   нового коміту).
+1. Системний таймер `vyshkil-prod-deploy` на прод-VM (роль `prod_autodeploy`, скрипт
+   `/usr/local/sbin/vyshkil-deploy` ← `infra/deploy/deploy-prod.sh`) щохвилини: `git fetch`;
+2. новий коміт → збірка `vyshkil-app:<sha>`/`vyshkil-notifier:<sha>` в обмеженому buildx-builder
+   (1.2 ГБ RAM + swap `/swap-build`, 1.5 CPU — робочий стек не страждає); кеш `target/`;
+3. `pg_dump` taktoblik + notifier у `/opt/vyshkil/backups/` (останні 14);
+4. поточні `:latest` → `:previous`, нові → `:latest`, `compose up -d`;
+5. перевірка: HTTP 200 на `:3000` і нема `panicked` у логах app (до 2 хв); збій → відкат на
+   `:previous`, sha у `/var/lib/vyshkil-deploy/failed-sha` (не ретраїться до нового коміту).
 
-Журнал: `journalctl -u vyshkil-prod-deploy -f` (на прод-VM). Ручний деплой коміту:
-`sudo vyshkil-deploy --force <sha>`. Пауза: `sudo systemctl stop vyshkil-prod-deploy.timer`.
-Пакети GHCR мають бути Public. compose/env/NATS-конфіг — `playbooks/prod-vm.yml`.
+Журнал: `journalctl -u vyshkil-prod-deploy -f`. Ручний деплой: `sudo vyshkil-deploy --force [<sha>]`.
+Пауза: `sudo systemctl stop vyshkil-prod-deploy.timer`. compose/env/NATS — `playbooks/prod-vm.yml`.
 
 ## 6. Логи й моніторинг
 - Docker `log-driver: local`, ротація.
