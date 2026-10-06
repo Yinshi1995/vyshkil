@@ -140,12 +140,12 @@ function UserCard({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-2 text-[11px]"
+                  className="h-6 px-1.5 sm:px-2 text-[11px]"
                   onClick={() => onMessage(user.user_id)}
                   title="Написати"
                 >
-                  <MessageSquarePlus className="mr-1 h-3 w-3" />
-                  Написати
+                  <MessageSquarePlus className="h-3.5 w-3.5 sm:mr-1 sm:h-3 sm:w-3" />
+                  <span className="hidden sm:inline">Написати</span>
                 </Button>
               )}
               {canManage && (
@@ -153,25 +153,25 @@ function UserCard({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-[11px]"
+                    className="h-6 px-1.5 sm:px-2 text-[11px]"
                     onClick={() => onToggleActive(user.user_id)}
                     title={user.is_active ? "Заблокувати" : "Розблокувати"}
                   >
                     {user.is_active ? (
-                      <><UserX className="mr-1 h-3 w-3" /> Заблокувати</>
+                      <><UserX className="h-3.5 w-3.5 sm:mr-1 sm:h-3 sm:w-3" /><span className="hidden sm:inline">Заблокувати</span></>
                     ) : (
-                      <><UserCheck className="mr-1 h-3 w-3" /> Розблокувати</>
+                      <><UserCheck className="h-3.5 w-3.5 sm:mr-1 sm:h-3 sm:w-3" /><span className="hidden sm:inline">Розблокувати</span></>
                     )}
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-[11px]"
+                    className="h-6 px-1.5 sm:px-2 text-[11px]"
                     onClick={() => onResetPassword(user.user_id)}
                     title="Скинути пароль"
                   >
-                    <KeyRound className="mr-1 h-3 w-3" />
-                    Пароль
+                    <KeyRound className="h-3.5 w-3.5 sm:mr-1 sm:h-3 sm:w-3" />
+                    <span className="hidden sm:inline">Пароль</span>
                   </Button>
                 </>
               )}
