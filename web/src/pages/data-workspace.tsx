@@ -1480,6 +1480,18 @@ function CreateGroupDialog({
     return e;
   }
 
+  const isFormValid = Boolean(
+    orgId
+    && venueType
+    && (venueType === "unit_base" ? cityId : venueId)
+    && plannedStart
+    && plannedEnd
+    && plannedEnd >= plannedStart
+    && plannedCount
+    && parseInt(plannedCount, 10) > 0
+    && !validateCount(arrivedCount, false)
+  );
+
   type CreateRes = { id?: number; warning?: string; existing?: { id: number; vos_label: string; site_label: string; planned_count: number }[] };
 
   const submitGroup = async (force = false) => {
@@ -1596,7 +1608,7 @@ function CreateGroupDialog({
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <Building2 className="mr-1 inline h-3 w-3" />
-                Підрозділ *
+                Підрозділ <span style={{ color: "#D9534F" }}>*</span>
               </Label>
               <Popover open={orgCmdOpen} onOpenChange={setOrgCmdOpen}>
                 <PopoverTrigger
@@ -1659,7 +1671,7 @@ function CreateGroupDialog({
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <FileText className="mr-1 inline h-3 w-3" />
-                Вид *
+                Вид <span style={{ color: "#D9534F" }}>*</span>
               </Label>
               <Select
                 value={String(kindId)}
@@ -1913,7 +1925,7 @@ function CreateGroupDialog({
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <MapPin className="mr-1 inline h-3 w-3" />
-                Тип місця *
+                Тип місця <span style={{ color: "#D9534F" }}>*</span>
               </Label>
               <Select
                 value={venueType}
@@ -1955,7 +1967,7 @@ function CreateGroupDialog({
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <MapPin className="mr-1 inline h-3 w-3" />
-                  {venueType === "vvnz" ? "ВВНЗ" : "Навчальний центр"} *
+                  {venueType === "vvnz" ? "ВВНЗ" : "Навчальний центр"} <span style={{ color: "#D9534F" }}>*</span>
                 </Label>
                 <Popover open={venueCmdOpen} onOpenChange={setVenueCmdOpen}>
                   <PopoverTrigger
@@ -2034,7 +2046,7 @@ function CreateGroupDialog({
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <MapPin className="mr-1 inline h-3 w-3" />
-                  Місто *
+                  Місто <span style={{ color: "#D9534F" }}>*</span>
                 </Label>
                 <Popover open={cityCmdOpen} onOpenChange={setCityCmdOpen}>
                   <PopoverTrigger
@@ -2098,7 +2110,7 @@ function CreateGroupDialog({
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <CalendarIcon className="mr-1 inline h-3 w-3" />
-                Період *
+                Період <span style={{ color: "#D9534F" }}>*</span>
               </Label>
               <Popover>
                 <PopoverTrigger
@@ -2150,7 +2162,7 @@ function CreateGroupDialog({
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <Hash className="mr-1 inline h-3 w-3" />
-                План (к-ть) *
+                План (к-ть) <span style={{ color: "#D9534F" }}>*</span>
               </Label>
               <Input
                 type="number"
@@ -2226,7 +2238,7 @@ function CreateGroupDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Скасувати
           </Button>
-          <Button onClick={handleCreate} disabled={saving}>
+          <Button onClick={handleCreate} disabled={saving || !isFormValid}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             <Plus className="mr-2 h-4 w-4" />
             Створити
