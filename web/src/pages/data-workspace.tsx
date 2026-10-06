@@ -1756,7 +1756,9 @@ function CreateGroupDialog({
                 onValueChange={(v) => setPositionId(v === "__none__" ? null : Number(v))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="—" />
+                  <SelectValue placeholder="—">
+                    {positionId ? (dicts?.positions?.find((p) => p.id === positionId)?.label ?? "—") : "—"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">—</SelectItem>
@@ -1777,7 +1779,9 @@ function CreateGroupDialog({
                 onValueChange={(v) => setCourseId(v === "__none__" ? null : Number(v))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="—" />
+                  <SelectValue placeholder="—">
+                    {courseId ? (dicts?.courses?.find((c) => c.id === courseId)?.label ?? "—") : "—"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">—</SelectItem>
@@ -1802,7 +1806,9 @@ function CreateGroupDialog({
                 onValueChange={(v) => setBzvpProgramId(v === "__none__" ? null : Number(v))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="—" />
+                  <SelectValue placeholder="—">
+                    {bzvpProgramId ? (dicts?.bzvp_programs?.find((b) => b.id === bzvpProgramId)?.label ?? "—") : "—"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">—</SelectItem>
