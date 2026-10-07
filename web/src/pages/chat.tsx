@@ -1804,9 +1804,10 @@ export function ChatPage() {
 
             {/* Messages area */}
             <div
-              className="flex-1 overflow-y-auto px-2 py-3 space-y-1"
+              className="flex-1 overflow-y-auto px-2 py-3"
               style={{ scrollBehavior: "smooth" }}
             >
+              <div className="flex flex-col justify-end space-y-1" style={{ minHeight: "100%" }}>
               {loadingMsgs ? (
                 <div className="flex flex-col gap-3 p-4">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -1853,6 +1854,7 @@ export function ChatPage() {
                 ))
               )}
               <div ref={messagesEndRef} />
+              </div>
             </div>
 
             {/* Reply preview */}
