@@ -120,7 +120,7 @@ async fn list_rooms(
                  WHERE crm2.room_id = cr.id
                 )::bigint AS member_count,
                 CASE WHEN cr.kind = 'direct' THEN
-                    (SELECT ua3.avatar_url
+                    (SELECT ua3.avatar_path
                      FROM chat_room_member crm4
                      JOIN user_account ua3 ON ua3.id = crm4.user_id
                      WHERE crm4.room_id = cr.id AND crm4.user_id <> $1

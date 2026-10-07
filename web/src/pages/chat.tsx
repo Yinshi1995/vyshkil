@@ -959,7 +959,7 @@ function RoomItem({
     >
       {room.kind === "direct" && room.dm_avatar ? (
         <img
-          src={room.dm_avatar}
+          src={`/api/avatars/${room.dm_avatar}`}
           alt=""
           className="h-9 w-9 shrink-0 rounded-lg object-cover"
           style={{
@@ -1762,7 +1762,7 @@ export function ChatPage() {
                 if (currentRoom?.kind === "direct" && currentRoom.dm_avatar) {
                   return (
                     <img
-                      src={currentRoom.dm_avatar}
+                      src={`/api/avatars/${currentRoom.dm_avatar}`}
                       alt=""
                       className="h-10 w-10 shrink-0 rounded-lg object-cover"
                       style={{ boxShadow: `0 2px 8px ${ri.color}33` }}
