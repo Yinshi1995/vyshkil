@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth";
 import { api } from "@/api/client";
 import type { ChatRoom, ChatMessage } from "@/api/types";
@@ -957,19 +957,42 @@ function RoomItem({
         borderLeft: active ? "3px solid var(--primary)" : "3px solid transparent",
       }}
     >
-      <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-        style={{
-          background: active ? roomIcon.bg : "var(--muted)",
-          boxShadow: active ? `0 2px 8px ${roomIcon.color}33` : undefined,
-          transition: "all 0.2s",
-        }}
-      >
-        <IconComp
-          className="h-4.5 w-4.5"
-          style={{ color: active ? roomIcon.color : "var(--muted-foreground)" }}
+      {room.kind === "direct" && room.dm_avatar ? (
+        <img
+          src={room.dm_avatar}
+          alt=""
+          className="h-9 w-9 shrink-0 rounded-lg object-cover"
+          style={{
+            boxShadow: active ? `0 2px 8px ${roomIcon.color}33` : undefined,
+            transition: "all 0.2s",
+          }}
         />
-      </div>
+      ) : room.kind === "direct" ? (
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
+          style={{
+            background: active ? roomIcon.bg : "var(--muted)",
+            color: active ? roomIcon.color : "var(--muted-foreground)",
+            transition: "all 0.2s",
+          }}
+        >
+          {room.name.slice(0, 2).toUpperCase()}
+        </div>
+      ) : (
+        <div
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+          style={{
+            background: active ? roomIcon.bg : "var(--muted)",
+            boxShadow: active ? `0 2px 8px ${roomIcon.color}33` : undefined,
+            transition: "all 0.2s",
+          }}
+        >
+          <IconComp
+            className="h-4.5 w-4.5"
+            style={{ color: active ? roomIcon.color : "var(--muted-foreground)" }}
+          />
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
           <span
@@ -1290,9 +1313,11 @@ function NewDmDialog({
 
 export function ChatPage() {
   const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [chatParams, setChatParams] = useSearchParams();
   const initialRoom = chatParams.get("room") ? Number(chatParams.get("room")) : null;
+  const fromUrl = useRef(chatParams.get("from"));
   const [activeRoom, setActiveRoom] = useState<number | null>(initialRoom);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1310,7 +1335,7 @@ export function ChatPage() {
 
   // Clear prefill/room from URL and focus input
   useEffect(() => {
-    if (chatParams.has("prefill") || chatParams.has("room") || chatParams.has("newdm")) {
+    if (chatParams.has("prefill") || chatParams.has("room") || chatParams.has("newdm") || chatParams.has("from")) {
       setChatParams({}, { replace: true });
       if (chatParams.has("prefill")) {
         setTimeout(() => inputRef.current?.focus(), 300);
@@ -1720,13 +1745,40 @@ export function ChatPage() {
             >
               <button
                 className="md:hidden shrink-0"
-                onClick={() => setMobileSidebar(true)}
+                onClick={() => {
+                  if (fromUrl.current) {
+                    navigate(fromUrl.current);
+                    fromUrl.current = null;
+                  } else {
+                    setMobileSidebar(true);
+                  }
+                }}
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               {(() => {
                 const ri = ROOM_ICONS[currentRoom?.kind ?? "direct"] ?? ROOM_ICONS.direct;
                 const Ic = ri.icon;
+                if (currentRoom?.kind === "direct" && currentRoom.dm_avatar) {
+                  return (
+                    <img
+                      src={currentRoom.dm_avatar}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                      style={{ boxShadow: `0 2px 8px ${ri.color}33` }}
+                    />
+                  );
+                }
+                if (currentRoom?.kind === "direct") {
+                  return (
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold"
+                      style={{ background: ri.bg, color: ri.color, boxShadow: `0 2px 8px ${ri.color}33` }}
+                    >
+                      {(currentRoom.name ?? "?").slice(0, 2).toUpperCase()}
+                    </div>
+                  );
+                }
                 return (
                   <div
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"

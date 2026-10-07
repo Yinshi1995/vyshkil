@@ -642,7 +642,7 @@ function EventTimeline({
                           onClick={async () => {
                             try {
                               const res = await api.post<{ room_id: number }>(`/chat/dm/${ev.created_by_id}`, {});
-                              navigate(`/chat?room=${res.room_id}`);
+                              navigate(`/chat?room=${res.room_id}&from=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                             } catch {
                               toast.error("Не вдалось відкрити діалог");
                             }
@@ -859,7 +859,7 @@ function DetailPanel({
                       key={room.id}
                       onClick={() => {
                         const text = `${shareUrl} (${shareText})`;
-                        navigate(`/chat?room=${room.id}&prefill=${encodeURIComponent(text)}`);
+                        navigate(`/chat?room=${room.id}&prefill=${encodeURIComponent(text)}&from=${encodeURIComponent(window.location.pathname + window.location.search)}`);
                       }}
                     >
                       {room.emoji ? `${room.emoji} ` : ""}{room.name}

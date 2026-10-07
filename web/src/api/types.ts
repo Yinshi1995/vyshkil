@@ -407,6 +407,7 @@ export interface ChatRoom {
   last_message_body: string | null;
   last_message_at: string | null;
   member_count: number | null;
+  dm_avatar: string | null;
 }
 
 export interface ChatMessage {

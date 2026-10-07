@@ -31,6 +31,7 @@ struct ChatRoom {
     last_message_body: Option<String>,
     last_message_at: Option<String>,
     member_count: Option<i64>,
+    dm_avatar: Option<String>,
 }
 
 #[derive(Serialize, FromQueryResult)]
@@ -117,7 +118,14 @@ async fn list_rooms(
                 ) AS last_message_at,
                 (SELECT COUNT(*) FROM chat_room_member crm2
                  WHERE crm2.room_id = cr.id
-                )::bigint AS member_count
+                )::bigint AS member_count,
+                CASE WHEN cr.kind = 'direct' THEN
+                    (SELECT ua3.avatar_url
+                     FROM chat_room_member crm4
+                     JOIN user_account ua3 ON ua3.id = crm4.user_id
+                     WHERE crm4.room_id = cr.id AND crm4.user_id <> $1
+                     LIMIT 1)
+                END AS dm_avatar
             FROM chat_room cr
             JOIN chat_room_member crm ON crm.room_id = cr.id AND crm.user_id = $1
             WHERE cr.is_active = TRUE
