@@ -1,5 +1,8 @@
 ---
+# reload, не restart: ExecStop юніта nftables = `nft flush ruleset` — стирає таблиці Docker
+# (NAT опублікованих портів), і прод лежить до рестарту docker. reload = `nft -f`, а шаблон
+# чистить лише власну `inet filter`.
 - name: Перезавантажити nftables
   ansible.builtin.systemd:
     name: nftables
-    state: restarted
+    state: reloaded

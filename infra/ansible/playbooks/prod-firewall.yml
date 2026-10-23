@@ -1,0 +1,9 @@
+---
+# Лише nftables прод-VM (без base/docker/app_stack) — для точкових змін доступу.
+- name: Firewall прод-VM
+  hosts: prod
+  become: true
+  vars_files:
+    - ../inventories/prod/group_vars/vault.yml
+  roles:
+    - firewall

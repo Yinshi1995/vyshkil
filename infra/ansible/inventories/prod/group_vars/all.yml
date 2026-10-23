@@ -55,6 +55,18 @@ firewall_allowed_tcp_ports:
 firewall_published_ports:
   - port: 3000
     source: "{{ prod_cf_connector_ip }}"
+  # NetBird-шлюз (VM 195): адмінки через тунель, vyshkil.lab.okpivden.uk
+  - port: 3000
+    source: 10.60.0.30
+  # Пульт (VM 190): агент і cAdvisor
+  - port: 9440
+    source: 10.70.0.40
+  - port: 8081
+    source: 10.70.0.40
+# Пульт: node_exporter (network_mode host)
+firewall_allowed_tcp_from:
+  - port: 9100
+    source: 10.70.0.40
 
 # --- App stack ---
 app_stack_compose_dir: "/opt/vyshkil"
