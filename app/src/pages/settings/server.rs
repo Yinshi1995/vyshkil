@@ -276,6 +276,9 @@ pub async fn admin_create_user(
 ) -> Result<i32, ServerFnError> {
     use crate::backend::repo;
     require_admin(actor)?;
+    if !crate::services::auth::password_login_enabled() {
+        return Err(ServerFnError::new(crate::services::auth::PASSWORD_LOGIN_DISABLED));
+    }
 
     if login.len() < 3 {
         return Err(ServerFnError::new("Логін занадто короткий (мін. 3 символи)"));
@@ -303,6 +306,9 @@ pub async fn admin_reset_password(
 ) -> Result<(), ServerFnError> {
     use crate::backend::repo;
     require_admin(actor)?;
+    if !crate::services::auth::password_login_enabled() {
+        return Err(ServerFnError::new(crate::services::auth::PASSWORD_LOGIN_DISABLED));
+    }
 
     if new_password.len() < 6 {
         return Err(ServerFnError::new("Пароль занадто короткий (мін. 6 символів)"));
@@ -395,12 +401,14 @@ pub async fn get_my_account() -> Result<AccountInfo, ServerFnError> {
         delta_nick: Option<String>,
         avatar_path: Option<String>,
         created_at: String,
+        managed_by_iks: bool,
     }
 
     let account = AccountWithDate::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
         "SELECT login, display_name, first_name, last_name, rank, phone, callsign, \
-                delta_nick, avatar_path, to_char(created_at, 'YYYY-MM-DD') AS created_at \
+                delta_nick, avatar_path, to_char(created_at, 'YYYY-MM-DD') AS created_at, \
+                (oidc_sub IS NOT NULL) AS managed_by_iks \
          FROM user_account WHERE id = $1",
         [auth_user.user_id.into()],
     ))
@@ -432,6 +440,7 @@ pub async fn get_my_account() -> Result<AccountInfo, ServerFnError> {
         avatar_url,
         roles,
         created_at: account.created_at,
+        managed_by_iks: account.managed_by_iks,
     })
 }
 

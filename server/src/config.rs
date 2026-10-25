@@ -8,6 +8,9 @@ pub struct Config {
     pub worker_threads: usize,
     pub log_level: String,
     pub nats_url: String,
+    /// Вхід через ІКС — OIDC_ISSUER/OIDC_CLIENT_ID/OIDC_CLIENT_SECRET/OIDC_REDIRECT_URI/OIDC_GROUP
+    /// (усі п'ять або жодної; див. `oidc::OidcConfig::from_env`).
+    pub oidc: Option<crate::oidc::OidcConfig>,
 }
 
 impl Config {
@@ -33,6 +36,7 @@ impl Config {
             // ручний `docker run ... -p 4222:4222 nats:2-alpine -js` у MEMORY.md). Relay сам не
             // падає, якщо тут щось недосяжне (§3.1) — це не обов'язковий для старту сервіс.
             nats_url: env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string()),
+            oidc: crate::oidc::OidcConfig::from_env(),
         }
     }
 }

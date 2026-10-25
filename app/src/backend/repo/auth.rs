@@ -479,3 +479,132 @@ pub async fn set_can_see_org_names(
     .await?;
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Вхід через ІКС (OIDC, 12-auth.md §2.5)
+// ---------------------------------------------------------------------------
+
+/// Обліковий запис, знайдений для входу через ІКС.
+#[derive(Debug, Clone, FromQueryResult)]
+pub struct SsoAccount {
+    pub id: i32,
+    pub login: String,
+    pub is_active: bool,
+    pub oidc_sub: Option<String>,
+}
+
+/// Пошук за логіном без урахування регістру (`preferred_username` з ІКС ↔ `user_account.login`).
+/// Якщо в базі історично є кілька логінів, що різняться лише регістром, — перевага точному
+/// збігу, далі найстарішому запису (детерміновано, без "випадкового" вибору).
+pub async fn find_user_for_sso(db: &DatabaseConnection, login: &str) -> Result<Option<SsoAccount>, DbErr> {
+    SsoAccount::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT id, login, is_active, oidc_sub FROM user_account \
+         WHERE lower(login) = lower($1) \
+         ORDER BY (login = $1) DESC, id LIMIT 1",
+        [login.into()],
+    ))
+    .one(db)
+    .await
+}
+
+/// Чи прив'язано цей `sub` до якогось облікового запису (для захисту від перейменувань у ІКС).
+pub async fn find_user_id_by_oidc_sub(db: &DatabaseConnection, sub: &str) -> Result<Option<i32>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct IdRow { id: i32 }
+    Ok(IdRow::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT id FROM user_account WHERE oidc_sub = $1",
+        [sub.into()],
+    ))
+    .one(db)
+    .await?
+    .map(|r| r.id))
+}
+
+/// Новий обліковий запис з ІКС: без пароля (хеш-заглушка, яку argon2 не розбере — парольний
+/// вхід для нього неможливий), неактивний до рішення адміністратора, роль `viewer` в
+/// організації адміністратора (той самий дефолт, що `admin_create_user` — там береться org
+/// адміна, що створює). Без жодного адміна в базі роль не додається.
+pub async fn create_sso_user(
+    db: &DatabaseConnection,
+    login: &str,
+    oidc_sub: &str,
+) -> Result<i32, DbErr> {
+    #[derive(FromQueryResult)]
+    struct NewId { id: i32 }
+    let row = NewId::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "INSERT INTO user_account (login, password_hash, must_change_password, is_active, oidc_sub) \
+         VALUES ($1, '!sso', false, false, $2) RETURNING id",
+        [login.into(), oidc_sub.into()],
+    ))
+    .one(db)
+    .await?
+    .ok_or(DbErr::Custom("INSERT user_account returned nothing".into()))?;
+
+    #[derive(FromQueryResult)]
+    struct AdminOrg { org_id: i32 }
+    let admin_org = AdminOrg::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT org_id FROM user_role WHERE role = 'admin' ORDER BY id LIMIT 1",
+        [],
+    ))
+    .one(db)
+    .await?;
+    if let Some(org) = admin_org {
+        add_user_role(db, row.id, org.org_id, "viewer").await?;
+    }
+    Ok(row.id)
+}
+
+/// Прив'язати наявний обліковий запис до профілю ІКС (перший вхід через ІКС).
+pub async fn bind_oidc_sub(db: &DatabaseConnection, user_id: i32, oidc_sub: &str) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "UPDATE user_account SET oidc_sub = $1, updated_at = now() WHERE id = $2 AND oidc_sub IS NULL",
+        [oidc_sub.into(), user_id.into()],
+    ))
+    .await?;
+    Ok(())
+}
+
+/// Профіль з ІКС — джерело істини для полів профілю: перезаписуємо при кожному вході.
+/// `None` у claim = поле в ІКС порожнє → і тут порожнє (дані "спільні всюди").
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SsoProfile {
+    pub display_name: Option<String>,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub rank: Option<String>,
+    pub phone: Option<String>,
+    pub callsign: Option<String>,
+    pub delta_nick: Option<String>,
+}
+
+pub async fn sync_sso_profile(db: &DatabaseConnection, user_id: i32, p: &SsoProfile) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "UPDATE user_account SET display_name = COALESCE($1, display_name), \
+                first_name = $2, last_name = $3, rank = $4, phone = $5, callsign = $6, \
+                delta_nick = $7, updated_at = now() \
+         WHERE id = $8",
+        [
+            p.display_name.clone().into(), p.first_name.clone().into(), p.last_name.clone().into(),
+            p.rank.clone().into(), p.phone.clone().into(), p.callsign.clone().into(),
+            p.delta_nick.clone().into(), user_id.into(),
+        ],
+    ))
+    .await?;
+    Ok(())
+}
+
+pub async fn set_avatar_path(db: &DatabaseConnection, user_id: i32, path: Option<&str>) -> Result<(), DbErr> {
+    db.execute(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "UPDATE user_account SET avatar_path = $1, updated_at = now() WHERE id = $2",
+        [path.map(|s| s.to_string()).into(), user_id.into()],
+    ))
+    .await?;
+    Ok(())
+}

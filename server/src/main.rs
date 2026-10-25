@@ -69,7 +69,14 @@ async fn run(config: config::Config) {
     let shared_nats: bus::SharedNatsClient = std::sync::Arc::new(std::sync::Mutex::new(None));
     let (chat_tx, _) = tokio::sync::broadcast::channel(256);
     let chat_tx = std::sync::Arc::new(chat_tx);
-    let app_state = AppState { leptos_options, db, nats: shared_nats.clone(), chat_tx };
+    let oidc = server::oidc::from_config(config.oidc.clone());
+    if oidc.is_some() {
+        tracing::info!("вхід через ІКС увімкнено");
+    }
+    if app::services::auth::password_login_enabled() {
+        tracing::warn!("PASSWORD_LOGIN=1 — аварійний вхід за паролем увімкнено");
+    }
+    let app_state = AppState { leptos_options, db, nats: shared_nats.clone(), chat_tx, oidc };
 
     // Перша фонова задача в цьому проєкті (09-messaging.md §3.1, Фаза 1) -- `tokio::spawn`, не
     // блокує запуск: NATS недоступний при старті — relay сам ретраїть, сервер піднімається як

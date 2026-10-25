@@ -23,3 +23,4 @@
 | `state.rs` | `AppState` (`FromRef`) — `LeptosOptions`+`DatabaseConnection`+`bus::SharedNatsClient` для axum-роутера | `main.rs` |
 | `relay.rs` | `run()` — фонова задача: непубліковані рядки `outbox` → NATS JetStream (таймер-опитувач, не LISTEN/NOTIFY), забезпечує стрім `EVENTS` | `main.rs` (`tokio::spawn`) |
 | `admin_sse.rs` | `whatsapp_status_stream` — SSE з NATS KV `notifier_status`, QR → SVG на сервері | `main.rs` (маршрут `/api/admin/whatsapp/events`) |
+| `oidc.rs` | Вхід через ІКС (OIDC, Pocket ID, 12-auth.md §2.5): `/api/auth/methods`, `/api/auth/oidc/login`, `/api/auth/oidc/callback`; PKCE/state/nonce, перевірка id_token, доступ за групою, мапінг акаунта, синхронізація профілю й аватара; сесію створює через `api::start_session` | `api.rs` (`api_router` → `.merge(oidc::router())`), `main.rs` (`oidc::from_config`) |

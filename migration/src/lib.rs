@@ -69,6 +69,7 @@ mod m20261005_000066_add_org_masked_label;
 mod m20261006_000067_allow_duplicate_groups;
 mod m20261006_000068_drop_fake_discrepancies;
 mod m20261006_000069_seed_ukraine_cities;
+mod m20261025_000070_add_user_oidc_sub;
 
 pub struct Migrator;
 
@@ -177,6 +178,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20261006_000068_drop_fake_discrepancies::Migration),
             // Довідник: усі міста України (460 унікальних назв).
             Box::new(m20261006_000069_seed_ukraine_cities::Migration),
+            // Вхід через ІКС: прив'язка облікового запису до профілю Pocket ID (claim `sub`).
+            Box::new(m20261025_000070_add_user_oidc_sub::Migration),
         ]
     }
 }

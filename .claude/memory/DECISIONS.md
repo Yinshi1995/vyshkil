@@ -43,3 +43,4 @@ date: 2026-09-27
 - [Dev-VM: параметри](../decisions/dev-vm-parameters.md) — RAM/мережа/git-remote/source_files, зафіксовані відповідями замовника + реальною інвентаризацією хоста, не вгадані.
 - [Прод через cf-connector, VLAN 90 за VyOS](../decisions/prod-cloudflare-tunnel.md) — ревізія 2: без окремого cloudflared на VM.
 - [Автодеплой проду — таймер на прод-VM, збірка там же](../decisions/prod-autodeploy-pull.md) — без dev-VM і без GitHub Actions (billing-блок, платити не будемо); від GitHub лише git fetch.
+- [Вхід через ІКС (OIDC, Pocket ID)](../decisions/iks-sso-oidc.md) — єдиний штатний вхід: PKCE+state+nonce, доступ за групою, мапінг за логіном з прив'язкою `sub`, нові акаунти неактивні до адміна, профіль синхронізується з ІКС; пароль — лише при `PASSWORD_LOGIN=1`.

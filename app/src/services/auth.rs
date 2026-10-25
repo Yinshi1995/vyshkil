@@ -2,9 +2,25 @@ use leptos::prelude::*;
 
 use crate::types::auth::{LoginResponse, UserRoleRow};
 
+/// Аварійний вхід за паролем (12-auth.md §2.1): основний і єдиний штатний шлях — «Увійти через
+/// ІКС» (§2.5). Парольний вхід, зміна/скидання пароля, створення акаунта з тимчасовим паролем і
+/// «Запросити обліковий запис» працюють лише при `PASSWORD_LOGIN=1` на сервері (за замовчуванням
+/// вимкнено). Читається з env на кожен виклик — дешево, і вмикається без перезбірки.
+#[cfg(feature = "ssr")]
+pub fn password_login_enabled() -> bool {
+    std::env::var("PASSWORD_LOGIN").map(|v| v.trim() == "1").unwrap_or(false)
+}
+
+#[cfg(feature = "ssr")]
+pub const PASSWORD_LOGIN_DISABLED: &str = "Вхід за паролем вимкнено — увійдіть через ІКС";
+
 #[server(AuthLogin, "/api")]
 pub async fn auth_login(login: String, password: String) -> Result<LoginResponse, ServerFnError> {
     use crate::backend::repo;
+
+    if !password_login_enabled() {
+        return Err(ServerFnError::new(PASSWORD_LOGIN_DISABLED));
+    }
 
     let client_ip = extract_client_ip().await.unwrap_or_default();
     if !check_rate_limit(&client_ip) {
@@ -226,6 +242,9 @@ pub async fn change_password(
     use argon2::password_hash::{SaltString, rand_core::OsRng};
     use sea_orm::FromQueryResult;
 
+    if !password_login_enabled() {
+        return Err(ServerFnError::new(PASSWORD_LOGIN_DISABLED));
+    }
     if new_password.len() < 6 {
         return Err(ServerFnError::new("Новий пароль занадто короткий (мін. 6 символів)"));
     }

@@ -15,3 +15,12 @@ app_stack_postgres_notifier_user: notifier
 # NATS
 app_stack_nats_app_user: app
 app_stack_nats_notifier_user: notifier
+
+# Вхід через ІКС (OIDC, 12-auth.md §2.5). Секрет — vault_oidc_client_secret у vault; без нього
+# OIDC_CLIENT_SECRET порожній → вхід через ІКС вимкнено (застосунок стартує як завжди).
+app_stack_oidc_issuer: https://id.lab.okpivden.uk
+app_stack_oidc_client_id: vyshkil
+app_stack_oidc_redirect_uri: https://vyshkil.lab.okpivden.uk/api/auth/oidc/callback
+app_stack_oidc_group: vyshkil
+# Аварійний вхід за паролем: "1" — увімкнено. Штатно вимкнено.
+app_stack_password_login: "0"

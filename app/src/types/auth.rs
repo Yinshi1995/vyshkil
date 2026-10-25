@@ -122,6 +122,10 @@ pub struct AccountInfo {
     pub avatar_url: Option<String>,
     pub roles: Vec<String>,
     pub created_at: String,
+    /// Профіль ведеться в ІКС (обліковий запис прив'язано до Pocket ID): поля профілю й аватар
+    /// перезаписуються з ІКС при кожному вході через ІКС.
+    #[serde(default)]
+    pub managed_by_iks: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

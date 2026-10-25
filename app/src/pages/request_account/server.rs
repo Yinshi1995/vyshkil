@@ -6,6 +6,9 @@ pub async fn request_account(contact: String, unit: String, message: String) -> 
     use crate::backend::repo;
     use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
 
+    if !crate::services::auth::password_login_enabled() {
+        return Err(ServerFnError::new(crate::services::auth::PASSWORD_LOGIN_DISABLED));
+    }
     if contact.trim().is_empty() {
         return Err(ServerFnError::new("Вкажіть контактні дані"));
     }

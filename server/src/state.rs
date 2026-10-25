@@ -20,4 +20,6 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub nats: SharedNatsClient,
     pub chat_tx: ChatTx,
+    /// Вхід через ІКС (OIDC); `None` — не налаштовано (OIDC_* env), кнопка на /login прихована.
+    pub oidc: Option<Arc<crate::oidc::Oidc>>,
 }

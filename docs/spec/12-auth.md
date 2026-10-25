@@ -59,7 +59,12 @@ status: чернетка (потребує підтвердження замов
 
 ## 2. Потоки
 
-### 2.1 Логін/пароль
+### 2.1 Логін/пароль (аварійний режим)
+
+З 2026-10-25 штатний вхід — лише через ІКС (§2.5). Парольний вхід і все, що без нього не має
+сенсу (зміна/скидання пароля, створення акаунта з тимчасовим паролем, «Запросити обліковий
+запис»), працює тільки при `PASSWORD_LOGIN=1` на сервері; інакше ці ендпоінти віддають 404, а UI
+їх ховає ([[iks-sso-oidc]]).
 
 1. `POST /api/auth/login` — `{ login, password }`.
 2. Сервер: знайти `user_account` за `login`, верифікувати `password_hash` (argon2id).
@@ -77,6 +82,32 @@ status: чернетка (потребує підтвердження замов
    - `POST /api/auth/passkey/login/begin` → `PublicKeyCredentialRequestOptions`.
    - Клієнт: `navigator.credentials.get()`.
    - `POST /api/auth/passkey/login/finish` → session cookie.
+
+### 2.5 Вхід через ІКС (OIDC, Pocket ID)
+
+Рішення — `.claude/decisions/iks-sso-oidc.md`; код — `server/src/oidc.rs`.
+
+Конфіг (env; усі п'ять або жодної — інакше кнопка прихована): `OIDC_ISSUER`
+(`https://id.lab.okpivden.uk`), `OIDC_CLIENT_ID` (`vyshkil`), `OIDC_CLIENT_SECRET`,
+`OIDC_REDIRECT_URI` (`https://vyshkil.lab.okpivden.uk/api/auth/oidc/callback`), `OIDC_GROUP`
+(`vyshkil`).
+
+1. `GET /api/auth/methods` → `{ sso, password, sso_url }` — що показувати на `/login`.
+2. `GET /api/auth/oidc/login` → state/nonce/PKCE-verifier у пам'яті сервера (TTL 10 хв),
+   cookie `oidc_state` (HttpOnly, SameSite=Lax, Path=/api/auth/oidc), 303 на
+   `authorization_endpoint` (scope `openid profile email groups`, S256).
+3. `GET /api/auth/oidc/callback?code&state` → state = cookie, одноразово; обмін коду
+   (`client_secret_basic` + `code_verifier`); id_token: `iss`, `aud`/`azp`, `exp`, `nonce`.
+4. Доступ лише якщо `groups` ∋ `OIDC_GROUP`.
+5. Акаунт: `lower(login) = lower(preferred_username)`; `sub` → `user_account.oidc_sub`
+   (UNIQUE, міграція 070). Невідповідність `sub` ↔ логін — конфлікт.
+   Нового — створити неактивним, роль `viewer` в org першого адміна, без пароля.
+6. Профіль з claims (`name`/`given_name`/`family_name`/`rank`/`callsign`/`phone`/`delta_nick`)
+   перезаписується при кожному вході; `picture` (лише з хоста ІКС) → `data/avatars/`.
+7. Неактивний акаунт → без сесії. Інакше — звичайна cookie `session` (як §2.1), 303 на `/`.
+8. Помилки → 303 на `/login?sso_error=<код>`: `disabled`, `unavailable`, `denied`, `state`,
+   `token`, `forbidden`, `pending` («Обліковий запис створено, чекає адміністратора»),
+   `inactive`, `conflict`, `internal`.
 
 ### 2.3 Перемикання актора
 

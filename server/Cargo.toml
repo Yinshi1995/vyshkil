@@ -50,6 +50,13 @@ serde = { workspace = true }
 # default-features = false: вимикаємо статистику використання секцій mimalloc, яка на віддалених
 # ОС не завжди коректно білдиться і нам тут не потрібна — лишаємо тільки сам аллокатор.
 mimalloc = { version = "0.1", default-features = false }
+# Вхід через ІКС (OIDC, Pocket ID) — server/src/oidc.rs. HTTP-клієнт до id.lab (discovery,
+# token endpoint, аватар) — rustls, не openssl ([[rustls-over-openssl]]).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# PKCE S256 (RFC 7636) і декодування id_token (base64url).
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
 
 [dev-dependencies]
 # tests/relay.rs: TEST_DATABASE_URL/TEST_NATS_URL-гейтований інтеграційний тест (09 §6).

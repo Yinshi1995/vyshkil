@@ -110,6 +110,23 @@ fn actor_or_err(user: &AuthUser) -> Result<Actor, StatusCode> {
 // Auth
 // ---------------------------------------------------------------------------
 
+/// Cookie сесії — однакова для входу за паролем і через ІКС (`oidc.rs`).
+pub(crate) fn session_cookie(session_id: &str) -> String {
+    format!("session={session_id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000")
+}
+
+/// Сесія з першою роллю користувача як активним актором — так само, як при вході за паролем.
+pub(crate) async fn start_session(db: &DatabaseConnection, user_id: i32) -> Result<String, sea_orm::DbErr> {
+    let roles = repo::auth::user_roles(db, user_id).await?;
+    let (first_org, first_role) = roles.first().map(|r| (Some(r.org_id), Some(r.role.as_str()))).unwrap_or((None, None));
+    repo::auth::create_session(db, user_id, first_org, first_role).await
+}
+
+/// Аварійний парольний режим (`PASSWORD_LOGIN=1`) вимкнено → парольні ендпоінти "не існують" (404).
+fn password_routes_disabled() -> bool {
+    !app::services::auth::password_login_enabled()
+}
+
 #[derive(Deserialize)]
 struct LoginReq {
     login: String,
@@ -121,6 +138,9 @@ async fn login_handler(
     headers: HeaderMap,
     Json(body): Json<LoginReq>,
 ) -> impl IntoResponse {
+    if password_routes_disabled() {
+        return err(StatusCode::NOT_FOUND, app::services::auth::PASSWORD_LOGIN_DISABLED).into_response();
+    }
     let db = &state.db;
 
     let client_ip = headers
@@ -205,7 +225,7 @@ async fn login_handler(
         Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()).into_response(),
     };
 
-    let cookie = format!("session={session_id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000");
+    let cookie = session_cookie(&session_id);
 
     (
         [(header::SET_COOKIE, cookie)],
@@ -323,6 +343,9 @@ async fn change_password_handler(
     use argon2::password_hash::{SaltString, rand_core::OsRng};
     use sea_orm::FromQueryResult;
 
+    if password_routes_disabled() {
+        return Err(StatusCode::NOT_FOUND);
+    }
     let user = require_auth(&state.db, &headers).await?;
 
     if body.new_password.len() < 6 {
@@ -378,11 +401,13 @@ async fn account_handler(
         delta_nick: Option<String>,
         avatar_path: Option<String>,
         created_at: String,
+        managed_by_iks: bool,
     }
     let row = AccountRow::find_by_statement(sea_orm::Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
         "SELECT login, display_name, first_name, last_name, rank, phone, callsign, \
-                delta_nick, avatar_path, to_char(created_at, 'YYYY-MM-DD') AS created_at \
+                delta_nick, avatar_path, to_char(created_at, 'YYYY-MM-DD') AS created_at, \
+                (oidc_sub IS NOT NULL) AS managed_by_iks \
          FROM user_account WHERE id = $1",
         [user.user_id.into()],
     ))
@@ -410,6 +435,7 @@ async fn account_handler(
         avatar_url,
         roles,
         created_at: row.created_at,
+        managed_by_iks: row.managed_by_iks,
     }))
 }
 
@@ -734,6 +760,10 @@ async fn request_account_handler(
 ) -> impl IntoResponse {
     use sea_orm::{ConnectionTrait, FromQueryResult, Statement};
 
+    // Без паролів обліковий запис з'являється сам при першому вході через ІКС.
+    if password_routes_disabled() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     if body.contact.trim().is_empty() {
         return err(StatusCode::BAD_REQUEST, "Вкажіть контактні дані").into_response();
     }
@@ -1632,6 +1662,9 @@ async fn admin_create_user_handler(
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
     let admin = require_admin_actor(&user)?;
+    if password_routes_disabled() {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     if body.login.len() < 3 || body.temp_password.len() < 6 {
         return Err(StatusCode::BAD_REQUEST);
@@ -1667,6 +1700,9 @@ async fn admin_reset_password_handler(
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
     let admin = require_admin_actor(&user)?;
+    if password_routes_disabled() {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     if !can_manage_user(&state.db, admin, target_id).await? {
         return Err(StatusCode::FORBIDDEN);
@@ -4052,6 +4088,8 @@ pub fn api_router() -> Router<AppState> {
         .route("/api/avatars/:filename", get(avatar_serve_handler))
         .route("/api/auth/request-account", post(request_account_handler))
         .route("/api/directory", get(directory_handler))
+        // Вхід через ІКС (OIDC) + /api/auth/methods
+        .merge(crate::oidc::router())
         // Dashboard
         .route("/api/dashboard/stats", get(dashboard_stats_handler))
         .route("/api/dashboard/pipeline", get(dashboard_pipeline_handler))
