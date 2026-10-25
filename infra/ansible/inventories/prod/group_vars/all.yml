@@ -53,8 +53,7 @@ docker_dns_servers:
 firewall_allowed_tcp_ports:
   - 22
 firewall_published_ports:
-  - port: 3000
-    source: "{{ prod_cf_connector_ip }}"
+  # Публічного домену (Cloudflare → cf-connector) більше немає: Вишкіл лише через тунель і вхід ІКС.
   # NetBird-шлюз (VM 195): адмінки через тунель, vyshkil.lab.okpivden.uk
   - port: 3000
     source: 10.60.0.30
