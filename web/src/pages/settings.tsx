@@ -91,7 +91,10 @@ import {
   ChevronUp,
   Eye,
   EyeOff,
+  Fingerprint,
+  ExternalLink,
 } from "lucide-react";
+import { useAuthMethods } from "@/lib/auth-methods";
 
 // ---------------------------------------------------------------------------
 // Account
@@ -199,7 +202,7 @@ function AvatarCropDialog({
   );
 }
 
-function AvatarUpload({ url, onUploaded }: { url: string | null; onUploaded: (url: string | null) => void }) {
+function AvatarUpload({ url, onUploaded, readOnly = false }: { url: string | null; onUploaded: (url: string | null) => void; readOnly?: boolean }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -253,6 +256,8 @@ function AvatarUpload({ url, onUploaded }: { url: string | null; onUploaded: (ur
           <User className="h-10 w-10 text-muted-foreground" />
         )}
       </div>
+      {/* Аватар з ІКС — змінюється там, локальне завантаження перезаписалося б при вході. */}
+      {!readOnly && (<>
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
@@ -273,6 +278,7 @@ function AvatarUpload({ url, onUploaded }: { url: string | null; onUploaded: (ur
         </button>
       )}
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+      </>)}
       {cropSrc && (
         <AvatarCropDialog
           src={cropSrc}
@@ -304,6 +310,7 @@ function AccountSection() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [rolesExpanded, setRolesExpanded] = useState(false);
+  const methods = useAuthMethods();
 
   useEffect(() => {
     api.get<AccountInfo>("/auth/account").then((data) => {
@@ -346,6 +353,8 @@ function AccountSection() {
 
   if (!info) return <Skeleton className="h-64 w-full rounded-lg" />;
 
+  // Профіль з ІКС: поля й аватар перезаписуються при кожному вході — редагувати тут марно.
+  const managed = !!info.managed_by_iks;
   const ROLES_PREVIEW = 5;
   const hasMore = info.roles.length > ROLES_PREVIEW;
   const visibleRoles = rolesExpanded ? info.roles : info.roles.slice(0, ROLES_PREVIEW);
@@ -357,7 +366,7 @@ function AccountSection() {
         <div className="h-16" style={{ background: "linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary) 60%, transparent) 100%)" }} />
         <CardContent className="relative pt-0 -mt-10">
           <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
-            <AvatarUpload url={avatarUrl} onUploaded={(url) => { setAvatarUrl(url); refreshUser(); }} />
+            <AvatarUpload url={avatarUrl} readOnly={managed} onUploaded={(url) => { setAvatarUrl(url); refreshUser(); }} />
             <div className="flex-1 flex flex-col gap-0.5 pb-1">
               <h3 className="text-lg font-bold leading-tight">
                 {callsign || firstName || info.login}
@@ -377,7 +386,26 @@ function AccountSection() {
 
           <Separator className="my-4" />
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {managed && (
+            <div className="mb-4 flex flex-col gap-2 rounded-lg border border-primary/30 p-3 sm:flex-row sm:items-center">
+              <Fingerprint className="h-4 w-4 shrink-0 text-primary" />
+              <p className="flex-1 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Профіль ведеться в ІКС.</span>{" "}
+                Ім'я, звання, позивний, телефон, нік Delta й аватар оновлюються з ІКС при кожному вході —
+                змінюйте їх там, і вони стануть однаковими в усіх застосунках.
+              </p>
+              {methods?.sso_url && (
+                <a href={methods.sso_url} target="_blank" rel="noreferrer">
+                  <Button variant="outline" size="sm">
+                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                    Відкрити ІКС
+                  </Button>
+                </a>
+              )}
+            </div>
+          )}
+
+          <fieldset disabled={managed} className="m-0 grid min-w-0 gap-4 border-0 p-0 sm:grid-cols-2 lg:grid-cols-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="callsign">Позивний / нік</Label>
               <Input id="callsign" placeholder="Ваш позивний" value={callsign} onChange={d(setCallsign)} />
@@ -406,9 +434,9 @@ function AccountSection() {
               <Label>Логін</Label>
               <Input value={info.login} disabled className="opacity-60" />
             </div>
-          </div>
+          </fieldset>
 
-          {dirty && (
+          {dirty && !managed && (
             <div className="mt-4">
               <Button size="sm" onClick={handleSaveProfile} disabled={saving}>
                 {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
@@ -456,19 +484,24 @@ function AccountSection() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Змінити пароль</p>
-              <p className="text-xs text-muted-foreground">Рекомендуємо міняти кожні 90 днів</p>
-            </div>
-            <Link to="/change-password">
-              <Button variant="outline" size="sm">
-                <KeyRound className="mr-1.5 h-3.5 w-3.5" />
-                Змінити
-              </Button>
-            </Link>
-          </div>
-          <Separator />
+          {/* Зміна пароля — лише в аварійному парольному режимі (PASSWORD_LOGIN=1). */}
+          {methods?.password && (
+            <>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Змінити пароль</p>
+                  <p className="text-xs text-muted-foreground">Рекомендуємо міняти кожні 90 днів</p>
+                </div>
+                <Link to="/change-password">
+                  <Button variant="outline" size="sm">
+                    <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                    Змінити
+                  </Button>
+                </Link>
+              </div>
+              <Separator />
+            </>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Вийти з системи</p>
@@ -1113,6 +1146,9 @@ function RolesCell({ roles }: { roles: AdminUserRow["roles"] }) {
 function UserManagementSection() {
   const [users, setUsers] = useState<AdminUserRow[] | null>(null);
   const { prompt: promptDialog, dialog: confirmDialog } = useConfirm();
+  // Без паролів акаунти створюються самі при першому вході через ІКС (неактивними — тут їх
+  // активують); створення з тимчасовим паролем і скидання пароля — лише при PASSWORD_LOGIN=1.
+  const passwordMode = useAuthMethods()?.password ?? false;
 
   const loadUsers = useCallback(() => {
     api.get<AdminUserRow[]>("/admin/users").then(setUsers).catch(() => setUsers([]));
@@ -1167,7 +1203,7 @@ function UserManagementSection() {
           <UsersIcon className="h-4 w-4 text-primary" />
           Користувачі
         </CardTitle>
-        <CreateUserDialog onCreated={loadUsers} />
+        {passwordMode && <CreateUserDialog onCreated={loadUsers} />}
       </CardHeader>
       <CardContent>
         {users.length === 0 ? (
@@ -1199,14 +1235,16 @@ function UserManagementSection() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Скинути пароль"
-                          onClick={() => handleResetPassword(u.id)}
-                        >
-                          <KeyRound className="h-4 w-4" />
-                        </Button>
+                        {passwordMode && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Скинути пароль"
+                            onClick={() => handleResetPassword(u.id)}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"

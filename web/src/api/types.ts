@@ -168,6 +168,8 @@ export interface AccountInfo {
   avatar_url: string | null;
   roles: string[];
   created_at: string;
+  /** Профіль ведеться в ІКС: поля й аватар оновлюються з ІКС при кожному вході. */
+  managed_by_iks?: boolean;
 }
 
 export interface DirectoryUser {

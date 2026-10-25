@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/auth";
+import { useAuthMethods } from "@/lib/auth-methods";
 import { ThemeProvider } from "@/context/theme";
 import { AppLayout } from "@/components/layout/app-layout";
 import { PageTransition } from "@/components/page-transition";
@@ -45,13 +46,21 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+// Сторінки, що мають сенс лише в аварійному парольному режимі (PASSWORD_LOGIN=1).
+function RequirePasswordMode({ children }: { children: ReactNode }) {
+  const methods = useAuthMethods();
+  if (!methods) return <PageLoader />;
+  if (!methods.password) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/change-password" element={<ChangePasswordPage />} />
-        <Route path="/request-account" element={<RequestAccountPage />} />
+        <Route path="/change-password" element={<RequirePasswordMode><ChangePasswordPage /></RequirePasswordMode>} />
+        <Route path="/request-account" element={<RequirePasswordMode><RequestAccountPage /></RequirePasswordMode>} />
         <Route
           path="/*"
           element={

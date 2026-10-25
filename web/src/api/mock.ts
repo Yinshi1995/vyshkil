@@ -98,6 +98,8 @@ type MockHandler = (url: string, body?: unknown) => unknown | null;
 
 const routes: MockHandler[] = [
   (url) => { if (url === "/api/auth/me") return MOCK_USER; return null; },
+  // Моки: ІКС недоступний, лишаємо парольну форму (admin/admin123).
+  (url) => { if (url === "/api/auth/methods") return { sso: false, password: true, sso_url: null }; return null; },
   (url, body) => {
     if (url === "/api/auth/login") {
       const b = body as { login: string; password: string } | undefined;

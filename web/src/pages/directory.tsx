@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/auth";
+import { useAuthMethods } from "@/lib/auth-methods";
 import { api } from "@/api/client";
 import type { DirectoryUser } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +60,8 @@ function UserCard({
   isAdmin: boolean;
   isSelf: boolean;
   onToggleActive: (userId: number) => void;
-  onResetPassword: (userId: number) => void;
+  /** Лише в аварійному парольному режимі (PASSWORD_LOGIN=1). */
+  onResetPassword?: (userId: number) => void;
   onMessage: (userId: number) => void;
 }) {
   const name = user.callsign ?? user.display_name ?? user.login;
@@ -163,16 +165,18 @@ function UserCard({
                       <><UserCheck className="h-3.5 w-3.5 sm:mr-1 sm:h-3 sm:w-3" /><span className="hidden sm:inline">Розблокувати</span></>
                     )}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-1.5 sm:px-2 text-[11px]"
-                    onClick={() => onResetPassword(user.user_id)}
-                    title="Скинути пароль"
-                  >
-                    <KeyRound className="h-3.5 w-3.5 sm:mr-1 sm:h-3 sm:w-3" />
-                    <span className="hidden sm:inline">Пароль</span>
-                  </Button>
+                  {onResetPassword && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 sm:px-2 text-[11px]"
+                      onClick={() => onResetPassword(user.user_id)}
+                      title="Скинути пароль"
+                    >
+                      <KeyRound className="h-3.5 w-3.5 sm:mr-1 sm:h-3 sm:w-3" />
+                      <span className="hidden sm:inline">Пароль</span>
+                    </Button>
+                  )}
                 </>
               )}
             </div>
@@ -185,6 +189,7 @@ function UserCard({
 
 export function DirectoryPage() {
   const { isAdmin, user: authUser } = useAuth();
+  const passwordMode = useAuthMethods()?.password ?? false;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<DirectoryUser[]>([]);
@@ -334,7 +339,7 @@ export function DirectoryPage() {
                     isAdmin={isAdmin}
                     isSelf={u.user_id === authUser?.user_id}
                     onToggleActive={handleToggleActive}
-                    onResetPassword={(id) => { setResetDialogUser(id); setNewPassword(""); }}
+                    onResetPassword={passwordMode ? (id) => { setResetDialogUser(id); setNewPassword(""); } : undefined}
                     onMessage={async (id) => {
                       try {
                         const res = await api.post<{ room_id: number }>(`/chat/dm/${id}`, {});
