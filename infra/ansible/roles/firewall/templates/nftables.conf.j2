@@ -38,6 +38,15 @@ table inet filter {
 {% endfor %}
         iifname "{{ firewall_external_iface }}" ct status dnat drop
 {% endif %}
+{% if firewall_iks_egress %}
+
+        # Мережа iks (app → ІКС): назовні лише HTTPS на проксі *.lab; дані застосунку з периметра
+        # не виходять (11 §0) — усе інше з цієї мережі відкидаємо.
+        # Відповіді на вхідні (опубліковані порти, Docker може DNAT-ити в цю мережу) — пропускаємо.
+        ip saddr {{ firewall_iks_egress.subnet }} ct state established,related accept
+        ip saddr {{ firewall_iks_egress.subnet }} ip daddr {{ firewall_iks_egress.dest }} tcp dport {{ firewall_iks_egress.port }} accept
+        ip saddr {{ firewall_iks_egress.subnet }} oifname "{{ firewall_external_iface }}" drop
+{% endif %}
     }
 
     chain output {

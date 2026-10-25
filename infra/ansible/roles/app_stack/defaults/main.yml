@@ -24,3 +24,8 @@ app_stack_oidc_redirect_uri: https://vyshkil.lab.okpivden.uk/api/auth/oidc/callb
 app_stack_oidc_group: vyshkil
 # Аварійний вхід за паролем: "1" — увімкнено. Штатно вимкнено.
 app_stack_password_login: "0"
+# Мережа app → ІКС (порожньо — без неї, app лишається повністю ізольованим). Хост і адреса
+# проксі *.lab, на якому живе Pocket ID; firewall пускає з цієї мережі лише туди й лише 443.
+app_stack_iks_subnet: ""
+app_stack_oidc_host: id.lab.okpivden.uk
+app_stack_iks_proxy_ip: 10.60.0.30

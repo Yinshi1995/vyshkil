@@ -1,5 +1,6 @@
 # Прод compose — згенеровано Ansible (roles/app_stack). Не редагувати вручну.
-# Мережі: internal (без інтернету), publish (локальний bridge без NAT), egress (notifier → WhatsApp).
+# Мережі: internal (без інтернету), publish (локальний bridge без NAT), egress (notifier → WhatsApp),
+# iks (app → ІКС/Pocket ID: лише HTTPS на проксі *.lab, решту ріже nftables хоста — roles/firewall).
 networks:
   internal:
     internal: true
@@ -9,6 +10,13 @@ networks:
       com.docker.network.bridge.enable_ip_masquerade: "false"
   egress:
     driver: bridge
+{% if app_stack_iks_subnet %}
+  iks:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: {{ app_stack_iks_subnet }}
+{% endif %}
 
 services:
   db:
@@ -52,7 +60,19 @@ services:
 
   app:
     image: vyshkil-app:latest
+{% if app_stack_iks_subnet %}
+    # Маршрут за замовчуванням — через iks (publish без NAT); назовні з iks пускає лише ІКС.
+    networks:
+      internal: {}
+      publish: {}
+      iks:
+        gw_priority: 1
+    # ІКС без DNS у контейнері: адреса проксі *.lab — прямо тут.
+    extra_hosts:
+      - "{{ app_stack_oidc_host }}:{{ app_stack_iks_proxy_ip }}"
+{% else %}
     networks: [internal, publish]
+{% endif %}
     depends_on:
       db:
         condition: service_healthy

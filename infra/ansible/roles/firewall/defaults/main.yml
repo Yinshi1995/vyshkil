@@ -11,3 +11,5 @@ firewall_published_ports: []
 # Порти хоста лише з конкретної адреси: [{port: 9100, source: 10.70.0.40}] (node_exporter для Пульта).
 firewall_allowed_tcp_from: []
 firewall_external_iface: "{{ ansible_default_ipv4.interface | default('eth0') }}"
+# Вихід контейнерів до ІКС: {subnet: 172.31.90.0/24, dest: 10.60.0.30, port: 443}. Порожньо — правил немає.
+firewall_iks_egress: {}

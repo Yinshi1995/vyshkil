@@ -73,3 +73,10 @@ app_stack_compose_dir: "/opt/vyshkil"
 app_stack_data_dir: "/opt/vyshkil/data"
 app_stack_images_dir: "/opt/vyshkil/images"
 app_stack_app_bind_addr: "{{ prod_vm_ip }}"
+
+# --- Вхід через ІКС: застосунку — вузький вихід лише на Pocket ID (проксі *.lab, 10.60.0.30:443) ---
+app_stack_iks_subnet: 172.31.90.0/24
+firewall_iks_egress:
+  subnet: 172.31.90.0/24
+  dest: 10.60.0.30
+  port: 443
