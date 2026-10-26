@@ -620,7 +620,7 @@ async fn complete_login(
         }
         Mapping::Create => {
             let id = repo::auth::create_sso_user(db, &login, &claims.sub).await.map_err(ise)?;
-            tracing::info!("вхід через ІКС: створено обліковий запис id={id}, чекає адміністратора");
+            tracing::info!("вхід через ІКС: створено обліковий запис id={id} (переглядач, активний: доступ видано в Пульті)");
             (id, true)
         }
     };

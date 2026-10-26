@@ -536,7 +536,7 @@ pub async fn create_sso_user(
     let row = NewId::find_by_statement(Statement::from_sql_and_values(
         sea_orm::DatabaseBackend::Postgres,
         "INSERT INTO user_account (login, password_hash, must_change_password, is_active, oidc_sub) \
-         VALUES ($1, '!sso', false, false, $2) RETURNING id",
+         VALUES ($1, '!sso', false, true, $2) RETURNING id",
         [login.into(), oidc_sub.into()],
     ))
     .one(db)

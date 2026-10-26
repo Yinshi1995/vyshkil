@@ -101,7 +101,7 @@ status: чернетка (потребує підтвердження замов
 4. Доступ лише якщо `groups` ∋ `OIDC_GROUP`.
 5. Акаунт: `lower(login) = lower(preferred_username)`; `sub` → `user_account.oidc_sub`
    (UNIQUE, міграція 070). Невідповідність `sub` ↔ логін — конфлікт.
-   Нового — створити неактивним, роль `viewer` в org першого адміна, без пароля.
+   Нового — створити активним (доступ уже видано в Пульті: група ІКС `vyshkil`), роль `viewer` в org першого адміна, без пароля.
 6. Профіль з claims (`name`/`given_name`/`family_name`/`rank`/`callsign`/`phone`/`delta_nick`)
    перезаписується при кожному вході; `picture` (лише з хоста ІКС) → `data/avatars/`.
 7. Неактивний акаунт → без сесії. Інакше — звичайна cookie `session` (як §2.1), 303 на `/`.
