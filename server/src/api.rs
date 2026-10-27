@@ -718,8 +718,23 @@ async fn avatar_delete_handler(
 }
 
 async fn avatar_serve_handler(
+    State(state): State<AppState>,
     Path(filename): Path<String>,
 ) -> impl IntoResponse {
+    // Людина з ІКС: свіжий аватар з профілю ІКС (копія старша за хвилину оновлюється).
+    let mut filename = filename;
+    if !filename.contains(['/', '\\']) {
+        if let Some(id) = filename
+            .strip_prefix("user_")
+            .and_then(|r| r.split('.').next())
+            .and_then(|n| n.parse::<i32>().ok())
+        {
+            let current = format!("data/avatars/{filename}");
+            if let Some(f) = crate::oidc::refresh_avatar(&state, id, std::path::Path::new(&current)).await {
+                filename = f;
+            }
+        }
+    }
     let safe_name = filename.replace(['/', '\\', '.', '.'], "");
     let filepath = format!("data/avatars/{}", filename);
     let path = std::path::Path::new(&filepath);

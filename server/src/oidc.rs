@@ -692,6 +692,35 @@ async fn sync_avatar(oidc: &Oidc, db: &sea_orm::DatabaseConnection, user_id: i32
     repo::auth::set_avatar_path(db, user_id, Some(&filename)).await.map_err(|e| e.to_string())
 }
 
+/// Аватар людини з ІКС — свіжий: копія старша за хвилину оновлюється з профілю ІКС (там людина
+/// міняє фото сама), а не лише при вході. Повертає ім'я файлу (розширення може змінитися).
+pub async fn refresh_avatar(state: &AppState, user_id: i32, current: &std::path::Path) -> Option<String> {
+    let oidc = state.oidc.as_ref()?;
+    let fresh = std::fs::metadata(current)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < std::time::Duration::from_secs(60));
+    if fresh {
+        return None;
+    }
+    let sub = repo::auth::oidc_sub_of(&state.db, user_id).await.ok().flatten()?;
+    let url = format!("{}/api/users/{sub}/profile-picture.png", oidc.cfg.issuer.trim_end_matches('/'));
+    if !avatar_url_allowed(&url, &oidc.cfg.issuer) {
+        return None;
+    }
+    match sync_avatar(oidc, &state.db, user_id, &url).await {
+        Ok(()) => ["png", "jpg", "webp"]
+            .into_iter()
+            .map(|e| format!("user_{user_id}.{e}"))
+            .find(|f| std::path::Path::new("data/avatars").join(f).exists()),
+        Err(e) => {
+            tracing::warn!(user_id, error = %e, "аватар з ІКС не оновився");
+            None
+        }
+    }
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/auth/methods", get(methods_handler))

@@ -508,6 +508,20 @@ pub async fn find_user_for_sso(db: &DatabaseConnection, login: &str) -> Result<O
     .await
 }
 
+/// `sub` ІКС облікового запису (якщо вхід через ІКС уже був).
+pub async fn oidc_sub_of(db: &DatabaseConnection, user_id: i32) -> Result<Option<String>, DbErr> {
+    #[derive(FromQueryResult)]
+    struct SubRow { oidc_sub: Option<String> }
+    Ok(SubRow::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::Postgres,
+        "SELECT oidc_sub FROM user_account WHERE id = $1",
+        [user_id.into()],
+    ))
+    .one(db)
+    .await?
+    .and_then(|r| r.oidc_sub))
+}
+
 /// Чи прив'язано цей `sub` до якогось облікового запису (для захисту від перейменувань у ІКС).
 pub async fn find_user_id_by_oidc_sub(db: &DatabaseConnection, sub: &str) -> Result<Option<i32>, DbErr> {
     #[derive(FromQueryResult)]
