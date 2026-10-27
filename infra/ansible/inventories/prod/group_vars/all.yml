@@ -78,6 +78,8 @@ app_stack_app_bind_addr: "{{ prod_vm_ip }}"
 
 # --- Вхід через ІКС: застосунку — вузький вихід лише на Pocket ID (проксі *.lab, 10.60.0.30:443) ---
 app_stack_iks_subnet: 172.31.90.0/24
+# Вхід ІКС — через проксі *.lab LAB-EDGE (CT 161, адреса входу ІКС), docs/LAB-EDGE.md у репо pult
+app_stack_iks_proxy_ip: 10.61.0.40
 firewall_iks_egress:
   subnet: 172.31.90.0/24
   # Старий (VM 195) і новий (CT 161, адреса входу ІКС) проксі *.lab — на час переїзду обидва

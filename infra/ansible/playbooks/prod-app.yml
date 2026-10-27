@@ -1,0 +1,9 @@
+---
+# Лише стек застосунку прод-VM (compose, env) — для точкових змін без base/docker/firewall.
+- name: Застосунок прод-VM
+  hosts: prod
+  become: true
+  vars_files:
+    - ../inventories/prod/group_vars/vault.yml
+  roles:
+    - app_stack
