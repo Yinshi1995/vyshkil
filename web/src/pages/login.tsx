@@ -43,7 +43,26 @@ export function LoginPage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
+  // Без аварійного пароля вхід ІКС починається сам (за воротами ІКС сесія вже є — Pocket ID
+  // завершить його без сторінок). Кнопка лишається після помилки входу чи виходу з Вишколу.
+  const [loggedOut] = useState(() => {
+    try {
+      return sessionStorage.getItem("vyshkil.loggedOut") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const auto = !!methods?.sso && !methods.password && !ssoError && !loggedOut;
+  useEffect(() => {
+    if (auto) handleSso();
+  }, [auto]);
+
   function handleSso() {
+    try {
+      sessionStorage.removeItem("vyshkil.loggedOut");
+    } catch {
+      /* приватний режим */
+    }
     setSsoRedirecting(true);
     // Повна навігація, не fetch: сервер редиректить на ІКС і назад.
     window.location.href = "/api/auth/oidc/login";

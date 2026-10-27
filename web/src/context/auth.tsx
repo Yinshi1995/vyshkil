@@ -66,6 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await api.post("/auth/logout");
+    // Інакше сторінка входу одразу почне вхід ІКС і поверне назад (сесія ІКС ще жива).
+    try {
+      sessionStorage.setItem("vyshkil.loggedOut", "1");
+    } catch {
+      /* приватний режим */
+    }
     setUser(null);
     navigate("/login");
   }, [navigate]);
