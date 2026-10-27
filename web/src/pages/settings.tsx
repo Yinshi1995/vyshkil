@@ -395,10 +395,10 @@ function AccountSection() {
                 змінюйте їх там, і вони стануть однаковими в усіх застосунках.
               </p>
               {methods?.sso_url && (
-                <a href={methods.sso_url} target="_blank" rel="noreferrer">
+                <a href={`${methods.sso_url.replace(/\/$/, "")}/settings/account`}>
                   <Button variant="outline" size="sm">
                     <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                    Відкрити ІКС
+                    Відкрити профіль ІКС
                   </Button>
                 </a>
               )}
