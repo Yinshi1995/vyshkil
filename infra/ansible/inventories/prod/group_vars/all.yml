@@ -57,6 +57,9 @@ firewall_published_ports:
   # NetBird-шлюз (VM 195): адмінки через тунель, vyshkil.lab.okpivden.uk
   - port: 3000
     source: 10.60.0.30
+  # Проксі *.lab в окремому VLAN (CT 161 lab-proxy, docs/LAB-EDGE.md у репо pult)
+  - port: 3000
+    source: 10.61.0.10
   # Пульт (VM 190): агент і cAdvisor
   - port: 9440
     source: 10.70.0.40
@@ -77,5 +80,6 @@ app_stack_app_bind_addr: "{{ prod_vm_ip }}"
 app_stack_iks_subnet: 172.31.90.0/24
 firewall_iks_egress:
   subnet: 172.31.90.0/24
-  dest: 10.60.0.30
+  # Старий (VM 195) і новий (CT 161, адреса входу ІКС) проксі *.lab — на час переїзду обидва
+  dest: "{ 10.60.0.30, 10.61.0.40 }"
   port: 443
