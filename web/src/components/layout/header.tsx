@@ -30,6 +30,7 @@ import {
   MessageCircle,
   BarChart3,
   MoreHorizontal,
+  UserRound,
 } from "lucide-react";
 
 interface NotificationItem {
@@ -398,6 +399,14 @@ export function Header() {
                   </div>
                 </div>
                 <DropdownMenuSeparator />
+                {/* Профіль ІКС (аватар, ключі доступу, мої застосунки) — спільний для всіх застосунків. */}
+                <DropdownMenuItem
+                  className="py-2 text-sm"
+                  onClick={() => location.assign(`https://${location.hostname.replace(/^[^.]+\./, "id.")}/settings/account`)}
+                >
+                  <UserRound className="mr-2.5 h-4 w-4" />
+                  Мій профіль ІКС
+                </DropdownMenuItem>
                 <DropdownMenuItem className="py-2 text-sm" onClick={() => navigate("/settings")}>
                   <Settings className="mr-2.5 h-4 w-4" />
                   Налаштування
