@@ -95,6 +95,27 @@ function DropdownMenuItem({
   )
 }
 
+/** Пункт-посилання (`<a href>`) — для переходу на іншу адресу. */
+function DropdownMenuLinkItem({
+  className,
+  variant = "default",
+  ...props
+}: MenuPrimitive.LinkItem.Props & {
+  variant?: "default" | "destructive"
+}) {
+  return (
+    <MenuPrimitive.LinkItem
+      data-slot="dropdown-menu-item"
+      data-variant={variant}
+      className={cn(
+        "relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm no-underline outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:data-highlighted:bg-destructive/10 data-[variant=destructive]:data-highlighted:text-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 function DropdownMenuSub({ ...props }: MenuPrimitive.SubmenuRoot.Props) {
   return <MenuPrimitive.SubmenuRoot data-slot="dropdown-menu-sub" {...props} />
 }
@@ -256,6 +277,7 @@ export {
   DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuItem,
+  DropdownMenuLinkItem,
   DropdownMenuCheckboxItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,

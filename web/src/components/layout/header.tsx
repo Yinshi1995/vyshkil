@@ -30,8 +30,8 @@ import {
   MessageCircle,
   BarChart3,
   MoreHorizontal,
-  UserRound,
 } from "lucide-react";
+import { IksMobileButton } from "./iks-rail";
 
 interface NotificationItem {
   id: number;
@@ -148,8 +148,11 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-border backdrop-blur app-header">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
+        {/* Рейка ІКС на вузькому екрані — окремо від меню Вишколу, крайня ліва. */}
+        <IksMobileButton />
+
         {/* Brand — doubles as "Головна" */}
-        <Link to="/" className="flex items-center gap-3">
+        <Link to="/" className="flex shrink-0 items-center gap-3">
           <img
             src="/emblem.png"
             alt="Вишкіл"
@@ -374,7 +377,7 @@ export function Header() {
                     {(user.callsign ?? user.display_name ?? "U")[0]}
                   </span>
                 )}
-                <span className="max-w-[140px] truncate">{user.callsign ?? actor.org_label}</span>
+                <span className="hidden max-w-[140px] truncate min-[440px]:inline">{user.callsign ?? actor.org_label}</span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 p-1.5">
@@ -399,14 +402,7 @@ export function Header() {
                   </div>
                 </div>
                 <DropdownMenuSeparator />
-                {/* Профіль ІКС (аватар, ключі доступу, мої застосунки) — спільний для всіх застосунків. */}
-                <DropdownMenuItem
-                  className="py-2 text-sm"
-                  onClick={() => location.assign(`https://${location.hostname.replace(/^[^.]+\./, "id.")}/settings/account`)}
-                >
-                  <UserRound className="mr-2.5 h-4 w-4" />
-                  Мій профіль ІКС
-                </DropdownMenuItem>
+                {/* Профіль ІКС і вихід з усіх застосунків — у рейці ІКС (iks-rail.tsx), тут лише Вишкіл. */}
                 <DropdownMenuItem className="py-2 text-sm" onClick={() => navigate("/settings")}>
                   <Settings className="mr-2.5 h-4 w-4" />
                   Налаштування
