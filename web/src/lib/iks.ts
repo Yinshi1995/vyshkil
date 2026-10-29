@@ -24,7 +24,8 @@ export const iksUrls = LAB
       emblem: `https://apps.${LAB}/emblem.png`,
       profile: `https://id.${LAB}/settings/account`,
       logoutAll: `https://gate.${LAB}/logout`,
-      icon: (name: string) => `https://apps.${LAB}/icons/web/${encodeURIComponent(name)}.svg`,
+      /** Іконка модуля під тему: кольори вшиті в SVG (набір dark/ і light/), без фільтрів. */
+      icon: (name: string, theme: "dark" | "light") => `https://apps.${LAB}/icons/web/${theme}/${encodeURIComponent(name)}.svg`,
     }
   : null;
 

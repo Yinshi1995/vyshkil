@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { House, LayoutGrid, LogOut, UserRound } from "lucide-react";
 import { useAuth } from "@/context/auth";
+import { useTheme } from "@/context/theme";
 import { iksUrls, useIksModules, type IksModule } from "@/lib/iks";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -32,13 +33,14 @@ function Emblem({ className }: { className?: string }) {
 }
 
 function ModuleIcon({ module }: { module: IksModule }) {
+  const { theme } = useTheme();
   const [failed, setFailed] = useState(false);
   if (!iksUrls || failed) {
     return <span className="iks-letter">{module.title.charAt(0).toUpperCase()}</span>;
   }
   return (
     <img
-      src={iksUrls.icon(module.name)}
+      src={iksUrls.icon(module.name, theme)}
       alt=""
       className="iks-icon"
       draggable={false}
