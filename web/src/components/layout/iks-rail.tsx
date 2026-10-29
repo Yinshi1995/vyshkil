@@ -176,8 +176,10 @@ export function IksMobileButton() {
   if (!iksUrls) return null;
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger className="iks-mobile-trigger lg:hidden" aria-label="ІКС">
-        <Emblem className="size-7 object-contain" />
+      {/* Не герб: поруч — герб Вишколу, два майже однакові щити читаються як повтор. Перемикач
+          модулів (сітка) — того ж вигляду, що й інші кнопки шапки. */}
+      <SheetTrigger className="iks-mobile-trigger lg:hidden" aria-label="Модулі ІКС" title="Модулі ІКС">
+        <LayoutGrid className="size-4" />
       </SheetTrigger>
       <SheetContent side="left" className="iks-sheet gap-0 p-0 max-sm:top-auto sm:w-[22rem]">
         <a href={iksUrls.home} className="iks-sheet-home">

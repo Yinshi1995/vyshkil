@@ -1003,19 +1003,20 @@ button:active:not(:disabled), [role="button"]:active:not(:disabled) {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  margin-left: -6px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-md);
   background: none;
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
   cursor: pointer;
-  transition: background-color 200ms ease-out, border-color 200ms ease-out;
+  transition: background-color 200ms ease-out, border-color 200ms ease-out, color 200ms ease-out;
 }
 .iks-mobile-trigger:hover,
 .iks-mobile-trigger[data-popup-open] {
   background: var(--iks-tile-hover);
-  border-color: var(--border);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 /* Межа між ІКС і брендом Вишколу. */
 .iks-mobile-trigger + a {
