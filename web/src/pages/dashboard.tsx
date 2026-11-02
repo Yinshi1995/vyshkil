@@ -600,8 +600,8 @@ function KindDonut({ data }: { data: { kind: string; count: number }[] }) {
 
 function OrgBarChart({ data }: { data: OrgData[] }) {
   return (
-    <ResponsiveContainer width="100%" height={Math.max(300, data.length * 84)}>
-      <BarChart data={data} layout="vertical" barCategoryGap="22%" margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
+    <ResponsiveContainer width="100%" height={Math.min(520, Math.max(240, data.length * 46 + 70))}>
+      <BarChart data={data} layout="vertical" barCategoryGap="18%" barSize={9} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.3} />
         <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
         <YAxis
@@ -610,7 +610,7 @@ function OrgBarChart({ data }: { data: OrgData[] }) {
           width={100}
           tick={{ fill: "var(--foreground)", fontSize: 13, fontWeight: 600 }}
         />
-        <Tooltip content={<ChartTooltip />} />
+        <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
         <Legend
           wrapperStyle={{ fontSize: 13 }}
           formatter={(v: string) => <span style={{ color: "var(--foreground)" }}>{v}</span>}
@@ -756,7 +756,7 @@ function DiscOrgChart({ data }: { data: { org_name: string; open: number; resolv
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.3} />
         <XAxis dataKey="org_name" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} />
         <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
-        <Tooltip content={<ChartTooltip />} />
+        <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
         <Legend
           wrapperStyle={{ fontSize: 13 }}
           formatter={(v: string) => <span style={{ color: "var(--foreground)" }}>{v}</span>}
@@ -1185,15 +1185,32 @@ export function DashboardPage() {
       </ChartSection>
 
       {/* Org breakdown + Discrepancies */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <ChartSection title="Підготовка по підрозділах" icon={BarChart3} accent={CHART_COLORS.green}>
           {filteredOrgData.length > 0 ? <OrgBarChart data={filteredOrgData} /> : <EmptyState />}
         </ChartSection>
         <ChartSection title="Розбіжності" icon={AlertTriangle} accent={CHART_COLORS.red}>
           {filteredDiscData ? (
             <div className="flex flex-col gap-4">
-              <DiscStatusDonut data={filteredDiscData.by_status} />
-              {filteredDiscData.by_org.length > 0 && <DiscOrgChart data={filteredDiscData.by_org} />}
+              {filteredDiscData.by_status.reduce((s, d) => s + d.count, 0) === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <div
+                    className="flex h-16 w-16 items-center justify-center rounded-full"
+                    style={{ background: `${CHART_COLORS.green}1f`, border: `1px solid ${CHART_COLORS.green}55`, boxShadow: `0 0 24px ${CHART_COLORS.green}33` }}
+                  >
+                    <Shield className="h-7 w-7" style={{ color: CHART_COLORS.green }} />
+                  </div>
+                  <p className="font-heading text-xl font-bold" style={{ color: CHART_COLORS.green }}>Розбіжностей немає</p>
+                  <p className="max-w-xs text-sm text-muted-foreground">Дані підрозділів і вищих рівнів збігаються.</p>
+                </div>
+              ) : (
+                <>
+                  <DiscStatusDonut data={filteredDiscData.by_status} />
+                  {filteredDiscData.by_org.some((o) => o.open + o.resolved + o.accepted > 0) && (
+                    <DiscOrgChart data={filteredDiscData.by_org.filter((o) => o.open + o.resolved + o.accepted > 0)} />
+                  )}
+                </>
+              )}
             </div>
           ) : (
             <EmptyState />
