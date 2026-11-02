@@ -24,8 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-# Обмеження паралелізму: локально (ноутбук) `--build-arg CARGO_JOBS=4`, на проді — за замовчуванням усе.
-ARG CARGO_JOBS=
+# Обмеження паралелізму: локально (ноутбук) `--build-arg CARGO_JOBS=4`, на проді — `default` (усе). Порожнє значення CARGO_BUILD_JOBS cargo не приймає.
+ARG CARGO_JOBS=default
 ENV CARGO_BUILD_JOBS=${CARGO_JOBS}
 COPY . .
 
