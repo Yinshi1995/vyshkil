@@ -29,3 +29,7 @@ node_modules
 
 # Звіти нічного раннера — генеруються на VM щоночі, не артефакт репозиторію.
 /infra/night-runner/reports
+
+dogfood-output/
+qa/results/
+.playwright-mcp/
