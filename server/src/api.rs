@@ -268,10 +268,30 @@ struct ActorDto {
     org_label: String,
 }
 
+/// Автовхід для СТЕНДІВ ТЕСТУВАННЯ (`DEV_AUTOLOGIN=<login>`): якщо сесії немає, `/api/auth/me` сам
+/// відкриває її для цього акаунта. Вмикається лише разом із `PASSWORD_LOGIN=1` і лише без ІКС (OIDC) —
+/// `main.rs` відмовляється стартувати при `DEV_AUTOLOGIN` + OIDC, тож на проді (вхід ключем доступу)
+/// це неможливо. Права — ті самі, що в акаунта; нічого поза звичайною сесією не обходиться.
+pub static DEV_AUTOLOGIN: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 async fn me_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+    let mut headers = headers;
+    let mut dev_cookie: Option<String> = None;
+    if let Some(login) = DEV_AUTOLOGIN.get() {
+        if require_auth(&state.db, &headers).await.is_err() {
+            if let Ok(Some(u)) = repo::auth::find_user_by_login(&state.db, login).await {
+                if let Ok(sid) = start_session(&state.db, u.id).await {
+                    if let Ok(v) = header::HeaderValue::from_str(&format!("session={sid}")) {
+                        headers.insert(header::COOKIE, v);
+                        dev_cookie = Some(session_cookie(&sid));
+                    }
+                }
+            }
+        }
+    }
     let user = require_auth(&state.db, &headers).await.map_err(|s| (s, ""))?;
     let actor_dto = if let Some(actor) = user.actor {
         use sea_orm::{ConnectionTrait, FromQueryResult};
@@ -300,14 +320,17 @@ async fn me_handler(
     } else {
         None
     };
-    Ok::<_, (StatusCode, &str)>(Json(MeResponse {
-        user_id: user.user_id,
-        actor: actor_dto,
-        display_name: user.display_name.clone(),
-        callsign: user.callsign.clone(),
-        avatar_url: user.avatar_url.clone(),
-        can_see_org_names: user.can_see_org_names,
-    }))
+    Ok::<_, (StatusCode, &str)>((
+        axum::response::AppendHeaders(dev_cookie.map(|c| (header::SET_COOKIE, c))),
+        Json(MeResponse {
+            user_id: user.user_id,
+            actor: actor_dto,
+            display_name: user.display_name.clone(),
+            callsign: user.callsign.clone(),
+            avatar_url: user.avatar_url.clone(),
+            can_see_org_names: user.can_see_org_names,
+        }),
+    ))
 }
 
 #[derive(Deserialize)]
@@ -322,9 +345,13 @@ async fn switch_actor_handler(
     Json(body): Json<SwitchActorReq>,
 ) -> impl IntoResponse {
     let session_id = session_from_cookies(&headers).ok_or(StatusCode::UNAUTHORIZED)?;
-    repo::auth::update_session_actor(&state.db, &session_id, body.org_id, &body.role)
+    // Лише ролі, які справді є в користувача (`user_role`) — інакше 403, без зміни сесії.
+    let updated = repo::auth::update_session_actor(&state.db, &session_id, body.org_id, &body.role)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !updated {
+        return Err(StatusCode::FORBIDDEN);
+    }
     Ok::<_, StatusCode>(StatusCode::NO_CONTENT)
 }
 
@@ -3940,9 +3967,10 @@ async fn admin_org_number_get_handler(
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
     let _actor = require_admin_actor(&user)?;
-    let num = repo::orgs::get_org_number(&state.db, id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let num = repo::orgs::get_org_number(&state.db, id).await.map_err(|e| match e {
+        sea_orm::DbErr::RecordNotFound(_) => StatusCode::NOT_FOUND,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    })?;
     Ok::<_, StatusCode>(Json(num))
 }
 

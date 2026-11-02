@@ -378,7 +378,7 @@ function AccountSection() {
               )}
               {actor && (
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {actor.role} — {actor.org_label}
+                  {ROLE_UA[actor.role] ?? actor.role} — {actor.org_label}
                 </p>
               )}
             </div>
@@ -1118,7 +1118,7 @@ function RolesCell({ roles }: { roles: AdminUserRow["roles"] }) {
     <div className="flex flex-wrap gap-1 items-center">
       {visible.map((r, i) => (
         <Badge key={i} variant="outline" className="text-[10px] px-1.5 py-0">
-          {r.role}@{r.org_label}
+          {ROLE_UA[r.role] ?? r.role} · {r.org_label}
         </Badge>
       ))}
       {hidden > 0 && !expanded && (

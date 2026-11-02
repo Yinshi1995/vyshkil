@@ -141,19 +141,23 @@ pub async fn delete_session(db: &DatabaseConnection, session_id: &str) -> Result
     Ok(())
 }
 
+/// Перемикає активного актора сесії. Дозволено ЛИШЕ на пару (org, role), яка справді є серед ролей
+/// власника сесії (`user_role`) — інакше будь-який користувач міг би зробити себе адміном.
+/// `Ok(false)` — такої ролі в користувача немає, сесію не змінено.
 pub async fn update_session_actor(
     db: &DatabaseConnection,
     session_id: &str,
     org_id: i32,
     role: &str,
-) -> Result<(), DbErr> {
-    db.execute(sea_orm::Statement::from_sql_and_values(
-        sea_orm::DatabaseBackend::Postgres,
-        "UPDATE user_session SET active_org_id = $1, active_role = $2 WHERE id = $3::uuid",
-        [org_id.into(), role.into(), session_id.into()],
-    ))
-    .await?;
-    Ok(())
+) -> Result<bool, DbErr> {
+    let res = db
+        .execute(sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "UPDATE user_session s SET active_org_id = $1, active_role = $2              WHERE s.id = $3::uuid                AND EXISTS (SELECT 1 FROM user_role ur                            WHERE ur.user_id = s.user_id AND ur.org_id = $1 AND ur.role = $2)",
+            [org_id.into(), role.into(), session_id.into()],
+        ))
+        .await?;
+    Ok(res.rows_affected() > 0)
 }
 
 pub async fn list_users(db: &DatabaseConnection) -> Result<Vec<crate::types::auth::AdminUserRow>, DbErr> {

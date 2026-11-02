@@ -76,6 +76,15 @@ async fn run(config: config::Config) {
     if app::services::auth::password_login_enabled() {
         tracing::warn!("PASSWORD_LOGIN=1 — аварійний вхід за паролем увімкнено");
     }
+    if let Some(login) = std::env::var("DEV_AUTOLOGIN").ok().filter(|v| !v.is_empty()) {
+        // Лише стенд тестування: без ІКС і лише при аварійному парольному режимі (див. api::DEV_AUTOLOGIN).
+        assert!(
+            oidc.is_none() && std::env::var("OIDC_ISSUER").map(|v| v.is_empty()).unwrap_or(true) && app::services::auth::password_login_enabled(),
+            "DEV_AUTOLOGIN заборонено разом із входом через ІКС і без PASSWORD_LOGIN=1"
+        );
+        tracing::warn!("DEV_AUTOLOGIN={login} — автовхід без пароля (ТІЛЬКИ стенд тестування)");
+        let _ = server::api::DEV_AUTOLOGIN.set(login);
+    }
     let app_state = AppState { leptos_options, db, nats: shared_nats.clone(), chat_tx, oidc };
 
     // Перша фонова задача в цьому проєкті (09-messaging.md §3.1, Фаза 1) -- `tokio::spawn`, не

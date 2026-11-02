@@ -24,6 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+# Обмеження паралелізму: локально (ноутбук) `--build-arg CARGO_JOBS=4`, на проді — за замовчуванням усе.
+ARG CARGO_JOBS=
+ENV CARGO_BUILD_JOBS=${CARGO_JOBS}
 COPY . .
 
 # --release використовує профіль з opt-level=z/lto/panic=abort із кореневого Cargo.toml —

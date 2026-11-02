@@ -483,14 +483,14 @@ function StatCard({
 // Pipeline funnel
 // ---------------------------------------------------------------------------
 
-function PipelineChart({ data }: { data: PipelineData }) {
+function PipelineChart({ data, partial = false }: { data: PipelineData; partial?: boolean }) {
   const stages = [
     { name: "Заплановано", value: data.planned, color: CHART_COLORS.blue },
     { name: "Прибуло", value: data.arrived, color: CHART_COLORS.teal },
     { name: "Навчається", value: data.in_training, color: CHART_COLORS.gold },
     { name: "Завершило", value: data.completed, color: CHART_COLORS.green },
     { name: "Вибуло", value: data.attrition, color: CHART_COLORS.red },
-  ];
+  ].filter((st) => !partial || (st.name !== "Прибуло" && st.name !== "Навчається"));
   const maxVal = Math.max(...stages.map((s) => s.value), 1);
   const [go, setGo] = useState(false);
   useEffect(() => {
@@ -502,7 +502,7 @@ function PipelineChart({ data }: { data: PipelineData }) {
     <div className="flex flex-col gap-4">
       {stages.map((stage, i) => {
         const pct = (stage.value / maxVal) * 100;
-        const prev = i > 0 && i < 4 ? stages[i - 1].value : null;
+        const prev = !partial && i > 0 && i < 4 ? stages[i - 1].value : null;
         const conv = prev && prev > 0 ? Math.round((stage.value / prev) * 100) : null;
         const ofPlan = data.planned > 0 ? Math.round((stage.value / data.planned) * 100) : 0;
         return (
@@ -1159,7 +1159,16 @@ export function DashboardPage() {
       {/* Pipeline + Kind breakdown */}
       <div className="grid gap-4 lg:grid-cols-5">
         <ChartSection title="Воронка підготовки" icon={Target} accent={CHART_COLORS.blue} className="lg:col-span-3">
-          {fp ? <PipelineChart data={fp} /> : <EmptyState />}
+          {fp ? (
+            <div className="flex flex-col gap-3">
+              <PipelineChart data={fp} partial={hasOrgFilter} />
+              {hasOrgFilter && (
+                <p className="text-xs text-muted-foreground">
+                  Для вибраних підрозділів етапи "Прибуло" і "Навчається" не показуються: розбивка по підрозділах їх не містить.
+                </p>
+              )}
+            </div>
+          ) : <EmptyState />}
         </ChartSection>
         <ChartSection title="За видами підготовки" icon={PieIcon} accent={CHART_COLORS.teal} className="lg:col-span-2">
           {filteredKinds.length ? (

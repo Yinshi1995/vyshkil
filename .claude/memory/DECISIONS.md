@@ -10,7 +10,7 @@ date: 2026-09-27
 - [SeaORM замість Diesel](../decisions/seaorm-vs-diesel.md) — async-first ORM без блокуючого мосту, природно лягає на tokio/Axum/Leptos.
 - [mimalloc як глобальний аллокатор](../decisions/mimalloc-allocator.md) — менший RSS і краще повернення пам'яті ОС на слабкому сервері.
 - [Ручний tokio runtime замість #[tokio::main]](../decisions/manual-tokio-runtime.md) — `worker_threads` читається з env у рантаймі, а не запікається в бінарник.
-- [opt-level=z + lto + panic=abort у релізі](../decisions/release-profile-size.md) — розмір бінарника важливіший за пікову швидкодію на цьому сервері.
+- [Профіль релізу: швидка збірка](../decisions/release-profile-size.md) — ревізія 2: opt-level=2, thin LTO, 16 codegen-units; швидкість і легкість збірки важливіші за розмір.
 - [distroless/cc, а не scratch, для рантайм-образу](../decisions/docker-distroless-cc.md) — бінарник динамічно лінкований проти glibc, scratch був би без libc.
 - [rustls замість native-tls/openssl](../decisions/rustls-over-openssl.md) — прибирає OpenSSL з рантайм-образу, сумісно з distroless.
 - [cargo-modules замість Graphify](../decisions/cargo-modules-over-graphify.md) — Graphify виявився свіжим нерозкрученим інструментом з auto-exec hook (supply-chain ризик); cargo-modules — перевірена Rust-специфічна заміна.

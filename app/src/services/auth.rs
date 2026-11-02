@@ -164,9 +164,11 @@ pub async fn switch_actor(org_id: i32, role: String) -> Result<(), ServerFnError
         return Err(ServerFnError::new("не автентифіковано"));
     };
 
-    repo::auth::update_session_actor(&db, &session_id, org_id, &role)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))
+    match repo::auth::update_session_actor(&db, &session_id, org_id, &role).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(ServerFnError::new("немає такої ролі")),
+        Err(e) => Err(ServerFnError::new(e.to_string())),
+    }
 }
 
 #[cfg(feature = "ssr")]
