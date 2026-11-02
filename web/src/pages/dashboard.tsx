@@ -23,13 +23,10 @@ import {
   AlertTriangle,
   TrendingUp,
   Target,
-  Activity,
   BarChart3,
   PieChart as PieIcon,
   Calendar,
   Shield,
-  Filter,
-  X,
   RotateCcw,
   Share2,
   MessageSquare,
@@ -49,8 +46,6 @@ import {
   AreaChart,
   Area,
   Legend,
-  RadialBarChart,
-  RadialBar,
 } from "recharts";
 
 // ---------------------------------------------------------------------------
@@ -150,8 +145,6 @@ const STATUS_COLORS: Record<string, string> = {
   dismissed: "#888",
   notified: CHART_COLORS.teal,
 };
-
-const PIE_COLORS = [CHART_COLORS.red, CHART_COLORS.green, CHART_COLORS.blue, CHART_COLORS.gold];
 
 const ALL_KINDS = ["bzvp", "special", "adaptation", "internship"] as const;
 
@@ -336,44 +329,150 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 // ---------------------------------------------------------------------------
+// Visual helpers: count-up, sparkline, ring gauge
+// ---------------------------------------------------------------------------
+
+function useCountUp(target: number, ms = 900) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / ms);
+      const e = 1 - Math.pow(1 - p, 3);
+      setV(Math.round(target * e));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return v;
+}
+
+function Spark({ values, color, id }: { values: number[]; color: string; id: string }) {
+  if (values.length < 2) return null;
+  const W = 120, H = 36, pad = 3;
+  const min = Math.min(...values), max = Math.max(...values);
+  const rng = max - min || 1;
+  const pts = values.map((v, i) => [pad + (i / (values.length - 1)) * (W - pad * 2), H - pad - ((v - min) / rng) * (H - pad * 2)]);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const area = `${line} L${pts[pts.length - 1][0]},${H} L${pts[0][0]},${H} Z`;
+  const last = pts[pts.length - 1];
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="shrink-0" aria-hidden="true">
+      <defs>
+        <linearGradient id={`sp-${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#sp-${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last[0]} cy={last[1]} r={3.2} fill={color} />
+    </svg>
+  );
+}
+
+function Ring({ pct, color, size = 132, stroke = 12, children }: { pct: number; color: string; size?: number; stroke?: number; children?: React.ReactNode }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setShown(Math.max(0, Math.min(100, pct))), 60);
+    return () => clearTimeout(t);
+  }, [pct]);
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--muted)" strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - shown / 100)}
+          style={{ transition: "stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)", filter: `drop-shadow(0 0 6px ${color}66)` }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Stat card
 // ---------------------------------------------------------------------------
 
 function StatCard({
   title,
   value,
+  suffix,
   icon: Icon,
   color,
   subtitle,
+  trend,
+  delta,
+  goodWhenUp = true,
+  id,
 }: {
   title: string;
-  value: number | string;
+  value: number;
+  suffix?: string;
   icon: React.ElementType;
   color: string;
   subtitle?: string;
+  trend?: number[];
+  delta?: number | null;
+  goodWhenUp?: boolean;
+  id: string;
 }) {
+  const shown = useCountUp(value);
+  const up = (delta ?? 0) > 0;
+  const good = delta ? up === goodWhenUp : true;
   return (
-    <Card className="card-animate card-hover">
-      <CardContent className="flex items-center gap-4 p-4">
-        <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-          style={{
-            background: `linear-gradient(135deg, ${color}20, ${color}10)`,
-            border: `1px solid ${color}30`,
-          }}
-        >
-          <Icon className="h-5 w-5" style={{ color }} />
+    <Card
+      className="card-animate card-hover relative overflow-hidden"
+      style={{ background: `linear-gradient(155deg, ${color}18 0%, transparent 55%), var(--card)` }}
+    >
+      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${color}, ${color}00)` }} />
+      <span className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full blur-2xl" style={{ background: `${color}22` }} />
+      <CardContent className="relative flex flex-col gap-3 p-5">
+        <div className="flex items-center gap-2.5">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+            style={{ background: `${color}22`, border: `1px solid ${color}40`, boxShadow: `0 0 18px ${color}25` }}
+          >
+            <Icon className="h-5 w-5" style={{ color }} />
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</p>
         </div>
-        <div className="min-w-0">
-          <p className="text-2xl font-bold tabular-nums" style={{ color }}>
-            {typeof value === "number" ? value.toLocaleString("uk-UA") : value}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">{title}</p>
-          {subtitle && (
-            <p className="text-[10px] mt-0.5" style={{ color: `${color}99` }}>
-              {subtitle}
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-heading text-5xl leading-none font-bold tabular-nums" style={{ color }}>
+              {shown.toLocaleString("uk-UA")}
+              {suffix && <span className="ml-1 text-2xl opacity-80">{suffix}</span>}
             </p>
-          )}
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              {delta != null && delta !== 0 && (
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-0.5 font-bold tabular-nums"
+                  style={{
+                    background: good ? `${CHART_COLORS.green}22` : `${CHART_COLORS.red}22`,
+                    color: good ? CHART_COLORS.green : CHART_COLORS.red,
+                  }}
+                  title="Зміна проти попереднього тижня"
+                >
+                  {up ? "▲" : "▼"} {Math.abs(delta)}
+                </span>
+              )}
+              {subtitle && <span className="text-muted-foreground">{subtitle}</span>}
+            </div>
+          </div>
+          {trend && <Spark values={trend} color={color} id={id} />}
         </div>
       </CardContent>
     </Card>
@@ -392,30 +491,40 @@ function PipelineChart({ data }: { data: PipelineData }) {
     { name: "Завершило", value: data.completed, color: CHART_COLORS.green },
     { name: "Вибуло", value: data.attrition, color: CHART_COLORS.red },
   ];
-
   const maxVal = Math.max(...stages.map((s) => s.value), 1);
+  const [go, setGo] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGo(true), 60);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {stages.map((stage, i) => {
-        const pct = maxVal > 0 ? (stage.value / maxVal) * 100 : 0;
+        const pct = (stage.value / maxVal) * 100;
+        const prev = i > 0 && i < 4 ? stages[i - 1].value : null;
+        const conv = prev && prev > 0 ? Math.round((stage.value / prev) * 100) : null;
+        const ofPlan = data.planned > 0 ? Math.round((stage.value / data.planned) * 100) : 0;
         return (
-          <div key={i} className="flex items-center gap-3">
-            <span className="w-24 text-xs text-right text-muted-foreground shrink-0">
-              {stage.name}
-            </span>
-            <div className="flex-1 h-8 rounded-lg overflow-hidden" style={{ background: "var(--muted)" }}>
+          <div key={i} className="flex items-center gap-2 sm:gap-4">
+            <span className="w-20 shrink-0 text-right text-xs font-medium text-muted-foreground sm:w-28 sm:text-sm">{stage.name}</span>
+            <div className="relative h-10 flex-1 overflow-hidden rounded-xl sm:h-12" style={{ background: "var(--muted)" }}>
               <div
-                className="h-full rounded-lg flex items-center px-3 text-xs font-bold transition-all duration-700"
+                className="flex h-full items-center rounded-xl px-4 text-lg font-bold tabular-nums"
                 style={{
-                  width: `${Math.max(pct, 2)}%`,
-                  background: `linear-gradient(90deg, ${stage.color}, ${stage.color}cc)`,
+                  width: go ? `${Math.max(pct, 4)}%` : "0%",
+                  background: `linear-gradient(90deg, ${stage.color}, ${stage.color}b0)`,
                   color: "#14140c",
-                  boxShadow: `0 0 12px ${stage.color}40`,
+                  boxShadow: `0 0 22px ${stage.color}55, inset 0 1px 0 rgba(255,255,255,0.25)`,
+                  transition: `width 900ms cubic-bezier(.2,.8,.2,1) ${i * 90}ms`,
                 }}
               >
-                {stage.value > 0 ? stage.value.toLocaleString("uk-UA") : ""}
+                {stage.value.toLocaleString("uk-UA")}
               </div>
+            </div>
+            <div className="hidden w-24 shrink-0 text-xs leading-tight sm:block">
+              <p className="font-bold tabular-nums" style={{ color: stage.color }}>{ofPlan}% плану</p>
+              {conv != null && <p className="text-muted-foreground tabular-nums">{conv}% від попер.</p>}
             </div>
           </div>
         );
@@ -434,41 +543,52 @@ function KindDonut({ data }: { data: { kind: string; count: number }[] }) {
     value: d.count,
     color: KIND_COLORS[d.kind] || CHART_COLORS.purple,
   }));
-
   const total = chartData.reduce((s, d) => s + d.value, 0);
 
   return (
-    <div className="flex items-center gap-4">
-      <ResponsiveContainer width={160} height={160}>
-        <PieChart>
+    <div className="flex flex-col items-center gap-5 sm:flex-row lg:flex-col xl:flex-row">
+      <div className="relative shrink-0" style={{ width: 220, height: 220 }}>
+        <PieChart width={220} height={220}>
           <Pie
             data={chartData}
             cx="50%"
             cy="50%"
-            innerRadius={45}
-            outerRadius={70}
-            paddingAngle={3}
+            innerRadius={72}
+            outerRadius={104}
+            paddingAngle={4}
+            cornerRadius={6}
             dataKey="value"
             strokeWidth={0}
+            isAnimationActive={false}
           >
             {chartData.map((d, i) => (
-              <Cell key={i} fill={d.color} />
+              <Cell key={i} fill={d.color} style={{ filter: `drop-shadow(0 0 8px ${d.color}66)` }} />
             ))}
           </Pie>
           <Tooltip content={<ChartTooltip />} />
         </PieChart>
-      </ResponsiveContainer>
-      <div className="flex flex-col gap-2 flex-1">
-        {chartData.map((d, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-sm shrink-0" style={{ background: d.color }} />
-            <span className="text-xs flex-1">{d.name}</span>
-            <span className="text-xs font-bold tabular-nums">{d.value}</span>
-            <span className="text-[10px] text-muted-foreground w-10 text-right tabular-nums">
-              {total > 0 ? Math.round((d.value / total) * 100) : 0}%
-            </span>
-          </div>
-        ))}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="font-heading text-5xl font-bold tabular-nums">{total}</span>
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">груп</span>
+        </div>
+      </div>
+      <div className="flex w-full min-w-0 flex-1 flex-col gap-3">
+        {chartData.map((d, i) => {
+          const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
+          return (
+            <div key={i} className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color, boxShadow: `0 0 8px ${d.color}` }} />
+                <span className="flex-1 font-medium">{d.name}</span>
+                <span className="font-bold tabular-nums">{d.value}</span>
+                <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">{pct}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "var(--muted)" }}>
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: d.color }} />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -480,24 +600,24 @@ function KindDonut({ data }: { data: { kind: string; count: number }[] }) {
 
 function OrgBarChart({ data }: { data: OrgData[] }) {
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data} layout="vertical" margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
+    <ResponsiveContainer width="100%" height={Math.max(300, data.length * 84)}>
+      <BarChart data={data} layout="vertical" barCategoryGap="22%" margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.3} />
         <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
         <YAxis
           dataKey="org_name"
           type="category"
-          width={90}
-          tick={{ fill: "var(--foreground)", fontSize: 11 }}
+          width={100}
+          tick={{ fill: "var(--foreground)", fontSize: 13, fontWeight: 600 }}
         />
         <Tooltip content={<ChartTooltip />} />
         <Legend
-          wrapperStyle={{ fontSize: 11 }}
+          wrapperStyle={{ fontSize: 13 }}
           formatter={(v: string) => <span style={{ color: "var(--foreground)" }}>{v}</span>}
         />
-        <Bar dataKey="planned" name="Заплановано" fill={CHART_COLORS.blue} radius={[0, 4, 4, 0]} />
-        <Bar dataKey="completed" name="Завершило" fill={CHART_COLORS.green} radius={[0, 4, 4, 0]} />
-        <Bar dataKey="attrition" name="Вибуло" fill={CHART_COLORS.red} radius={[0, 4, 4, 0]} />
+        <Bar isAnimationActive={false} dataKey="planned" name="Заплановано" fill={CHART_COLORS.blue} radius={[0, 8, 8, 0]} />
+        <Bar isAnimationActive={false} dataKey="completed" name="Завершило" fill={CHART_COLORS.green} radius={[0, 8, 8, 0]} />
+        <Bar isAnimationActive={false} dataKey="attrition" name="Вибуло" fill={CHART_COLORS.red} radius={[0, 8, 8, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -514,53 +634,59 @@ function TimelineChart({ data }: { data: TimelinePoint[] }) {
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={360}>
       <AreaChart data={formatted} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
         <defs>
           <linearGradient id="gradPlanned" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={CHART_COLORS.blue} stopOpacity={0.3} />
+            <stop offset="5%" stopColor={CHART_COLORS.blue} stopOpacity={0.5} />
             <stop offset="95%" stopColor={CHART_COLORS.blue} stopOpacity={0.02} />
           </linearGradient>
           <linearGradient id="gradStarted" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={CHART_COLORS.gold} stopOpacity={0.3} />
+            <stop offset="5%" stopColor={CHART_COLORS.gold} stopOpacity={0.5} />
             <stop offset="95%" stopColor={CHART_COLORS.gold} stopOpacity={0.02} />
           </linearGradient>
           <linearGradient id="gradCompleted" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={CHART_COLORS.green} stopOpacity={0.3} />
+            <stop offset="5%" stopColor={CHART_COLORS.green} stopOpacity={0.5} />
             <stop offset="95%" stopColor={CHART_COLORS.green} stopOpacity={0.02} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.3} />
         <XAxis dataKey="label" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} />
-        <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+        <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
         <Tooltip content={<ChartTooltip />} />
         <Legend
-          wrapperStyle={{ fontSize: 11 }}
+          wrapperStyle={{ fontSize: 13 }}
           formatter={(v: string) => <span style={{ color: "var(--foreground)" }}>{v}</span>}
         />
-        <Area
+        <Area isAnimationActive={false}
           type="monotone"
           dataKey="planned"
           name="Заплановано"
           stroke={CHART_COLORS.blue}
           fill="url(#gradPlanned)"
-          strokeWidth={2}
+          strokeWidth={3}
+          dot={{ r: 3.5, strokeWidth: 0 }}
+          activeDot={{ r: 6 }}
         />
-        <Area
+        <Area isAnimationActive={false}
           type="monotone"
           dataKey="started"
           name="Розпочато"
           stroke={CHART_COLORS.gold}
           fill="url(#gradStarted)"
-          strokeWidth={2}
+          strokeWidth={3}
+          dot={{ r: 3.5, strokeWidth: 0 }}
+          activeDot={{ r: 6 }}
         />
-        <Area
+        <Area isAnimationActive={false}
           type="monotone"
           dataKey="completed"
           name="Завершено"
           stroke={CHART_COLORS.green}
           fill="url(#gradCompleted)"
-          strokeWidth={2}
+          strokeWidth={3}
+          dot={{ r: 3.5, strokeWidth: 0 }}
+          activeDot={{ r: 6 }}
         />
       </AreaChart>
     </ResponsiveContainer>
@@ -578,37 +704,44 @@ function DiscStatusDonut({ data }: { data: { status: string; count: number }[] }
     color: STATUS_COLORS[d.status] || CHART_COLORS.purple,
   }));
   const total = chartData.reduce((s, d) => s + d.value, 0);
+  const shown = chartData.filter((d) => d.value > 0);
 
   return (
-    <div className="flex items-center gap-4">
-      <ResponsiveContainer width={140} height={140}>
-        <PieChart>
+    <div className="flex flex-col items-center gap-5 sm:flex-row">
+      <div className="relative shrink-0" style={{ width: 190, height: 190 }}>
+        <PieChart width={190} height={190}>
           <Pie
-            data={chartData}
+            data={shown.length ? shown : [{ name: "—", value: 1, color: "var(--muted)" }]}
             cx="50%"
             cy="50%"
-            innerRadius={38}
-            outerRadius={60}
-            paddingAngle={4}
+            innerRadius={62}
+            outerRadius={90}
+            paddingAngle={shown.length > 1 ? 4 : 0}
+            cornerRadius={6}
             dataKey="value"
             strokeWidth={0}
+            isAnimationActive={false}
           >
-            {chartData.map((d, i) => (
-              <Cell key={i} fill={d.color} />
+            {(shown.length ? shown : [{ color: "var(--muted)" }]).map((d: any, i: number) => (
+              <Cell key={i} fill={d.color} style={{ filter: shown.length ? `drop-shadow(0 0 8px ${d.color}66)` : undefined }} />
             ))}
           </Pie>
           <Tooltip content={<ChartTooltip />} />
         </PieChart>
-      </ResponsiveContainer>
-      <div className="flex flex-col gap-2">
-        <p className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>
-          {total}
-        </p>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="font-heading text-4xl font-bold tabular-nums">{total}</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">всього</span>
+        </div>
+      </div>
+      <div className="grid w-full flex-1 grid-cols-2 gap-2.5">
         {chartData.map((d, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
-            <span className="text-xs">{d.name}</span>
-            <span className="text-xs font-bold tabular-nums">{d.value}</span>
+          <div
+            key={i}
+            className="rounded-xl px-3 py-2"
+            style={{ background: `${d.color}14`, border: `1px solid ${d.color}30` }}
+          >
+            <p className="font-heading text-2xl font-bold tabular-nums leading-none" style={{ color: d.color }}>{d.value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{d.name}</p>
           </div>
         ))}
       </div>
@@ -618,19 +751,19 @@ function DiscStatusDonut({ data }: { data: { status: string; count: number }[] }
 
 function DiscOrgChart({ data }: { data: { org_name: string; open: number; resolved: number; accepted: number }[] }) {
   return (
-    <ResponsiveContainer width="100%" height={250}>
+    <ResponsiveContainer width="100%" height={280}>
       <BarChart data={data} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.3} />
         <XAxis dataKey="org_name" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} />
-        <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+        <YAxis allowDecimals={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
         <Tooltip content={<ChartTooltip />} />
         <Legend
-          wrapperStyle={{ fontSize: 11 }}
+          wrapperStyle={{ fontSize: 13 }}
           formatter={(v: string) => <span style={{ color: "var(--foreground)" }}>{v}</span>}
         />
-        <Bar dataKey="open" name="Відкриті" fill={CHART_COLORS.red} stackId="a" radius={[0, 0, 0, 0]} />
-        <Bar dataKey="resolved" name="Вирішені" fill={CHART_COLORS.green} stackId="a" radius={[0, 0, 0, 0]} />
-        <Bar dataKey="accepted" name="Прийняті" fill={CHART_COLORS.blue} stackId="a" radius={[4, 4, 0, 0]} />
+        <Bar isAnimationActive={false} dataKey="open" name="Відкриті" fill={CHART_COLORS.red} stackId="a" radius={[0, 0, 0, 0]} />
+        <Bar isAnimationActive={false} dataKey="resolved" name="Вирішені" fill={CHART_COLORS.green} stackId="a" radius={[0, 0, 0, 0]} />
+        <Bar isAnimationActive={false} dataKey="accepted" name="Прийняті" fill={CHART_COLORS.blue} stackId="a" radius={[8, 8, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -662,32 +795,36 @@ function StaffingChart({ data }: { data: StaffingRow[] }) {
     return <p className="text-sm text-muted-foreground italic">Немає даних укомплектованості</p>;
   }
 
+  const totA = grouped.reduce((s, g) => s + g.authorized, 0);
+  const totS = grouped.reduce((s, g) => s + g.assigned, 0);
+  const totPct = totA > 0 ? Math.round((totS / totA) * 100) : 0;
+  const colorOf = (p: number) => (p >= 80 ? CHART_COLORS.green : p >= 50 ? CHART_COLORS.gold : CHART_COLORS.red);
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-[1.2fr_repeat(4,1fr)]">
+      <div
+        className="flex flex-col items-center justify-center gap-2 rounded-2xl p-4 col-span-2 lg:col-span-1"
+        style={{ background: `${colorOf(totPct)}12`, border: `1px solid ${colorOf(totPct)}35` }}
+      >
+        <Ring pct={totPct} color={colorOf(totPct)} size={150} stroke={14}>
+          <span className="font-heading text-4xl font-bold tabular-nums" style={{ color: colorOf(totPct) }}>{totPct}%</span>
+          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">разом</span>
+        </Ring>
+        <p className="text-xs text-muted-foreground tabular-nums">{totS} з {totA} штатних посад</p>
+      </div>
       {grouped.map((g, i) => {
-        const pct = g.fill_pct;
-        const barColor =
-          pct >= 80 ? CHART_COLORS.green : pct >= 50 ? CHART_COLORS.gold : CHART_COLORS.red;
+        const c = colorOf(g.fill_pct);
         return (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-20 text-xs text-right text-muted-foreground truncate shrink-0">
-              {g.org_name}
-            </span>
-            <div className="flex-1 h-5 rounded overflow-hidden" style={{ background: "var(--muted)" }}>
-              <div
-                className="h-full rounded flex items-center justify-end px-1.5 text-[10px] font-bold transition-all duration-500"
-                style={{
-                  width: `${Math.max(pct, 3)}%`,
-                  background: `linear-gradient(90deg, ${barColor}cc, ${barColor})`,
-                  color: "#14140c",
-                }}
-              >
-                {pct}%
-              </div>
-            </div>
-            <span className="text-[10px] text-muted-foreground tabular-nums w-16 shrink-0">
-              {g.assigned}/{g.authorized}
-            </span>
+          <div
+            key={i}
+            className="card-hover flex flex-col items-center gap-2 rounded-2xl p-4"
+            style={{ background: "var(--muted)", border: "1px solid var(--border)" }}
+          >
+            <Ring pct={g.fill_pct} color={c} size={104} stroke={10}>
+              <span className="font-heading text-2xl font-bold tabular-nums" style={{ color: c }}>{g.fill_pct}%</span>
+            </Ring>
+            <p className="max-w-full truncate text-sm font-semibold">{g.org_name}</p>
+            <p className="text-xs text-muted-foreground tabular-nums">{g.assigned} / {g.authorized}</p>
           </div>
         );
       })}
@@ -704,23 +841,29 @@ function ChartSection({
   icon: Icon,
   children,
   className,
+  accent = CHART_COLORS.gold,
 }: {
   title: string;
   icon: React.ElementType;
   children: React.ReactNode;
   className?: string;
+  accent?: string;
 }) {
   return (
-    <Card className={`card-animate ${className ?? ""}`}>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <div className="icon-box" style={{ width: 28, height: 28 }}>
-            <Icon className="h-3.5 w-3.5" />
+    <Card className={`card-animate relative overflow-hidden ${className ?? ""}`}>
+      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${accent}, ${accent}00 70%)` }} />
+      <CardHeader className="pb-3 pt-5">
+        <CardTitle className="flex items-center gap-3 text-base">
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-xl"
+            style={{ background: `${accent}1f`, border: `1px solid ${accent}40`, color: accent }}
+          >
+            <Icon className="h-4.5 w-4.5" />
           </div>
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="pb-5">{children}</CardContent>
     </Card>
   );
 }
@@ -890,6 +1033,13 @@ export function DashboardPage() {
   const attritionRate =
     fp && fp.planned > 0 ? Math.round((fp.attrition / fp.planned) * 100) : 0;
 
+  const weekDelta = (key: "started" | "attrition" | "completed" | "planned"): number | null => {
+    if (filteredTimeline.length < 2) return null;
+    const last = filteredTimeline[filteredTimeline.length - 1][key];
+    const prev = filteredTimeline[filteredTimeline.length - 2][key];
+    return last - prev;
+  };
+
   const filteredOrgCount = hasOrgFilter ? filters.orgs.size : (stats?.total_orgs ?? 0);
   const filteredGroupCount = hasKindFilter ? filteredKinds.reduce((s, k) => s + k.count, 0) : (stats?.total_groups ?? 0);
   const filteredDiscCount = filteredDiscData
@@ -964,41 +1114,54 @@ export function DashboardPage() {
       />
 
       {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
+          id="orgs"
           title="Підрозділів"
           value={filteredOrgCount}
           icon={Building2}
           color={CHART_COLORS.gold}
+          subtitle="у складі системи"
         />
         <StatCard
+          id="groups"
           title="Груп підготовки"
           value={filteredGroupCount}
           icon={Users}
           color={CHART_COLORS.blue}
           subtitle={`${completionRate}% завершення`}
+          trend={filteredTimeline.map((t) => t.started)}
+          delta={weekDelta("started")}
         />
         <StatCard
+          id="disc"
           title="Відкритих розбіжностей"
           value={filteredDiscCount}
           icon={AlertTriangle}
-          color={CHART_COLORS.red}
+          color={filteredDiscCount > 0 ? CHART_COLORS.red : CHART_COLORS.green}
+          subtitle={filteredDiscCount > 0 ? "потребують уваги" : "все узгоджено"}
+          goodWhenUp={false}
         />
         <StatCard
+          id="attr"
           title="Рівень вибуття"
-          value={`${attritionRate}%`}
+          value={attritionRate}
+          suffix="%"
           icon={TrendingUp}
           color={attritionRate > 15 ? CHART_COLORS.red : CHART_COLORS.green}
           subtitle={fp ? `${fp.attrition} з ${fp.planned}` : undefined}
+          trend={filteredTimeline.map((t) => t.attrition)}
+          delta={weekDelta("attrition")}
+          goodWhenUp={false}
         />
       </div>
 
       {/* Pipeline + Kind breakdown */}
       <div className="grid gap-4 lg:grid-cols-5">
-        <ChartSection title="Воронка підготовки" icon={Target} className="lg:col-span-3">
+        <ChartSection title="Воронка підготовки" icon={Target} accent={CHART_COLORS.blue} className="lg:col-span-3">
           {fp ? <PipelineChart data={fp} /> : <EmptyState />}
         </ChartSection>
-        <ChartSection title="За видами підготовки" icon={PieIcon} className="lg:col-span-2">
+        <ChartSection title="За видами підготовки" icon={PieIcon} accent={CHART_COLORS.teal} className="lg:col-span-2">
           {filteredKinds.length ? (
             <KindDonut data={filteredKinds} />
           ) : (
@@ -1008,16 +1171,16 @@ export function DashboardPage() {
       </div>
 
       {/* Timeline */}
-      <ChartSection title="Динаміка по тижнях" icon={Calendar}>
+      <ChartSection title="Динаміка по тижнях" icon={Calendar} accent={CHART_COLORS.purple}>
         {filteredTimeline.length > 0 ? <TimelineChart data={filteredTimeline} /> : <EmptyState text="Недостатньо даних для графіку динаміки" />}
       </ChartSection>
 
       {/* Org breakdown + Discrepancies */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChartSection title="Підготовка по підрозділах" icon={BarChart3}>
+        <ChartSection title="Підготовка по підрозділах" icon={BarChart3} accent={CHART_COLORS.green}>
           {filteredOrgData.length > 0 ? <OrgBarChart data={filteredOrgData} /> : <EmptyState />}
         </ChartSection>
-        <ChartSection title="Розбіжності" icon={AlertTriangle}>
+        <ChartSection title="Розбіжності" icon={AlertTriangle} accent={CHART_COLORS.red}>
           {filteredDiscData ? (
             <div className="flex flex-col gap-4">
               <DiscStatusDonut data={filteredDiscData.by_status} />
@@ -1030,7 +1193,7 @@ export function DashboardPage() {
       </div>
 
       {/* Staffing */}
-      <ChartSection title="Укомплектованість" icon={Shield}>
+      <ChartSection title="Укомплектованість" icon={Shield} accent={CHART_COLORS.orange}>
         <StaffingChart data={filteredStaffing} />
       </ChartSection>
     </div>

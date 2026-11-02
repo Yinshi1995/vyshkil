@@ -13,8 +13,21 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
   return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
 }
 
-function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
-  return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
+// base-ui не знає `asChild` (Radix-звичка): без перетворення тригер рендерився вкладеною
+// <button> усередині <button>. Єдиний елемент-дитина стає `render`-пропом.
+function DropdownMenuTrigger({
+  asChild,
+  children,
+  ...props
+}: MenuPrimitive.Trigger.Props & { asChild?: boolean }) {
+  if (asChild && React.isValidElement(children)) {
+    return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" render={children} {...props} />
+  }
+  return (
+    <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props}>
+      {children}
+    </MenuPrimitive.Trigger>
+  )
 }
 
 function DropdownMenuContent({

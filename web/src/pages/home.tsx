@@ -41,6 +41,7 @@ const METRIC_LABELS: Record<string, string> = {
   dropped_count: "Вибуло",
   completed_count: "Завершило",
   total_count: "Всього",
+  in_training_count: "Навчається",
 };
 
 function StatCard({
