@@ -542,10 +542,12 @@ function MediaContent({
   url,
   mime,
   kind,
+  own = false,
 }: {
   url: string;
   mime: string | null;
   kind: string;
+  own?: boolean;
 }) {
   const [lightbox, setLightbox] = useState(false);
   const isImage = kind === "image" || mime?.startsWith("image/");
@@ -553,11 +555,13 @@ function MediaContent({
 
   if (isImage) {
     return (
-      <>
+      <div className={`flex w-full ${own ? "justify-end" : "justify-start"}`}>
         <img
           src={url}
           alt=""
-          className="max-w-full sm:max-w-[320px] max-h-[240px] rounded-lg cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
+          loading="lazy"
+          decoding="async"
+          className="block h-auto w-auto max-w-full sm:max-w-[320px] max-h-[240px] rounded-lg object-contain cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
           style={{
             border: "1px solid var(--border)",
             boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
@@ -583,7 +587,7 @@ function MediaContent({
             </button>
           </div>
         )}
-      </>
+      </div>
     );
   }
 
@@ -592,7 +596,7 @@ function MediaContent({
       <video
         src={url}
         controls
-        className="max-w-[320px] max-h-[240px] rounded-lg"
+        className="block h-auto w-auto max-w-full sm:max-w-[320px] max-h-[240px] rounded-lg"
         style={{
           border: "1px solid var(--border)",
           boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
@@ -819,7 +823,7 @@ function MessageBubble({
 
         {/* Bubble */}
         <div
-          className="rounded-2xl px-3 py-2 text-sm leading-relaxed"
+          className={`w-fit max-w-full rounded-2xl px-3 py-2 text-sm leading-relaxed ${isOwn ? "self-end" : "self-start"}`}
           style={{
             background: isOwn
               ? "linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.10) 100%)"
@@ -843,7 +847,7 @@ function MessageBubble({
 
           {/* Image / Video */}
           {(msg.kind === "image" || msg.kind === "video") && msg.media_url && (
-            <MediaContent url={msg.media_url} mime={msg.media_mime} kind={msg.kind} />
+            <MediaContent url={msg.media_url} mime={msg.media_mime} kind={msg.kind} own={isOwn} />
           )}
 
           {/* Document / file */}

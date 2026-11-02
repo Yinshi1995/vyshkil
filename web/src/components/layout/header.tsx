@@ -251,7 +251,7 @@ export function Header() {
         </nav>
 
         {/* Right side */}
-        <div className="ml-auto flex items-center gap-3 md:ml-0">
+        <div className="ml-auto flex items-center gap-1 min-[360px]:gap-1.5 sm:gap-3 md:ml-0">
           {/* Notifications bell */}
           {actor && (
             <DropdownMenu>
