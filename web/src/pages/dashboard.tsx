@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DatePickerUa } from "@/components/ui/date-picker-ua";
 import {
   DropdownMenu,
@@ -31,6 +32,7 @@ import {
   Share2,
   MessageSquare,
   Copy,
+  Maximize2,
 } from "lucide-react";
 import {
   BarChart,
@@ -598,28 +600,47 @@ function KindDonut({ data }: { data: { kind: string; count: number }[] }) {
 // Org bar chart
 // ---------------------------------------------------------------------------
 
-function OrgBarChart({ data }: { data: OrgData[] }) {
+function OrgBarChart({ data, full = false }: { data: OrgData[]; full?: boolean }) {
+  // Рейтинг замість графіка: висота не залежить від кількості підрозділів (список прокручується).
+  const sorted = [...data].sort((a, b) => b.planned - a.planned);
+  const LIMIT = 6;
+  const rows = full ? sorted : sorted.slice(0, LIMIT);
+  const maxPlanned = Math.max(...rows.map((r) => r.planned), 1);
   return (
-    <ResponsiveContainer width="100%" height={Math.min(520, Math.max(240, data.length * 46 + 70))}>
-      <BarChart data={data} layout="vertical" barCategoryGap="18%" barSize={9} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.3} />
-        <XAxis type="number" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-        <YAxis
-          dataKey="org_name"
-          type="category"
-          width={100}
-          tick={{ fill: "var(--foreground)", fontSize: 13, fontWeight: 600 }}
-        />
-        <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
-        <Legend
-          wrapperStyle={{ fontSize: 13 }}
-          formatter={(v: string) => <span style={{ color: "var(--foreground)" }}>{v}</span>}
-        />
-        <Bar isAnimationActive={false} dataKey="planned" name="Заплановано" fill={CHART_COLORS.blue} radius={[0, 8, 8, 0]} />
-        <Bar isAnimationActive={false} dataKey="completed" name="Завершило" fill={CHART_COLORS.green} radius={[0, 8, 8, 0]} />
-        <Bar isAnimationActive={false} dataKey="attrition" name="Вибуло" fill={CHART_COLORS.red} radius={[0, 8, 8, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm" style={{ background: CHART_COLORS.green }} />Завершило</span>
+        <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm" style={{ background: CHART_COLORS.red }} />Вибуло</span>
+        <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm" style={{ background: CHART_COLORS.blue }} />Решта плану</span>
+      </div>
+      <ul className="flex flex-col gap-2.5">
+        {rows.map((r) => {
+          const done = r.planned > 0 ? Math.round((r.completed / r.planned) * 100) : 0;
+          const w = (r.planned / maxPlanned) * 100;
+          const pc = r.planned > 0 ? (r.completed / r.planned) * 100 : 0;
+          const pa = r.planned > 0 ? (r.attrition / r.planned) * 100 : 0;
+          return (
+            <li key={r.org_name} className="flex items-center gap-3" title={`${r.org_name}: план ${r.planned}, завершило ${r.completed}, вибуло ${r.attrition}`}>
+              <span className="w-24 shrink-0 truncate text-sm font-semibold">{r.org_name}</span>
+              <div className="h-3 flex-1 rounded-full" style={{ background: "var(--muted)" }}>
+                <div
+                  className="flex h-full overflow-hidden rounded-full"
+                  style={{ width: `${Math.max(w, 3)}%`, background: CHART_COLORS.blue, boxShadow: `0 0 10px ${CHART_COLORS.blue}40` }}
+                >
+                  <span style={{ width: `${pc}%`, background: CHART_COLORS.green }} />
+                  <span style={{ width: `${pa}%`, background: CHART_COLORS.red }} />
+                </div>
+              </div>
+              <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{r.completed}/{r.planned}</span>
+              <span className="w-10 shrink-0 text-right text-sm font-bold tabular-nums" style={{ color: done >= 70 ? CHART_COLORS.green : done >= 30 ? CHART_COLORS.gold : "var(--muted-foreground)" }}>{done}%</span>
+            </li>
+          );
+        })}
+      </ul>
+      {!full && sorted.length > LIMIT && (
+        <p className="text-xs text-muted-foreground">Ще {sorted.length - LIMIT} — натисніть на картку, щоб побачити всі.</p>
+      )}
+    </div>
   );
 }
 
@@ -627,14 +648,14 @@ function OrgBarChart({ data }: { data: OrgData[] }) {
 // Timeline area chart
 // ---------------------------------------------------------------------------
 
-function TimelineChart({ data }: { data: TimelinePoint[] }) {
+function TimelineChart({ data, full = false }: { data: TimelinePoint[]; full?: boolean }) {
   const formatted = data.map((d) => ({
     ...d,
     label: new Date(d.week).toLocaleDateString("uk-UA", { day: "numeric", month: "short" }),
   }));
 
   return (
-    <ResponsiveContainer width="100%" height={360}>
+    <ResponsiveContainer width="100%" height={full ? 440 : 230}>
       <AreaChart data={formatted} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
         <defs>
           <linearGradient id="gradPlanned" x1="0" y1="0" x2="0" y2="1">
@@ -773,7 +794,7 @@ function DiscOrgChart({ data }: { data: { org_name: string; open: number; resolv
 // Staffing gauge
 // ---------------------------------------------------------------------------
 
-function StaffingChart({ data }: { data: StaffingRow[] }) {
+function StaffingChart({ data, full = false }: { data: StaffingRow[]; full?: boolean }) {
   const grouped = useMemo(() => {
     const map = new Map<string, { authorized: number; assigned: number }>();
     for (const row of data) {
@@ -812,7 +833,7 @@ function StaffingChart({ data }: { data: StaffingRow[] }) {
         </Ring>
         <p className="text-xs text-muted-foreground tabular-nums">{totS} з {totA} штатних посад</p>
       </div>
-      {grouped.map((g, i) => {
+      {(full ? grouped : [...grouped].sort((a, b) => a.fill_pct - b.fill_pct).slice(0, 4)).map((g, i) => {
         const c = colorOf(g.fill_pct);
         return (
           <div
@@ -828,6 +849,11 @@ function StaffingChart({ data }: { data: StaffingRow[] }) {
           </div>
         );
       })}
+      {!full && grouped.length > 4 && (
+        <p className="col-span-full text-xs text-muted-foreground">
+          Показано 4 найнижчих з {grouped.length}. Натисніть на картку, щоб побачити всі підрозділи.
+        </p>
+      )}
     </div>
   );
 }
@@ -842,29 +868,65 @@ function ChartSection({
   children,
   className,
   accent = CHART_COLORS.gold,
+  expandable = false,
 }: {
   title: string;
   icon: React.ElementType;
-  children: React.ReactNode;
+  /** Функція отримує `full`: false — компактний огляд у картці, true — повний вміст у модалці. */
+  children: React.ReactNode | ((full: boolean) => React.ReactNode);
   className?: string;
   accent?: string;
+  expandable?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const render = (full: boolean) => (typeof children === "function" ? children(full) : children);
+  const headIcon = (
+    <div
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+      style={{ background: `${accent}1f`, border: `1px solid ${accent}40`, color: accent }}
+    >
+      <Icon className="h-4.5 w-4.5" />
+    </div>
+  );
   return (
-    <Card className={`card-animate relative overflow-hidden ${className ?? ""}`}>
-      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${accent}, ${accent}00 70%)` }} />
-      <CardHeader className="pb-3 pt-5">
-        <CardTitle className="flex items-center gap-3 text-base">
-          <div
-            className="flex h-9 w-9 items-center justify-center rounded-xl"
-            style={{ background: `${accent}1f`, border: `1px solid ${accent}40`, color: accent }}
-          >
-            <Icon className="h-4.5 w-4.5" />
-          </div>
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pb-5">{children}</CardContent>
-    </Card>
+    <>
+      <Card
+        className={`card-animate relative overflow-hidden ${expandable ? "card-hover cursor-pointer" : ""} ${className ?? ""}`}
+        onClick={expandable ? () => setOpen(true) : undefined}
+        onKeyDown={expandable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } } : undefined}
+        role={expandable ? "button" : undefined}
+        tabIndex={expandable ? 0 : undefined}
+        aria-label={expandable ? `${title} — відкрити докладно` : undefined}
+      >
+        <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${accent}, ${accent}00 70%)` }} />
+        <CardHeader className="pb-3 pt-5">
+          <CardTitle className="flex items-center gap-3 text-base">
+            {headIcon}
+            <span className="flex-1">{title}</span>
+            {expandable && (
+              <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                <span className="hidden sm:inline">Докладно</span>
+                <Maximize2 className="h-4 w-4" />
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-5">{render(false)}</CardContent>
+      </Card>
+      {expandable && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="max-h-[90vh] w-[96vw] overflow-y-auto sm:max-w-5xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-lg">
+                {headIcon}
+                {title}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="min-h-0">{render(true)}</div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
 
@@ -1180,17 +1242,17 @@ export function DashboardPage() {
       </div>
 
       {/* Timeline */}
-      <ChartSection title="Динаміка по тижнях" icon={Calendar} accent={CHART_COLORS.purple}>
-        {filteredTimeline.length > 0 ? <TimelineChart data={filteredTimeline} /> : <EmptyState text="Недостатньо даних для графіку динаміки" />}
+      <ChartSection title="Динаміка по тижнях" icon={Calendar} accent={CHART_COLORS.purple} expandable>
+        {(full) => filteredTimeline.length > 0 ? <TimelineChart data={filteredTimeline} full={full} /> : <EmptyState text="Недостатньо даних для графіку динаміки" />}
       </ChartSection>
 
       {/* Org breakdown + Discrepancies */}
       <div className="grid items-start gap-4 lg:grid-cols-2">
-        <ChartSection title="Підготовка по підрозділах" icon={BarChart3} accent={CHART_COLORS.green}>
-          {filteredOrgData.length > 0 ? <OrgBarChart data={filteredOrgData} /> : <EmptyState />}
+        <ChartSection title="Підготовка по підрозділах" icon={BarChart3} accent={CHART_COLORS.green} expandable>
+          {(full) => filteredOrgData.length > 0 ? <OrgBarChart data={filteredOrgData} full={full} /> : <EmptyState />}
         </ChartSection>
-        <ChartSection title="Розбіжності" icon={AlertTriangle} accent={CHART_COLORS.red}>
-          {filteredDiscData ? (
+        <ChartSection title="Розбіжності" icon={AlertTriangle} accent={CHART_COLORS.red} expandable>
+          {(full) => filteredDiscData ? (
             <div className="flex flex-col gap-4">
               {filteredDiscData.by_status.reduce((s, d) => s + d.count, 0) === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
@@ -1206,7 +1268,7 @@ export function DashboardPage() {
               ) : (
                 <>
                   <DiscStatusDonut data={filteredDiscData.by_status} />
-                  {filteredDiscData.by_org.some((o) => o.open + o.resolved + o.accepted > 0) && (
+                  {full && filteredDiscData.by_org.some((o) => o.open + o.resolved + o.accepted > 0) && (
                     <DiscOrgChart data={filteredDiscData.by_org.filter((o) => o.open + o.resolved + o.accepted > 0)} />
                   )}
                 </>
@@ -1219,8 +1281,8 @@ export function DashboardPage() {
       </div>
 
       {/* Staffing */}
-      <ChartSection title="Укомплектованість" icon={Shield} accent={CHART_COLORS.orange}>
-        <StaffingChart data={filteredStaffing} />
+      <ChartSection title="Укомплектованість" icon={Shield} accent={CHART_COLORS.orange} expandable>
+        {(full) => <StaffingChart data={filteredStaffing} full={full} />}
       </ChartSection>
     </div>
   );
