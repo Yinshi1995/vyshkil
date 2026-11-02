@@ -39,6 +39,25 @@ pub async fn search_orgs(
     db: &DatabaseConnection,
     query: &str,
 ) -> Result<Vec<OrgSearchResult>, DbErr> {
+    search_orgs_inner(db, query, false).await
+}
+
+/// Пошук для автокомпліту в UI: додатково знаходить за ПОЧАТКОМ і підрядком ("A00", "8", "корпус"),
+/// а не лише за точним збігом чи схожістю pg_trgm (яка на короткому префіксі не спрацьовує, і
+/// список лишався порожнім, поки людина не введе назву повністю). Імпорт (`resolve_org`) далі
+/// користується суворим `search_orgs` — його ранжування не змінюється.
+pub async fn search_orgs_typeahead(
+    db: &DatabaseConnection,
+    query: &str,
+) -> Result<Vec<OrgSearchResult>, DbErr> {
+    search_orgs_inner(db, query, true).await
+}
+
+async fn search_orgs_inner(
+    db: &DatabaseConnection,
+    query: &str,
+    typeahead: bool,
+) -> Result<Vec<OrgSearchResult>, DbErr> {
     let norm_query = normalize(query);
     if norm_query.is_empty() {
         return default_org_listing(db).await;
@@ -64,28 +83,30 @@ pub async fn search_orgs(
                 a.raw AS matched_raw,
                 a.uses_count,
                 (a.norm = $1) AS is_exact,
+                ($2 AND a.norm LIKE $1 || '%') AS is_prefix,
                 similarity(a.norm, $1) AS sim
             FROM alias a
             JOIN org o ON o.id = a.target_id AND a.target_type = 'org'
             WHERE o.deleted_at IS NULL
-              AND (a.norm = $1 OR a.norm % $1)
+              AND (a.norm = $1 OR a.norm % $1
+                   OR ($2 AND (a.norm LIKE $1 || '%' OR a.norm LIKE '%' || $1 || '%')))
         ),
         ranked AS (
             SELECT
                 *,
                 ROW_NUMBER() OVER (
                     PARTITION BY org_id
-                    ORDER BY is_exact DESC, uses_count DESC, sim DESC
+                    ORDER BY is_exact DESC, is_prefix DESC, uses_count DESC, sim DESC
                 ) AS rn
             FROM matches
         )
         SELECT org_id, short_name, masked_label, matched_raw, is_exact
         FROM ranked
         WHERE rn = 1
-        ORDER BY is_exact DESC, uses_count DESC, sim DESC
+        ORDER BY is_exact DESC, is_prefix DESC, uses_count DESC, sim DESC, short_name
         LIMIT 10
         "#,
-        [norm_query.into()],
+        [norm_query.into(), typeahead.into()],
     );
 
     let rows = Row::find_by_statement(stmt).all(db).await?;

@@ -409,7 +409,7 @@ pub async fn group_detail_for_corps(
         SELECT
             tg.id,
             COALESCE(o.short_name, '') AS org_label,
-            COALESCE(ts.name, '') AS site_label,
+            COALESCE(ts.locality, '') AS site_label,
             v.code AS vos_code,
             p.name AS position_label,
             c.name AS course_label,
@@ -419,7 +419,7 @@ pub async fn group_detail_for_corps(
         FROM training_group tg
         JOIN training_kind tk ON tk.id = tg.training_kind_id
         JOIN org o ON o.id = tg.sender_org_id
-        JOIN training_site ts ON ts.id = tg.site_id
+        LEFT JOIN training_site ts ON ts.id = tg.site_id
         LEFT JOIN vos v ON v.id = tg.vos_id
         LEFT JOIN "position" p ON p.id = tg.position_id
         LEFT JOIN course c ON c.id = tg.course_id

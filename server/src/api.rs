@@ -1856,7 +1856,7 @@ async fn org_search_handler(
 ) -> impl IntoResponse {
     let user = require_auth(&state.db, &headers).await?;
     let query = params.q.unwrap_or_default();
-    let mut results = repo::orgs::search_orgs(&state.db, &query)
+    let mut results = repo::orgs::search_orgs_typeahead(&state.db, &query)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
