@@ -147,7 +147,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border backdrop-blur app-header">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-2 min-[360px]:gap-4 min-[360px]:px-4">
         {/* Рейка ІКС на вузькому екрані — окремо від меню Вишколу, крайня ліва. */}
         <IksMobileButton />
 

@@ -260,7 +260,7 @@ export function DirectoryPage() {
           <UsersIcon className="h-7 w-7" />
           Люди
         </h1>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
@@ -330,7 +330,7 @@ export function DirectoryPage() {
                 </span>
                 <div className="h-px flex-1" style={{ background: "var(--border)" }} />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {members.map((u) => (
                   <UserCard
                     key={u.user_id}

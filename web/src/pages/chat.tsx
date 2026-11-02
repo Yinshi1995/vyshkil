@@ -780,12 +780,13 @@ function MessageBubble({
             )}
           </span>
           <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-60 sm:hover:!opacity-100 opacity-40 transition-opacity">
-            <button onClick={() => onReply(msg)} title="Відповісти">
+            <button className="p-2 sm:p-0.5" onClick={() => onReply(msg)} title="Відповісти">
               <Reply className="h-3 w-3" />
             </button>
             {canEdit && (
               <button
                 data-edit-trigger
+                className="p-2 sm:p-0.5"
                 onClick={() => { setEditing(true); setEditText(msg.body); }}
                 title="Редагувати"
               >
@@ -796,7 +797,7 @@ function MessageBubble({
               <button
                 onClick={() => onDelete(msg)}
                 title="Видалити"
-                className="hover:text-red-400"
+                className="p-2 sm:p-0.5 hover:text-red-400"
               >
                 <Trash2 className="h-3 w-3" />
               </button>
