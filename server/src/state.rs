@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use axum::extract::FromRef;
 use bus::SharedNatsClient;
-use leptos::prelude::LeptosOptions;
 use sea_orm::DatabaseConnection;
 use tokio::sync::broadcast;
 
@@ -16,7 +15,6 @@ pub type ChatTx = Arc<broadcast::Sender<ChatBroadcastMsg>>;
 
 #[derive(FromRef, Clone)]
 pub struct AppState {
-    pub leptos_options: LeptosOptions,
     pub db: DatabaseConnection,
     pub nats: SharedNatsClient,
     pub chat_tx: ChatTx,

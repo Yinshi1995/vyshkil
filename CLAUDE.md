@@ -5,9 +5,8 @@
 Домен — `docs/spec/README.md` (джерело істини; код узгоджується з ним, не навпаки).
 
 Стек: Axum + React 19 (SPA, Vite + TypeScript + shadcn/ui) + SeaORM + PostgreSQL.
-Workspace: `app/`, `frontend/`, `server/`, `migration/`, `web/` (React SPA).
-Leptos-код (`app/`, `frontend/`) лишається як fallback — сервер автоматично використовує React
-SPA, якщо `web/dist/` існує (`server/src/spa.rs`).
+Workspace: `app/` (серверна бібліотека: домен, SQL, права), `server/`, `migration/`, `contracts/`, `bus/`, `web/` (React SPA).
+Leptos-інтерфейс видалено (`.claude/decisions/remove-leptos-fallback.md`); сервер віддає `web/dist/` (`server/src/spa.rs`) і REST.
 
 ## Жорсткі правила
 
@@ -22,7 +21,7 @@ SPA, якщо `web/dist/` існує (`server/src/spa.rs`).
   відсутності.
 - Перед `git push` у `main` (автодеплой на прод) — прогін скіла `qa`: `cargo test` + e2e + `dogfood` по зачеплених екранах; червоне або NOT CHECKED = не пушити, а чесно сказати користувачеві. Фронтенд-зміни — ще й обхід сторінок при 1600 і 390 px. Скіли: `qa`, `dogfood` (дослідницьке), `qa-uat` (UAT-звіт).
 - Права — тільки через модуль `policy`.
-- Спільна логіка (нормалізація, парсинг дат, валідація) — в `app`, компілюється і для SSR, і для WASM.
+- Спільна логіка (нормалізація, парсинг дат, валідація) — в `app` (`domain/`); клієнтські копії для React — у `web/src/lib`, тримати узгодженими.
 
 ## Куди йти за контекстом
 
@@ -33,12 +32,11 @@ SPA, якщо `web/dist/` існує (`server/src/spa.rs`).
 | Контракт між app/frontend/server | `.claude/memory/INTERFACES.md` |
 | Домен і вимоги (сутності, форми, імпорт, звірка, документи, roadmap) | `docs/spec/` — див. таблицю в `docs/spec/README.md` |
 | Наступний крок | `docs/spec/06-roadmap.md` (поточний етап — у MEMORY.md) |
-| Де лежить код / куди класти новий | `app/src/CLAUDE.md` (дерево рішень), `docs/spec/07-code-structure.md` |
+| Де лежить код / куди класти новий | `app/src/CLAUDE.md`, `docs/spec/07-code-structure.md` (розділи про Leptos застарілі) |
 | Дані джерел і граблі імпорту | `docs/source-analysis.md` |
 | "хто що викликає" / залежності символів | `cargo modules dependencies` — перед grep по всьому проєкту |
 | Конкретна логіка в конкретному файлі | читай файл напряму |
 | QA-прогін / ревʼю інтерфейсу / UX перед викаткою | skills `qa`, `dogfood`, `qa-uat` (`.claude/skills/`) |
-| Стилізація компонента (класи, кольори, варіанти) | skill `styling` (`.claude/skills/styling/SKILL.md`) — не `style/grammar_data.rs` напряму |
 | Інфраструктура (dev-VM на Proxmox, майбутній прод) | `infra/README.md`, `docs/spec/10-dev-vm.md`, `docs/spec/11-prod-deploy.md` |
 
 ## Автономний режим (tmux Remote Control на dev-VM, нічний раннер)

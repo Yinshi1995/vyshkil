@@ -30,10 +30,6 @@ rust_xlsxwriter = "0.79"
 urlencoding = "2"
 # "macros" вмикає #[derive(FromRef)] для AppState (axum::extract::FromRef інакше є лише трейтом, без derive).
 axum = { version = "0.7", features = ["macros", "multipart"] }
-leptos = { workspace = true, features = ["ssr"] }
-leptos_axum = { workspace = true }
-leptos_meta = { workspace = true, features = ["ssr"] }
-leptos_router = { workspace = true, features = ["ssr"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 # oneshot (для ServeDir у fallback-хендлері) живе саме в tower, не в tower-http.
 tower = { version = "0.4", features = ["util"] }

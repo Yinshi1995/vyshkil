@@ -1,23 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["app", "frontend", "server", "migration", "style", "style_macros", "contracts", "bus"]
+members = ["app", "server", "migration", "contracts", "bus"]
 
-# Єдине місце версій для крейтів Leptos: app/frontend/server завжди компілюються
-# проти однакової версії, інакше SSR-рендер і WASM-гідратація можуть розійтися
-# в серіалізації view-дерева і впасти з незрозумілою помилкою на клієнті.
 [workspace.dependencies]
-leptos = { version = "0.7" }
-leptos_axum = { version = "0.7" }
-leptos_meta = { version = "0.7" }
-leptos_router = { version = "0.7" }
 serde = { version = "1", features = ["derive"] }
 
 # Профіль для продакшен-збірки на слабкому сервері: тут свідомо жертвуємо
 # часом компіляції та піковою продуктивністю заради меншого бінарника й нижчого RSS.
-# Залежності (leptos, serde, …) в dev-профілі оптимізуємо — вони рідко перезбираються,
-# а без цього WASM-бандл ~100 МБ і гідратація в браузері 15 с. З opt-level=2 бандл ~20 МБ,
-# гідратація 2-3 с. Workspace-крейти (app, frontend) лишаються на opt-level=0 для швидкого
-# ребілду.
+# Залежності в dev-профілі оптимізуємо (opt-level=2) — вони рідко перезбираються;
+# workspace-крейти лишаються на opt-level=0 для швидкого ребілду.
 [profile.dev]
 debug = "line-tables-only"  # швидший лінк і менший target/ на ноутбуці
 
@@ -30,20 +21,3 @@ lto = "thin"       # thin LTO: майже той самий виграш, але
 codegen-units = 16 # паралельний кодоген — збірка в рази швидша, ноутбук і прод-VM не стоять на одному ядрі
 panic = "abort"    # без розкрутки стека — менший бінарник і швидший panic-шлях
 strip = true       # без debug-символів у релізі
-
-
-# Конфігурація cargo-leptos: тримаємо server і frontend окремими бінарним/бібліотечним
-# пакетами, щоб SSR-бінарник ніколи не тягнув за собою wasm-bindgen-залежності фронтенду.
-[[workspace.metadata.leptos]]
-name = "taktoblik"
-bin-package = "server"
-lib-package = "frontend"
-site-root = "target/site"
-site-pkg-dir = "pkg"
-site-addr = "127.0.0.1:3000"
-reload-port = 3001
-env = "PROD"
-# Палітра/шрифти UI — з .claude/decisions/ui-visual-style-source.md (реальні виміри striy.pp.ua).
-style-file = "app/style/main.css"
-# Шрифти (self-hosted woff2, без CDN — CLAUDE.md: "жодних мережевих викликів... шрифти — локально").
-assets-dir = "app/assets"
