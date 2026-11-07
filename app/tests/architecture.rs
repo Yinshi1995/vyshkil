@@ -2,7 +2,6 @@
 //! без компіляції й без БД, тому працює в звичайному `cargo test` (без `--features ssr`).
 //! Кожне порушення друкується окремим, людським рядком: що саме не так і як виправити.
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
