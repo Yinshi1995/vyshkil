@@ -12,6 +12,7 @@ pub mod imports_vch_archive;
 pub mod notifications;
 pub mod orgs;
 pub mod outbox;
+pub mod personnel;
 pub mod reconciliation;
 pub mod staffing;
 pub mod submissions;

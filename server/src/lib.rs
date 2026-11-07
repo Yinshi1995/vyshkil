@@ -8,6 +8,7 @@ pub mod chat_api;
 pub mod config;
 pub mod db;
 pub mod oidc;
+pub mod personnel_api;
 pub mod relay;
 pub mod spa;
 pub mod state;

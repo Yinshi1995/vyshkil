@@ -18,6 +18,12 @@ pub fn is_admin(actor: Actor) -> bool {
     actor.role == Role::Admin
 }
 
+/// Особові дані (модуль `personnel`, `.claude/decisions/personnel-named-persons.md`): бачити й змінювати
+/// може лише `admin`. Розширення на `org_editor` своєї гілки — окреме рішення після юридичної перевірки.
+pub fn can_manage_personnel(actor: Actor) -> bool {
+    actor.role == Role::Admin
+}
+
 /// admin редагує все; решта — тільки власні подання своєї організації (01 §6).
 pub fn can_edit_org(actor: Actor, target_org_id: i32) -> bool {
     match actor.role {

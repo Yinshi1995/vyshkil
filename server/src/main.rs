@@ -8,7 +8,7 @@ use axum::{
 use mimalloc::MiMalloc;
 use migration::MigratorTrait;
 
-use server::{admin_sse, api, chat_api, config, db, relay, spa, state::AppState};
+use server::{admin_sse, api, chat_api, config, db, personnel_api, relay, spa, state::AppState};
 
 // mimalloc фрагментує купу помітно менше за glibc malloc на довгоживучих процесах
 // і активно повертає вільну пам'ять ОС — на сервері з обмеженим RAM це відчутно знижує RSS.
@@ -90,6 +90,7 @@ async fn run(config: config::Config) {
     let app = Router::new()
         .merge(api::api_router())
         .merge(chat_api::chat_router())
+        .merge(personnel_api::router())
         .route("/api/admin/whatsapp/events", axum::routing::get(admin_sse::whatsapp_status_stream))
         .merge(spa::spa_router())
         .layer(axum::middleware::from_fn(security_headers))

@@ -70,6 +70,7 @@ mod m20261006_000067_allow_duplicate_groups;
 mod m20261006_000068_drop_fake_discrepancies;
 mod m20261006_000069_seed_ukraine_cities;
 mod m20261025_000070_add_user_oidc_sub;
+mod m20261107_000071_create_personnel_tables;
 
 pub struct Migrator;
 
@@ -180,6 +181,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20261006_000069_seed_ukraine_cities::Migration),
             // Вхід через ІКС: прив'язка облікового запису до профілю Pocket ID (claim `sub`).
             Box::new(m20261025_000070_add_user_oidc_sub::Migration),
+            // Модуль personnel (вимкнений прапорцем): порожні таблиці осіб поіменно, без audit-тригера (там були б ПІБ).
+            Box::new(m20261107_000071_create_personnel_tables::Migration),
         ]
     }
 }
