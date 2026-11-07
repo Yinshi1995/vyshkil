@@ -45,6 +45,7 @@ async fn count(db: &sea_orm::DatabaseConnection, sql: &str) -> i64 {
 async fn personnel_link_dedupe_limit_and_no_pii_in_logs() {
     let Some(db) = fresh_test_db().await else { return };
     let be = db.get_database_backend();
+    validation_rejects_bad_input_before_touching_db(&db).await;
 
     // подія з к-тю ≥ 3 з dev-сіду
     let ev = Ev::find_by_statement(Statement::from_string(
@@ -120,24 +121,24 @@ async fn personnel_link_dedupe_limit_and_no_pii_in_logs() {
     assert!(count(&db, "SELECT count(*) AS n FROM personnel_access_log").await >= 5);
 }
 
-#[tokio::test]
-async fn personnel_validation_rejects_bad_input_before_touching_db() {
-    let Some(db) = fresh_test_db().await else { return };
+/// Частина основного тесту: тести одного файлу ділять одну тестову БД (`fresh_test_db` її перестворює),
+/// тому валідація перевіряється тут же, а не окремим `#[tokio::test]`.
+async fn validation_rejects_bad_input_before_touching_db(db: &sea_orm::DatabaseConnection) {
+    let before = count(db, "SELECT count(*) AS n FROM person").await;
     let ev = Ev::find_by_statement(Statement::from_string(
         db.get_database_backend(),
         "SELECT id, count FROM group_event WHERE count >= 1 ORDER BY id LIMIT 1",
     ))
-    .one(&db)
+    .one(db)
     .await
     .unwrap()
     .unwrap();
     let mut bad = person("", "Іван");
-    assert!(link_person_to_event(&db, ev.id, &bad, None, "1:admin").await.is_err());
+    assert!(link_person_to_event(db, ev.id, &bad, None, "1:admin").await.is_err());
     bad = person("Іваненко", "Іван");
     bad.birth_date = Some("1850-01-01".into());
-    assert!(link_person_to_event(&db, ev.id, &bad, None, "1:admin").await.is_err());
-    assert_eq!(count(&db, "SELECT count(*) AS n FROM person").await, 0, "некоректний ввід не створює запис");
+    assert!(link_person_to_event(db, ev.id, &bad, None, "1:admin").await.is_err());
+    assert_eq!(count(db, "SELECT count(*) AS n FROM person").await, before, "некоректний ввід не створює запис");
     // неіснуюча подія
-    assert!(link_person_to_event(&db, -5, &person("Коваль", "Іван"), None, "1:admin").await.is_err());
-    db.execute_unprepared("SELECT 1").await.unwrap();
+    assert!(link_person_to_event(db, -5, &person("Коваль", "Іван"), None, "1:admin").await.is_err());
 }

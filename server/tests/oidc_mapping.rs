@@ -58,7 +58,7 @@ async fn row(db: &DatabaseConnection, id: i32) -> Row {
 }
 
 #[tokio::test]
-async fn first_login_creates_inactive_viewer_then_binds_and_syncs() {
+async fn first_login_creates_active_viewer_then_binds_and_syncs() {
     let Some(db) = fresh_test_db().await else { return };
 
     // Невідомий логін → створюємо.
@@ -67,7 +67,7 @@ async fn first_login_creates_inactive_viewer_then_binds_and_syncs() {
     let id = auth::create_sso_user(&db, "petrenko", "sub-1").await.unwrap();
 
     let r = row(&db, id).await;
-    assert!(!r.is_active, "новий акаунт з ІКС чекає адміністратора");
+    assert!(r.is_active, "новий акаунт з ІКС активний одразу (доступ уже дала група ІКС; рішення 2026-10-26, 72a49be)");
     assert!(!r.must_change_password);
     assert_eq!(r.oidc_sub.as_deref(), Some("sub-1"));
 

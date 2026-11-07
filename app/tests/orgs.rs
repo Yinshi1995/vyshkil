@@ -65,7 +65,7 @@ async fn stage1_readiness_scenarios() {
     let ak_after = children_of(&after, seventeenth_ak_id);
     // 29 → 32: міграція 000065 (склад органів D1) додала підлеглих 17 АК; тест не оновлювали з жовтня.
     assert_eq!(ak_before.len(), 32, "17 АК на 2026-07-20 мала 32 підлеглих: {ak_before:?}");
-    assert_eq!(ak_after.len(), 23, "17 АК на 2026-09-20 має 23 підлеглих: {ak_after:?}");
+    assert_eq!(ak_after.len(), 26, "17 АК на 2026-09-20 має 26 підлеглих: {ak_after:?}");
 
     let kshr_after = children_of(&after, seventh_kshr_id);
     for moved in ["142 омбр", "154 омбр", "61 омбр", "5 омбр", "92 ошбр", "225 ошп", "44 оабр"] {
