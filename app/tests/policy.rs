@@ -21,7 +21,7 @@ async fn org_editor_does_not_see_foreign_subtree() {
 
     let seventeenth_ak = org_id("17 АК");
     let seventh_kshr = org_id("7 КШР");
-    let unit_under_17 = org_id("241 обр ТрО (4076)");
+    let unit_under_17 = org_id("241 обр ТрО");
     let unit_under_kshr = org_id("142 омбр");
 
     let org_editor_17 = Actor { org_id: seventeenth_ak, role: Role::OrgEditor };

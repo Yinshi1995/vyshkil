@@ -8,6 +8,6 @@
 | `backend/` | SQL/SeaORM (`repo/`), права (`policy.rs`), імпорт файлів (`import/`), генератори документів (`documents/`), `db.rs` (транзакція з `SET LOCAL app.actor`) | `server/src/api.rs` та інші |
 | `domain/` | чиста логіка без БД (нормалізація, дати, лічильники) | `backend/`, `server/` |
 | `types/` | DTO (`actor`, `auth`, `submission`…) | `backend/`, `server/` |
-| `services/auth.rs` | прапорець `PASSWORD_LOGIN`, ліміт спроб входу | `server/src/api.rs`, `main.rs`, `oidc.rs` |
+| `services/` (лише `auth.rs`) | прапорець `PASSWORD_LOGIN`, ліміт спроб входу | `server/src/api.rs`, `main.rs`, `oidc.rs` |
 
 Правила: SQL — лише в `backend/repo/`; перевірка прав — лише в `backend/policy.rs`; `domain/` і `types/` без `sea_orm`.

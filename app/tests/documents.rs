@@ -356,7 +356,10 @@ async fn document_generation_covers_d1_daily_and_d2_weekly_rollups() {
     assert!(docx_archive.by_name("word/document.xml").is_ok(), "docx має word/document.xml");
     let mut doc_xml = String::new();
     std::io::Read::read_to_string(&mut docx_archive.by_name("word/document.xml").unwrap(), &mut doc_xml).unwrap();
-    assert!(doc_xml.contains("<w:b/>"), "жирні заголовки мають <w:b/> тег");
+    // Жирне тримається в стилях (word/styles.xml, заголовки — через pStyle), а не інлайн у document.xml.
+    let mut styles_xml = String::new();
+    std::io::Read::read_to_string(&mut docx_archive.by_name("word/styles.xml").unwrap(), &mut styles_xml).unwrap();
+    assert!(doc_xml.contains("<w:b/>") || styles_xml.contains("<w:b/>"), "жирні заголовки мають <w:b/> тег (у document.xml або styles.xml)");
 
     // --- D4 ("Підготовка", 05 §D4): pptx з KPI-плитками ---
     let rollup_today_d4 = daily_training_rollup(&db, ak17, DAY0).await.unwrap();

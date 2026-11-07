@@ -1,29 +1,30 @@
 # app/src/backend/repo — SQL/SeaORM по агрегатах, без прав
 
 - Можна: `sea-orm`, `types`, `domain`. Не можна: `policy` (репозиторій не перевіряє права —
-  це робить виклик у `pages/*/server.rs`/`services/` ПІСЛЯ отримання даних або через
+  це робить виклик у `server/src/api.rs`/`services/` ПІСЛЯ отримання даних або через
   `policy::visible_org_ids`/`can_view_org` ДО), `leptos`.
 - Кожна функція бере `&DatabaseConnection` явним аргументом (без `expect_context`) — тому
   тестована напряму з `app/tests/<агрегат>.rs`, без сервера й без Leptos-контексту.
 
 | Елемент | Що це | Хто використовує |
 |---|---|---|
-| `orgs.rs` | `list_orgs`, `search_orgs`, `resolve_org` (Етап 5-6: суворіше за `search_orgs` — ведучий номер частини в запиті МАЄ збігтись у кандидата, інакше `None`, бо pg_trgm-схожість сама не розрізняє "17 овмбр"/"128 овмбр"), `subordination_tree`, `org_detail` — SQL по `org`/`alias`/`subordination_closure`/`org_name_history`/`org_status` | `services/orgs.rs`, `pages/home/server.rs`, `pages/org_detail/server.rs`, `repo/imports_*.rs`, `app/tests/orgs.rs`, `app/tests/policy.rs` |
-| `auth.rs` | `find_user_by_login`, `user_roles`, `create_session`/`find_session`/`delete_session`/`update_session_actor` — SQL для автентифікації (12-auth.md); вхід через ІКС: `find_user_for_sso`, `find_user_id_by_oidc_sub`, `create_sso_user`, `bind_oidc_sub`, `sync_sso_profile`, `set_avatar_path` (12-auth.md §2.5) | `services/auth.rs` |
-| `passkeys.rs` | `credentials_for_user`, `store_credential`, `find_credential_by_id`, `update_sign_count`, `delete_credential` — FIDO2/WebAuthn passkey credentials (12-auth.md §1.3, Étap 10b) | `pages/settings/server.rs` |
-| `dictionaries.rs` | `equipment_vos_hint`, `dictionaries_overview`, `learned_aliases`, `confirm_learned_alias`, `reject_learned_alias`, `resolve_vos_by_code`/`resolve_position`/`resolve_course`/`training_kind_id_by_code` (Етап 5) | `pages/settings/server.rs`, `services/dictionaries.rs`, `repo/imports_*.rs` |
-| `groups.rs` | `group_events` (читання), `search_vos_position_course`/`training_site_options` (02 §3, §1), `validate_row`/`commit_group_rows` (фіксація сітки, 02 §5), `find_or_create_training_site` (Етап 5) | `services/groups.rs`, `repo/imports_*.rs`, `app/tests/groups.rs` |
-| `submissions.rs` | `latest_draft_for_org`/`save_draft`/`mark_committed` — чернетки (`submission`, 02 §6), `source_type` параметром (`'form'`/`'table'`) | `services/submission_grid.rs` |
-| `imports_fah.rs` | `resolve_rows` — `RawFahRow` → `GroupFormRow`, резолюція org/vos/посада/місце через довідники (Етап 5) | `pages/training_form/server.rs` |
-| `imports_bps.rs` | `resolve_rows` — `RawBpsRow` → `GroupFormRow`, org/site через `org.number` (точніше за фах-текст) | `pages/training_form/server.rs` |
-| `imports_kvid.rs` | `resolve_rows` — `RawKvidRow` → `StaffingRow`, лише org резолюція | `pages/import/server.rs` |
-| `imports_ivs.rs` | `resolve_rows` — `IvsExtract` → `(InstructorStaffingRow, GroupFormRow)` РАЗОМ: стажування+курси йдуть у ту саму сітку, що й Фах/БпС | `pages/import/server.rs` |
-| `imports_terminy.rs` | `resolve_rows` — `TerminyExtract` (3 паралельні списки) → `GroupFormRow`, той самий Grid, різні `training_kind` (bzvp/special/adaptation) | `pages/training_form/server.rs` |
-| `imports_vch_archive.rs` | `resolve_rows` — Етап 6, `RawVchArchiveRow` → `GroupFormRow`, `training_kind='special'`, "Місце проведення" — вільний географічний текст (часто нерозпізнане) | `pages/import/server.rs` |
-| `staffing.rs` | `insert_snapshot`/`insert_instructor_snapshot` — `staffing_snapshot`+`staffing_metric` (01 §4, різні набори метрик КВід/ІВС) | `pages/import/server.rs` |
-| `documents.rs` | `daily_training_rollup` — правило групування (01 §1) + БЗВП/Фахова/Адаптація rollup по органу/дню; `top_level_orgs`/`root_org_id` (Етап 7, D2 — корпуси без хардкоду назв); `org_label`/`insert_generated_document` | `pages/documents/server.rs` |
-| `reconciliation.rs` | `refresh_horizontal`/`refresh_temporal`/`refresh_vertical` (перерахунок `discrepancy` після фіксації, 04 §3-4, усі три пишуть `DiscrepancyOpened`/`.Resolved` в outbox), `list_discrepancies` (Етап 8 зрізи 1-2) | `repo::groups::commit_group_rows`, `services/reconciliation.rs` |
+| `orgs.rs` | `list_orgs`, `search_orgs`, `resolve_org` (Етап 5-6: суворіше за `search_orgs` — ведучий номер частини в запиті МАЄ збігтись у кандидата, інакше `None`, бо pg_trgm-схожість сама не розрізняє "17 овмбр"/"128 овмбр"), `subordination_tree`, `org_detail` — SQL по `org`/`alias`/`subordination_closure`/`org_name_history`/`org_status` | `server/src/api.rs`, `repo/imports_*.rs`, `app/tests/orgs.rs`, `app/tests/policy.rs` |
+| `auth.rs` | `find_user_by_login`, `user_roles`, `create_session`/`find_session`/`delete_session`/`update_session_actor` — SQL для автентифікації (12-auth.md); вхід через ІКС: `find_user_for_sso`, `find_user_id_by_oidc_sub`, `create_sso_user`, `bind_oidc_sub`, `sync_sso_profile`, `set_avatar_path` (12-auth.md §2.5) | `server/src/api.rs` |
+| `passkeys.rs` | `credentials_for_user`, `store_credential`, `find_credential_by_id`, `update_sign_count`, `delete_credential` — FIDO2/WebAuthn passkey credentials (12-auth.md §1.3, Étap 10b) | `server/src/api.rs` |
+| `dictionaries.rs` | `equipment_vos_hint`, `dictionaries_overview`, `learned_aliases`, `confirm_learned_alias`, `reject_learned_alias`, `resolve_vos_by_code`/`resolve_position`/`resolve_course`/`training_kind_id_by_code` (Етап 5) | `server/src/api.rs`, `repo/imports_*.rs` |
+| `groups.rs` | `group_events` (читання), `search_vos_position_course`/`training_site_options` (02 §3, §1), `validate_row`/`commit_group_rows` (фіксація сітки, 02 §5), `find_or_create_training_site` (Етап 5) | `server/src/api.rs`, `repo/imports_*.rs`, `app/tests/groups.rs` |
+| `submissions.rs` | `latest_draft_for_org`/`save_draft`/`mark_committed` — чернетки (`submission`, 02 §6), `source_type` параметром (`'form'`/`'table'`) | `server/src/api.rs` |
+| `imports_fah.rs` | `resolve_rows` — `RawFahRow` → `GroupFormRow`, резолюція org/vos/посада/місце через довідники (Етап 5) | `server/src/api.rs` |
+| `imports_bps.rs` | `resolve_rows` — `RawBpsRow` → `GroupFormRow`, org/site через `org.number` (точніше за фах-текст) | `server/src/api.rs` |
+| `imports_kvid.rs` | `resolve_rows` — `RawKvidRow` → `StaffingRow`, лише org резолюція | `server/src/api.rs` |
+| `imports_ivs.rs` | `resolve_rows` — `IvsExtract` → `(InstructorStaffingRow, GroupFormRow)` РАЗОМ: стажування+курси йдуть у ту саму сітку, що й Фах/БпС | `server/src/api.rs` |
+| `imports_terminy.rs` | `resolve_rows` — `TerminyExtract` (3 паралельні списки) → `GroupFormRow`, той самий Grid, різні `training_kind` (bzvp/special/adaptation) | `server/src/api.rs` |
+| `imports_vch_archive.rs` | `resolve_rows` — Етап 6, `RawVchArchiveRow` → `GroupFormRow`, `training_kind='special'`, "Місце проведення" — вільний географічний текст (часто нерозпізнане) | `server/src/api.rs` |
+| `staffing.rs` | `insert_snapshot`/`insert_instructor_snapshot` — `staffing_snapshot`+`staffing_metric` (01 §4, різні набори метрик КВід/ІВС) | `server/src/api.rs` |
+| `documents.rs` | `daily_training_rollup` — правило групування (01 §1) + БЗВП/Фахова/Адаптація rollup по органу/дню; `top_level_orgs`/`root_org_id` (Етап 7, D2 — корпуси без хардкоду назв); `org_label`/`insert_generated_document` | `server/src/api.rs` |
+| `reconciliation.rs` | `refresh_horizontal`/`refresh_temporal`/`refresh_vertical` (перерахунок `discrepancy` після фіксації, 04 §3-4, усі три пишуть `DiscrepancyOpened`/`.Resolved` в outbox), `list_discrepancies` (Етап 8 зрізи 1-2) | `repo::groups::commit_group_rows`, `server/src/api.rs` |
 | `outbox.rs` | `insert` — транзакційний outbox (09-messaging.md §3.1, Фаза 1); `backlog` — відставання для адмін-екрана "Черги" (§5, Фаза 4) | `repo::reconciliation` (перший продюсер), `pages::settings::server` |
-| `notifications.rs` | Сповіщення (Етап 8 зріз 4, 04 §5) — CRUD для внутрішніх повідомлень | `services/notifications.rs`, `layout` |
-| `venues.rs` | CRUD для `training_venue` та `city` — `list_venues`/`search_venues`/`create_venue`/`update_venue`/`delete_venue`, `list_cities`/`search_cities`/`create_city`/`update_city`/`delete_city`, `venue_city_id`, `org_current_city_id` | `server/src/api.rs` (venue/city endpoints), `pages/settings/server.rs` |
+| `notifications.rs` | Сповіщення (Етап 8 зріз 4, 04 §5) — CRUD для внутрішніх повідомлень | `server/src/api.rs` |
+| `venues.rs` | CRUD для `training_venue` та `city` — `list_venues`/`search_venues`/`create_venue`/`update_venue`/`delete_venue`, `list_cities`/`search_cities`/`create_city`/`update_city`/`delete_city`, `venue_city_id`, `org_current_city_id` | `server/src/api.rs` |
 | `whatsapp_routing.rs` | WhatsApp-маршрутизація: CRUD для `whatsapp_destination`, `notification_subscription`, `notification_type` (09-messaging.md §2) | `server/src/api.rs` (WhatsApp routing endpoints) |
+| `personnel.rs` | Модуль особових даних (вимкнений `PERSONNEL_ENABLED`, рішення `personnel-named-persons`): `validate`, `link_person_to_event` (дедуп за `norm_key`, ліміт осіб ≤ count), `list_event_persons`, `unlink_person`; журнал `personnel_access_log` лише з id | `server/src/personnel_api.rs`, `app/tests/personnel.rs` |
