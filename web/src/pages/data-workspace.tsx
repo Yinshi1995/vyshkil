@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/context/auth";
 import { todayIso } from "@/lib/date-ua";
+import { useFeatures } from "@/lib/features";
+import { EventPersons } from "@/components/event-persons";
 import { KindBadge } from "@/components/kind-badge";
 import {
   createColumnHelper,
@@ -470,6 +472,9 @@ function EventTimeline({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  // Модуль "особи поіменно" (вимкнений за замовчуванням): без прапорця з сервера жодного елемента й запиту.
+  const features = useFeatures();
+  const [personsFor, setPersonsFor] = useState<number | null>(null);
   const [events, setEvents] = useState<GroupEventRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [tick, setTick] = useState(0);
@@ -570,8 +575,8 @@ function EventTimeline({
             color: "var(--muted-foreground)",
           };
           return (
+            <div key={ev.id} className="flex flex-col">
             <div
-              key={ev.id}
               className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent/40"
             >
               <span className="w-[70px] shrink-0 text-xs tabular-nums text-muted-foreground">
@@ -670,6 +675,19 @@ function EventTimeline({
                   {ev.note}
                 </span>
               )}
+              {features.personnel && ev.count > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-muted-foreground hover:text-primary"
+                  onClick={() => setPersonsFor(personsFor === ev.id ? null : ev.id)}
+                  title="Особи поіменно"
+                  aria-label="Особи поіменно"
+                  aria-expanded={personsFor === ev.id}
+                >
+                  <Users className="h-3 w-3" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -679,6 +697,8 @@ function EventTimeline({
               >
                 <X className="h-3 w-3" />
               </Button>
+            </div>
+            {features.personnel && personsFor === ev.id && <EventPersons eventId={ev.id} count={ev.count} />}
             </div>
           );
         })}
@@ -2600,6 +2620,11 @@ export function DataWorkspacePage() {
     getGroupedRowModel: getGroupedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
     globalFilterFn: "includesString",
+    // Автоскидання розгорнутих груп / сторінки викликало setState ще до монтування таблиці
+    // (react-table: Object.onStateChange) — у консолі "Can't perform a React state update on a component that
+    // hasn't mounted yet". Пагінації нема, а розгорнуті групи після оновлення даних краще лишати відкритими.
+    autoResetExpanded: false,
+    autoResetPageIndex: false,
   });
 
   const { rows } = table.getRowModel();

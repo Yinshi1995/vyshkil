@@ -51,6 +51,18 @@ Leptos-інтерфейс видалено (`.claude/decisions/remove-leptos-fal
 `main` = автодеплой на прод (`docs/spec/11-prod-deploy.md` §5.1), тож пушити лише після зеленого
 `cargo test`/e2e, ніколи `--force`. Решта правил цього файлу (жорсткі правила вище, спершу-spec) — без винятків.
 
+## Швидкий цикл розробки (Linux/WSL, пересборка ≈ 6 с)
+
+```bash
+./dev.sh            # сервер: watchexec перезбирає й перезапускає сам, автовхід admin (лише локально)
+./dev.sh front      # фронтенд: Vite dev з проксі на сервер
+./dev.sh personnel  # те саме, що перший, але з увімкненим модулем "особи поіменно"
+```
+Холодна збірка один раз ≈ 3 хв, далі правка в `app/` чи `server/` ≈ 6 с. Windows напряму не збирається (`LNK1120`) — працюйте з WSL
+(rustup + `mold` + `watchexec` + локальний Postgres; деталі у шапці `dev.sh`). Тести: `cargo test --workspace` з
+`TEST_DATABASE_URL=postgres://taktoblik:taktoblik@127.0.0.1:5432/taktoblik_test` (≈ 1 хв); e2e — `e2e/` проти стенда
+з `PASSWORD_LOGIN=1 DEV_AUTOLOGIN=admin` (`BASE_URL=... npx playwright test`).
+
 ## Запуск і перевірка (коротко — деталі в MEMORY.md)
 
 ```bash
