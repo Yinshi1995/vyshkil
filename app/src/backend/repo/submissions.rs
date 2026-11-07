@@ -5,23 +5,7 @@
 //! `pages/training_form/server.rs` / `pages/import/server.rs`.
 
 use crate::types::submission::{DraftPayload, DraftState};
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
-
-// draft_payload читається/пишеться як текст (::jsonb / ::text) через ручний serde_json::to_string/
-// from_str, а не через sea-orm Value::Json -- щоб не тягнути sea-orm feature "with-json" (і з ним
-// mysql/sqlite/rsa-залежності через уніфікацію фіч у Cargo.lock) заради одного jsonb-стовпця.
-#[derive(FromQueryResult)]
-struct DraftRow {
-    id: i32,
-    payload: String,
-    updated_at: String,
-}
-
-fn row_to_state(row: DraftRow) -> Result<DraftState, DbErr> {
-    let payload: DraftPayload = serde_json::from_str(&row.payload)
-        .map_err(|e| DbErr::Custom(format!("draft_payload не розбирається: {e}")))?;
-    Ok(DraftState { submission_id: row.id, payload, updated_at: row.updated_at })
-}
+use sea_orm::{ConnectionTrait, DbErr, FromQueryResult, Statement};
 
 /// Автозбереження (02 §6): новий рядок при першому збереженні сітки, інакше `UPDATE` тієї самої
 /// чернетки (тому й потрібен `submission_id`, який клієнт отримує з першої відповіді і надсилає

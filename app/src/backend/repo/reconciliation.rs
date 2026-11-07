@@ -7,7 +7,7 @@ use crate::domain::reconciliation::{
     detect_horizontal, detect_vertical, AggregatedCounts, ReportedValues,
 };
 use crate::types::reconciliation::{
-    DiscrepancyComparison, DiscrepancyRow, DiscrepancyValue, ReportedGroupSnapshot, SubmissionDetail,
+    DiscrepancyComparison, DiscrepancyRow, DiscrepancyValue, ReportedGroupSnapshot,
 };
 use contracts::{subjects, DiscrepancyMetric, DiscrepancyOpened, DiscrepancyResolved, Envelope};
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};

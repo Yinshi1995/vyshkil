@@ -7,7 +7,7 @@
 //! по колонках, доменну форму збирає виклик): `payload_json`/`headers_json` приходять уже
 //! серіалізованими рядками.
 
-use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
+use sea_orm::{ConnectionTrait, DbErr, FromQueryResult, Statement};
 use uuid::Uuid;
 
 /// Повертає `id` рядка — те саме значення стає `Nats-Msg-Id` при публікації (relay, Фаза 1):

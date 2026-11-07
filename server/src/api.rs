@@ -2425,7 +2425,6 @@ const SUBJECT_LOGOUT: &str = "vyshkil.notifier.whatsapp.logout";
 const SUBJECT_TEST: &str = "vyshkil.notifier.whatsapp.test";
 const SUBJECT_GROUPS_LIST: &str = "vyshkil.notifier.whatsapp.groups.list";
 const SUBJECT_CONTACTS_UPSERT: &str = "vyshkil.notifier.whatsapp.contacts.upsert";
-const SUBJECT_CONTACTS_REMOVE: &str = "vyshkil.notifier.whatsapp.contacts.remove";
 const SUBJECT_CONTACTS_SYNC: &str = "vyshkil.notifier.whatsapp.contacts.sync";
 
 fn nats_client(state: &AppState) -> Result<bus::async_nats::Client, StatusCode> {
