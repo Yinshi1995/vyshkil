@@ -20,8 +20,6 @@ pub const TEXT_ORANGE_DARK: Color = Color::RGB(0x855000);
 pub const TEXT_RED: Color = Color::RGB(0xA13A2A);
 
 pub const BORDER_THIN: Color = Color::RGB(0xC7C1B0);
-pub const BORDER_HAIR: Color = Color::RGB(0xE3DCC9);
-
 fn base() -> Format {
     Format::new()
         .set_font_name(FONT_NAME)
@@ -157,25 +155,5 @@ pub fn accent_format() -> Format {
             .set_bold()
             .set_font_color(TEXT_ORANGE_DARK)
             .set_background_color(BG_WARM_LIGHT)
-    )
-}
-
-pub fn green_number_format() -> Format {
-    with_borders(
-        base()
-            .set_font_size(10)
-            .set_font_color(TEXT_DARK)
-            .set_background_color(BG_GREEN)
-            .set_align(FormatAlign::Center)
-    )
-}
-
-pub fn red_number_format() -> Format {
-    with_borders(
-        base()
-            .set_font_size(10)
-            .set_font_color(TEXT_RED)
-            .set_background_color(BG_SALMON)
-            .set_align(FormatAlign::Center)
     )
 }

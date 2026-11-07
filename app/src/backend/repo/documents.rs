@@ -680,28 +680,3 @@ pub async fn transferred_orgs_report(
     }
     Ok(result)
 }
-
-/// Записує рядок в `generated_document` (05 §вступ: "кожен згенерований документ зберігається") —
-/// `file_path` уже записаний на диск викликачем (`pages/documents/server.rs`) ДО цього виклику.
-pub async fn insert_generated_document(
-    db: &DatabaseConnection,
-    kind: &str,
-    org_id: i32,
-    as_of_date: &str,
-    file_path: &str,
-) -> Result<i32, DbErr> {
-    #[derive(FromQueryResult)]
-    struct NewId {
-        id: i32,
-    }
-    let row = NewId::find_by_statement(Statement::from_sql_and_values(
-        db.get_database_backend(),
-        "INSERT INTO generated_document (kind, org_id, as_of_date, file_path) \
-         VALUES ($1, $2, $3::date, $4) RETURNING id",
-        [kind.into(), org_id.into(), as_of_date.into(), file_path.into()],
-    ))
-    .one(db)
-    .await?
-    .ok_or_else(|| DbErr::Custom("INSERT generated_document не повернув id".into()))?;
-    Ok(row.id)
-}

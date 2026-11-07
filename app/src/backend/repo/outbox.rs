@@ -36,16 +36,3 @@ pub struct OutboxBacklog {
     pub unpublished_count: i64,
     pub oldest_unpublished_at: Option<String>,
 }
-
-pub async fn backlog(db: &DatabaseConnection) -> Result<OutboxBacklog, DbErr> {
-    OutboxBacklog::find_by_statement(Statement::from_sql_and_values(
-        db.get_database_backend(),
-        "SELECT COUNT(*) AS unpublished_count, \
-                to_char(MIN(created_at), 'YYYY-MM-DD\"T\"HH24:MI:SS') AS oldest_unpublished_at \
-         FROM outbox WHERE published_at IS NULL",
-        [],
-    ))
-    .one(db)
-    .await?
-    .ok_or_else(|| DbErr::Custom("COUNT завжди повертає рядок".into()))
-}

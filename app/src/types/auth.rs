@@ -46,12 +46,6 @@ pub struct UserSession {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoginRequest {
-    pub login: String,
-    pub password: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoginResponse {
     pub success: bool,
     pub error: Option<String>,
@@ -100,14 +94,6 @@ pub struct AdminGroupRow {
     pub in_training_count: i32,
 }
 
-/// DTO зареєстрованого passkey для UI в /settings (12-auth.md §1.3).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PasskeyInfo {
-    pub id: i32,
-    pub name: Option<String>,
-    pub created_at: String,
-}
-
 /// DTO облікового запису для відображення в Settings → Обліковий запис.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountInfo {
@@ -126,10 +112,4 @@ pub struct AccountInfo {
     /// перезаписуються з ІКС при кожному вході через ІКС.
     #[serde(default)]
     pub managed_by_iks: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AuthMode {
-    Dev,
-    Auth,
 }

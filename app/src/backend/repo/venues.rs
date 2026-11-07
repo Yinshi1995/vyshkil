@@ -204,29 +204,3 @@ pub async fn delete_venue(db: &impl ConnectionTrait, id: i32) -> Result<(), DbEr
     .await?;
     Ok(())
 }
-
-pub async fn venue_city_id(db: &impl ConnectionTrait, venue_id: i32) -> Result<Option<i32>, DbErr> {
-    #[derive(FromQueryResult)]
-    struct Row { city_id: i32 }
-    Ok(Row::find_by_statement(Statement::from_sql_and_values(
-        db.get_database_backend(),
-        "SELECT city_id FROM training_venue WHERE id = $1",
-        [venue_id.into()],
-    ))
-    .one(db)
-    .await?
-    .map(|r| r.city_id))
-}
-
-pub async fn org_current_city_id(db: &impl ConnectionTrait, org_id: i32) -> Result<Option<i32>, DbErr> {
-    #[derive(FromQueryResult)]
-    struct Row { current_city_id: Option<i32> }
-    Ok(Row::find_by_statement(Statement::from_sql_and_values(
-        db.get_database_backend(),
-        "SELECT current_city_id FROM org WHERE id = $1",
-        [org_id.into()],
-    ))
-    .one(db)
-    .await?
-    .and_then(|r| r.current_city_id))
-}

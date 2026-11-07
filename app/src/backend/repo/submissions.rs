@@ -23,26 +23,6 @@ fn row_to_state(row: DraftRow) -> Result<DraftState, DbErr> {
     Ok(DraftState { submission_id: row.id, payload, updated_at: row.updated_at })
 }
 
-/// Незавершена чернетка організації, якщо є (найновіша) — для відновлення сітки при відкритті
-/// форми після обриву зв'язку/закритої вкладки (02 §6).
-pub async fn latest_draft_for_org(
-    db: &DatabaseConnection,
-    reporting_org_id: i32,
-    source_type: &str,
-) -> Result<Option<DraftState>, DbErr> {
-    let stmt = Statement::from_sql_and_values(
-        db.get_database_backend(),
-        "SELECT id, draft_payload::text AS payload, \
-                to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS updated_at \
-         FROM submission \
-         WHERE reporting_org_id = $1 AND source_type = $2 AND status = 'draft' \
-         ORDER BY updated_at DESC LIMIT 1",
-        [reporting_org_id.into(), source_type.into()],
-    );
-    let row = DraftRow::find_by_statement(stmt).one(db).await?;
-    row.map(row_to_state).transpose()
-}
-
 /// Автозбереження (02 §6): новий рядок при першому збереженні сітки, інакше `UPDATE` тієї самої
 /// чернетки (тому й потрібен `submission_id`, який клієнт отримує з першої відповіді і надсилає
 /// далі). Транзакція з `SET LOCAL app.actor` — виклик обгортає `db::actor_transaction`.

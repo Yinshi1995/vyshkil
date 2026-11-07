@@ -7,7 +7,6 @@
 | Елемент | Що це | Хто використовує |
 |---|---|---|
 | `actor.rs` | `Actor`/`Role` — org_id + роль, `Serialize`/`Deserialize` | `layout`, `pages/*`, `backend::policy` |
-| `dashboard.rs` | `DashboardStats`, `RecentSubmission` — DTO дашборду головної | `pages/home/server.rs` |
 | `org.rs` | `OrgSearchResult`, `OrgTreeRow`, `OrgDetail` | `backend/repo/orgs.rs`, `pages/home`, `pages/org_detail` |
 | `dictionaries.rs` | `EquipmentVosHint`, `DictionaryEntry`, `DictionariesOverview`, `LearnedAlias` | `backend/repo/dictionaries.rs`, `services/dictionaries.rs`, `pages/settings` |
 | `auth.rs` | `AuthUser`, `UserAccount`, `UserRoleRow`, `UserSession`, `LoginRequest`/`LoginResponse`, `PasskeyInfo`, `AuthMode` — DTO автентифікації (12-auth.md) | `backend/repo/auth.rs`, `services/auth.rs`, `pages/login`, `pages/settings`, `layout` |
