@@ -7,9 +7,7 @@ use super::reconciliation::{refresh_horizontal, refresh_temporal, refresh_vertic
 use crate::domain::counting::{EventType, GroupEventRecord};
 use crate::domain::dates::{parse_date, parse_end_date, parse_maybe_range, validate_period, DateError};
 use crate::domain::validation::{validate_funnel_order, CountError};
-use crate::types::submission::{
-    CompositionRow, GroupFormRow, VosPositionCourseHint, VosPositionCourseKind,
-};
+use crate::types::submission::{CompositionRow, GroupFormRow};
 use chrono::NaiveDate;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, FromQueryResult, Statement};
 use std::collections::BTreeSet;

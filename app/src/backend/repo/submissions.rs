@@ -4,7 +4,7 @@
 //! `repo::groups::commit_group_rows`, викликається разом з `mark_committed` у транзакції з
 //! `pages/training_form/server.rs` / `pages/import/server.rs`.
 
-use crate::types::submission::{DraftPayload, DraftState};
+use crate::types::submission::DraftPayload;
 use sea_orm::{ConnectionTrait, DbErr, FromQueryResult, Statement};
 
 /// Автозбереження (02 §6): новий рядок при першому збереженні сітки, інакше `UPDATE` тієї самої

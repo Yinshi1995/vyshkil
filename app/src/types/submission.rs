@@ -66,42 +66,6 @@ pub struct DraftPayload {
     pub rows: Vec<GroupFormRow>,
 }
 
-/// Що повертає сервер після автозбереження/завантаження чернетки.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DraftState {
-    pub submission_id: i32,
-    pub payload: DraftPayload,
-    pub updated_at: String,
-}
-
-/// Підказка поля "ВОС / посада / курс" (02 §3) — одне поле, що шукає одразу по трьох
-/// довідниках через `alias`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum VosPositionCourseKind {
-    Vos,
-    Position,
-    Course,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VosPositionCourseHint {
-    pub kind: VosPositionCourseKind,
-    pub id: i32,
-    pub label: String,
-    pub matched_raw: String,
-    pub is_exact: bool,
-    /// Пояснення "бо …" (02 §3: "бо «Vampire» → 218") — `None`, якщо збіг прямий (не через ОВТ).
-    pub why: Option<String>,
-}
-
-/// Один майданчик навчання організації (`training_site`, 01 §1) — для дропдауна "населений
-/// пункт" ПІСЛЯ вибору частини (02 §1 колонка 5: "частина + населений пункт").
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TrainingSiteOption {
-    pub site_id: i32,
-    pub label: String,
-}
-
 /// Результат спроби зафіксувати сітку (`Ctrl+Enter`, 02 §5): або все збережено, або перша
 /// помилкова клітинка (індекс рядка + назва поля + текст) — сітка фокусує саме її.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
