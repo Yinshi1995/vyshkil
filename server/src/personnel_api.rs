@@ -5,9 +5,11 @@
 //! Права — лише через `policy::can_manage_personnel`. Помилки й логи не містять значень полів особи.
 
 use axum::{
-    extract::{Path, State},
+    body::Bytes,
+    extract::{Path, Request, State},
     http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    middleware::Next,
+    response::{IntoResponse, Response},
     routing::{delete, get},
     Json, Router,
 };
@@ -23,11 +25,21 @@ pub fn enabled() -> bool {
     std::env::var("PERSONNEL_ENABLED").map(|v| v.trim() == "1").unwrap_or(false)
 }
 
+/// Шлюз ПЕРЕД екстракторами (Path/Json): при вимкненому прапорці ендпоінти особових даних відповідають
+/// 404 завжди — навіть на некоректне тіло чи шлях (інакше 400 проти 404 видавало б, що ендпоінт існує).
+async fn flag_gate(req: Request, next: Next) -> Response {
+    if !enabled() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    next.run(req).await
+}
+
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/api/features", get(features_handler))
+    let persons = Router::new()
         .route("/api/data/events/:event_id/persons", get(list_handler).post(add_handler))
         .route("/api/data/events/:event_id/persons/:person_id", delete(unlink_handler))
+        .route_layer(axum::middleware::from_fn(flag_gate));
+    Router::new().route("/api/features", get(features_handler)).merge(persons)
 }
 
 fn err(status: StatusCode, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
@@ -78,9 +90,12 @@ async fn add_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(event_id): Path<i32>,
-    Json(body): Json<NewPerson>,
+    body: Bytes,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    // Спершу прапорець/автентифікація/право, і лише потім розбір тіла: некоректний JSON не повинен
+    // відповідати раніше за 401/403. Помилка розбору не повторює значення полів.
     let (uid, tag) = guard(&state, &headers).await?;
+    let body: NewPerson = serde_json::from_slice(&body).map_err(|_| err(StatusCode::BAD_REQUEST, "Некоректні дані особи"))?;
     let txn = state
         .db
         .begin()
